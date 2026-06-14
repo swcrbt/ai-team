@@ -52,7 +52,7 @@ void main() {
     final gateway = OpenAiCompatibleGateway();
 
     final content = await gateway.complete(
-      model: model(),
+      model: model().copyWith(streaming: false),
       systemPrompt: 'system',
       messages: [
         ChatMessage(
@@ -98,13 +98,38 @@ void main() {
     );
 
     final content = await gateway.complete(
-      model: model(),
+      model: model().copyWith(streaming: false),
       systemPrompt: 'system',
       messages: const [],
     );
 
     expect(content, 'recovered');
     expect(requests, hasLength(2));
+  });
+
+  test('parses OpenAI compatible streaming deltas', () async {
+    unawaited(serve(server, (request) async {
+      requests.add(request);
+      final body = jsonDecode(await utf8.decodeStream(request)) as Map;
+      expect(body['stream'], isTrue);
+      request.response.headers.contentType =
+          ContentType('text', 'event-stream', charset: 'utf-8');
+      request.response
+        ..write('data: {"choices":[{"delta":{"content":"hel"}}]}\n\n')
+        ..write('data: {"choices":[{"delta":{"content":"lo"}}]}\n\n')
+        ..write('data: [DONE]\n\n');
+      await request.response.close();
+    }));
+    final gateway = OpenAiCompatibleGateway();
+
+    final content = await gateway.complete(
+      model: model().copyWith(streaming: true),
+      systemPrompt: 'system',
+      messages: const [],
+    );
+
+    expect(content, 'hello');
+    expect(requests, hasLength(1));
   });
 
   test('fails with a gateway exception when request times out', () async {

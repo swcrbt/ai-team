@@ -101,7 +101,7 @@ class OpenAiCompatibleGateway implements ModelGateway {
         .set(HttpHeaders.authorizationHeader, 'Bearer ${model.apiKey}');
     request.write(jsonEncode({
       'model': model.modelName,
-      'stream': false,
+      'stream': model.streaming,
       'temperature': model.temperature,
       'max_tokens': model.maxTokens,
       'messages': [
@@ -122,11 +122,39 @@ class OpenAiCompatibleGateway implements ModelGateway {
         isRetryable: response.statusCode >= 500,
       );
     }
+    if (model.streaming) {
+      return _parseStreamingContent(body);
+    }
     final decoded = jsonDecode(body) as Map<String, Object?>;
     final choices = decoded['choices'] as List;
     final first = choices.first as Map<String, Object?>;
     final message = first['message'] as Map<String, Object?>;
     return message['content'] as String;
+  }
+
+  String _parseStreamingContent(String body) {
+    final buffer = StringBuffer();
+    for (final line in const LineSplitter().convert(body)) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty || !trimmed.startsWith('data:')) {
+        continue;
+      }
+      final data = trimmed.substring('data:'.length).trim();
+      if (data == '[DONE]') {
+        break;
+      }
+      final decoded = jsonDecode(data) as Map<String, Object?>;
+      final choices = decoded['choices'] as List;
+      for (final item in choices) {
+        final choice = item as Map<String, Object?>;
+        final delta = choice['delta'] as Map<String, Object?>?;
+        final content = delta?['content'];
+        if (content is String) {
+          buffer.write(content);
+        }
+      }
+    }
+    return buffer.toString();
   }
 
   Future<HttpClientResponse> _awaitResponse(
