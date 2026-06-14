@@ -524,6 +524,7 @@ void main() {
     expect(find.text('默认开发团队'), findsWidgets);
     expect(find.textContaining('群聊 · 默认开发团队'), findsOneWidget);
     expect(find.byTooltip('设置'), findsOneWidget);
+    expect(find.byTooltip('补丁'), findsNothing);
     expect(find.text('模型配置'), findsNothing);
     expect(find.text('角色配置'), findsNothing);
     expect(find.text('团队成员'), findsNothing);
@@ -532,26 +533,52 @@ void main() {
     await tester.tap(find.byTooltip('设置'));
     await tester.pumpAndSettle();
 
+    expect(find.text('群聊'), findsNothing);
+    expect(find.text('私聊'), findsNothing);
+    expect(find.textContaining('群聊 · 默认开发团队'), findsNothing);
     expect(find.text('设置'), findsOneWidget);
     expect(find.text('模型'), findsOneWidget);
     expect(find.text('角色'), findsOneWidget);
     expect(find.text('成员'), findsOneWidget);
     expect(find.text('项目'), findsOneWidget);
     expect(find.text('命令'), findsOneWidget);
-    expect(find.text('补丁'), findsOneWidget);
+    expect(find.text('补丁'), findsNothing);
     expect(find.text('模型配置'), findsOneWidget);
     expect(find.text('角色配置'), findsOneWidget);
     expect(find.text('团队成员'), findsOneWidget);
     expect(find.text('任务轮次'), findsOneWidget);
+    expect(find.text('补丁确认'), findsNothing);
+  });
 
-    await tester.tap(
-      find.ancestor(
-        of: find.text('补丁'),
-        matching: find.byType(ActionChip),
+  testWidgets('chat workspace shows pending patch confirmations',
+      (tester) async {
+    final state = AppState.seed().copyWith(
+      patchProposals: const [
+        PatchProposal(
+          id: 'patch-chat',
+          filePath: '/tmp/README.md',
+          originalContent: 'old docs\n',
+          proposedContent: 'new docs\n',
+          memberName: '前端工程师',
+          diff: '--- README.md\n+++ README.md\n@@\n-old docs\n+new docs\n',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: state,
+        modelGateway: FakeModelGateway(),
       ),
     );
+
+    expect(find.text('待确认修改'), findsOneWidget);
+    expect(find.textContaining('+new docs'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(OutlinedButton, '拒绝'));
     await tester.pumpAndSettle();
-    expect(find.text('补丁确认'), findsOneWidget);
+
+    expect(find.text('待确认修改'), findsNothing);
   });
 
   testWidgets(
@@ -571,6 +598,18 @@ void main() {
       ),
       findsNothing,
     );
+  });
+
+  testWidgets('chat header omits continue and stop controls', (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    expect(find.byTooltip('继续'), findsNothing);
+    expect(find.byTooltip('停止'), findsNothing);
   });
 
   testWidgets('sidebar team button switches back to the team chat',
@@ -630,6 +669,30 @@ void main() {
     expect(find.textContaining('前端工程师'), findsWidgets);
     expect(find.textContaining('群聊 · 默认开发团队'), findsOneWidget);
     expect(find.textContaining('汇总'), findsWidgets);
+  });
+
+  testWidgets('send button stops an in-flight chat dispatch', (tester) async {
+    final gateway = BlockingModelGateway();
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: gateway,
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField).last, '请实现长任务');
+    await tester.tap(find.byTooltip('发送'));
+    await gateway.started.future.timeout(const Duration(seconds: 1));
+    await tester.pump();
+
+    expect(find.byTooltip('停止生成'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('停止生成'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.cancellation!.isCancelled, isTrue);
+    expect(find.byTooltip('发送'), findsOneWidget);
+    expect(find.textContaining('任务已停止'), findsWidgets);
   });
 }
 

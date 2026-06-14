@@ -96,6 +96,8 @@ class _AiTeamHomeState extends State<AiTeamHome> {
           body: SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
+                final conversationListWidth =
+                    (constraints.maxWidth * 0.28).clamp(300.0, 360.0);
                 return Row(
                   children: [
                     SizedBox(
@@ -113,41 +115,39 @@ class _AiTeamHomeState extends State<AiTeamHome> {
                           mainView = _MainView.settings;
                           focusedSettingsSection = '项目工作区';
                         }),
-                        onPatch: () => setState(() {
-                          mainView = _MainView.settings;
-                          focusedSettingsSection = '补丁确认';
-                        }),
                         onSettings: () => setState(() {
                           mainView = _MainView.settings;
                           focusedSettingsSection = null;
                         }),
                       ),
                     ),
-                    SizedBox(
-                      width: (constraints.maxWidth * 0.28).clamp(300.0, 360.0),
-                      child: _ConversationList(
-                        controller: controller,
-                        selectedView: mainView,
-                        onSelectConversation: (conversationId) {
-                          controller.selectConversation(conversationId);
-                          setState(() {
-                            mainView = _MainView.chat;
-                            focusedSettingsSection = null;
-                          });
-                        },
+                    if (mainView == _MainView.settings)
+                      Expanded(
+                        child: _SettingsPage(
+                          controller: controller,
+                          focusedSection: focusedSettingsSection,
+                          onBack: () =>
+                              setState(() => mainView = _MainView.chat),
+                        ),
+                      )
+                    else ...[
+                      SizedBox(
+                        width: conversationListWidth,
+                        child: _ConversationList(
+                          controller: controller,
+                          selectedView: mainView,
+                          onSelectConversation: (conversationId) {
+                            controller.selectConversation(conversationId);
+                            setState(() {
+                              mainView = _MainView.chat;
+                              focusedSettingsSection = null;
+                            });
+                          },
+                        ),
                       ),
-                    ),
-                    const VerticalDivider(width: 1),
-                    Expanded(
-                      child: mainView == _MainView.settings
-                          ? _SettingsPage(
-                              controller: controller,
-                              focusedSection: focusedSettingsSection,
-                              onBack: () =>
-                                  setState(() => mainView = _MainView.chat),
-                            )
-                          : _ChatPane(controller: controller),
-                    ),
+                      const VerticalDivider(width: 1),
+                      Expanded(child: _ChatPane(controller: controller)),
+                    ],
                   ],
                 );
               },
@@ -1030,7 +1030,6 @@ class _AppSidebar extends StatelessWidget {
     required this.onChat,
     required this.onTeam,
     required this.onProject,
-    required this.onPatch,
     required this.onSettings,
   });
 
@@ -1038,7 +1037,6 @@ class _AppSidebar extends StatelessWidget {
   final VoidCallback onChat;
   final VoidCallback onTeam;
   final VoidCallback onProject;
-  final VoidCallback onPatch;
   final VoidCallback onSettings;
 
   @override
@@ -1083,12 +1081,6 @@ class _AppSidebar extends StatelessWidget {
             label: '项目',
             selected: false,
             onPressed: onProject,
-          ),
-          _SidebarButton(
-            icon: Icons.difference_rounded,
-            label: '补丁',
-            selected: false,
-            onPressed: onPatch,
           ),
           const Spacer(),
           _SidebarButton(
@@ -1391,6 +1383,9 @@ class _ChatPaneState extends State<_ChatPane> {
   @override
   Widget build(BuildContext context) {
     final conversation = widget.controller.currentConversation;
+    final pendingPatches = widget.controller.patchProposals
+        .where((patch) => patch.status == PatchStatus.pending)
+        .toList();
     return Column(
       children: [
         Container(
@@ -1448,20 +1443,6 @@ class _ChatPaneState extends State<_ChatPane> {
                     ? widget.controller.pauseConversation
                     : null,
               ),
-              _StatusButton(
-                icon: Icons.play_arrow_rounded,
-                label: '继续',
-                onPressed: conversation.status == ConversationStatus.paused
-                    ? widget.controller.resumeConversation
-                    : null,
-              ),
-              _StatusButton(
-                icon: Icons.stop_rounded,
-                label: '停止',
-                onPressed: conversation.status != ConversationStatus.stopped
-                    ? widget.controller.stopConversation
-                    : null,
-              ),
             ],
           ),
         ),
@@ -1470,9 +1451,18 @@ class _ChatPaneState extends State<_ChatPane> {
             color: const Color(0xFFFCFCFD),
             child: ListView.builder(
               padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
-              itemCount: conversation.messages.length,
+              itemCount: conversation.messages.length + pendingPatches.length,
               itemBuilder: (context, index) {
-                return _MessageBubble(message: conversation.messages[index]);
+                if (index < conversation.messages.length) {
+                  return _MessageBubble(message: conversation.messages[index]);
+                }
+                final patch =
+                    pendingPatches[index - conversation.messages.length];
+                return _ChatPatchConfirmationCard(
+                  patch: patch,
+                  onApply: () => widget.controller.applyPatch(patch),
+                  onReject: () => widget.controller.rejectPatch(patch),
+                );
               },
             ),
           ),
@@ -1525,15 +1515,15 @@ class _ChatPaneState extends State<_ChatPane> {
                   icon: Icon(Icons.alternate_email_rounded),
                 ),
                 IconButton.filled(
-                  tooltip: '发送',
-                  onPressed: widget.controller.isDispatching ? null : _submit,
-                  icon: widget.controller.isDispatching
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.send_rounded),
+                  tooltip: widget.controller.isDispatching ? '停止生成' : '发送',
+                  onPressed: widget.controller.isDispatching
+                      ? widget.controller.stopConversation
+                      : _submit,
+                  icon: Icon(
+                    widget.controller.isDispatching
+                        ? Icons.stop_rounded
+                        : Icons.send_rounded,
+                  ),
                 ),
                 const SizedBox(width: 6),
               ],
@@ -1669,7 +1659,6 @@ class _SettingsPageState extends State<_SettingsPage> {
     '团队成员': GlobalKey(),
     '项目工作区': GlobalKey(),
     '命令请求': GlobalKey(),
-    '补丁确认': GlobalKey(),
     '导入导出': GlobalKey(),
     '审计日志': GlobalKey(),
   };
@@ -2001,22 +1990,6 @@ class _SettingsPageState extends State<_SettingsPage> {
                   ),
                 ),
                 _Panel(
-                  key: sectionKeys['补丁确认'],
-                  title: '补丁确认',
-                  icon: Icons.difference_rounded,
-                  child: Column(
-                    children: controller.patchProposals
-                        .map(
-                          (patch) => _PatchCard(
-                            patch: patch,
-                            onApply: () => controller.applyPatch(patch),
-                            onReject: () => controller.rejectPatch(patch),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ),
-                _Panel(
                   key: sectionKeys['审计日志'],
                   title: '审计日志',
                   icon: Icons.receipt_long_rounded,
@@ -2053,7 +2026,6 @@ class _SettingsCategoryBar extends StatelessWidget {
     (Icons.groups_rounded, '成员', '团队成员'),
     (Icons.folder_open_rounded, '项目', '项目工作区'),
     (Icons.terminal_rounded, '命令', '命令请求'),
-    (Icons.difference_rounded, '补丁', '补丁确认'),
     (Icons.ios_share_rounded, '导入导出', '导入导出'),
     (Icons.receipt_long_rounded, '审计', '审计日志'),
   ];
@@ -2259,8 +2231,8 @@ class _TaskAssignmentCard extends StatelessWidget {
   }
 }
 
-class _PatchCard extends StatelessWidget {
-  const _PatchCard({
+class _ChatPatchConfirmationCard extends StatelessWidget {
+  const _ChatPatchConfirmationCard({
     required this.patch,
     required this.onApply,
     required this.onReject,
@@ -2272,45 +2244,68 @@ class _PatchCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFAFAFA),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '${patch.memberName} · ${patch.status.name}',
-            style: const TextStyle(fontWeight: FontWeight.w700),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const CircleAvatar(
+          radius: 18,
+          backgroundColor: Color(0xFF8B5CF6),
+          child: Icon(
+            Icons.difference_rounded,
+            color: Colors.white,
+            size: 18,
           ),
-          const SizedBox(height: 6),
-          SelectableText(
-            patch.diff,
-            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+        ),
+        const SizedBox(width: 10),
+        Flexible(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 760),
+            margin: const EdgeInsets.only(bottom: 18),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: const Color(0xFFC7D2FE)),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '待确认修改',
+                  style: TextStyle(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 6),
+                Text('${patch.memberName} 提议修改 ${patch.filePath}'),
+                const SizedBox(height: 10),
+                SelectableText(
+                  patch.diff,
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: onApply,
+                      icon: const Icon(Icons.check_rounded),
+                      label: const Text('应用修改'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: onReject,
+                      icon: const Icon(Icons.close_rounded),
+                      label: const Text('拒绝'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              FilledButton.icon(
-                onPressed: patch.status == PatchStatus.pending ? onApply : null,
-                icon: const Icon(Icons.check_rounded),
-                label: const Text('应用'),
-              ),
-              OutlinedButton.icon(
-                onPressed:
-                    patch.status == PatchStatus.pending ? onReject : null,
-                icon: const Icon(Icons.close_rounded),
-                label: const Text('拒绝'),
-              ),
-            ],
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
