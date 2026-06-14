@@ -543,6 +543,14 @@ void main() {
     expect(find.text('角色配置'), findsOneWidget);
     expect(find.text('团队成员'), findsOneWidget);
     expect(find.text('任务轮次'), findsOneWidget);
+
+    await tester.tap(
+      find.ancestor(
+        of: find.text('补丁'),
+        matching: find.byType(ActionChip),
+      ),
+    );
+    await tester.pumpAndSettle();
     expect(find.text('补丁确认'), findsOneWidget);
   });
 

@@ -1659,7 +1659,7 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
-class _SettingsPage extends StatelessWidget {
+class _SettingsPage extends StatefulWidget {
   const _SettingsPage({
     required this.controller,
     required this.onBack,
@@ -1667,6 +1667,46 @@ class _SettingsPage extends StatelessWidget {
 
   final AppController controller;
   final VoidCallback onBack;
+
+  @override
+  State<_SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<_SettingsPage> {
+  final scrollController = ScrollController();
+  final sectionKeys = {
+    '模型配置': GlobalKey(),
+    '角色配置': GlobalKey(),
+    '团队成员': GlobalKey(),
+    '项目工作区': GlobalKey(),
+    '命令请求': GlobalKey(),
+    '补丁确认': GlobalKey(),
+    '导入导出': GlobalKey(),
+    '审计日志': GlobalKey(),
+  };
+
+  AppController get controller => widget.controller;
+
+  VoidCallback get onBack => widget.onBack;
+
+  @override
+  void dispose() {
+    scrollController.dispose();
+    super.dispose();
+  }
+
+  void scrollToSection(String title) {
+    final context = sectionKeys[title]?.currentContext;
+    if (context == null) {
+      return;
+    }
+    Scrollable.ensureVisible(
+      context,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      alignment: 0.02,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1708,13 +1748,15 @@ class _SettingsPage extends StatelessWidget {
             ],
           ),
         ),
-        const _SettingsCategoryBar(),
+        _SettingsCategoryBar(onSelect: scrollToSection),
         Expanded(
           child: SingleChildScrollView(
+            controller: scrollController,
             padding: const EdgeInsets.all(20),
             child: Column(
               children: [
                 _Panel(
+                  key: sectionKeys['导入导出'],
                   title: '导入导出',
                   icon: Icons.ios_share_rounded,
                   action: IconButton(
@@ -1725,6 +1767,7 @@ class _SettingsPage extends StatelessWidget {
                   child: const Text('配置文件和密钥导出选项集中在这里管理。'),
                 ),
                 _Panel(
+                  key: sectionKeys['模型配置'],
                   title: '模型配置',
                   icon: Icons.memory_rounded,
                   action: IconButton(
@@ -1762,6 +1805,7 @@ class _SettingsPage extends StatelessWidget {
                   ),
                 ),
                 _Panel(
+                  key: sectionKeys['角色配置'],
                   title: '角色配置',
                   icon: Icons.badge_rounded,
                   action: IconButton(
@@ -1799,6 +1843,7 @@ class _SettingsPage extends StatelessWidget {
                   ),
                 ),
                 _Panel(
+                  key: sectionKeys['团队成员'],
                   title: '团队成员',
                   icon: Icons.groups_rounded,
                   action: IconButton(
@@ -1862,6 +1907,7 @@ class _SettingsPage extends StatelessWidget {
                   ),
                 ),
                 _Panel(
+                  key: sectionKeys['项目工作区'],
                   title: '项目工作区',
                   icon: Icons.folder_open_rounded,
                   action: Wrap(
@@ -1904,6 +1950,7 @@ class _SettingsPage extends StatelessWidget {
                   ),
                 ),
                 _Panel(
+                  key: sectionKeys['命令请求'],
                   title: '命令请求',
                   icon: Icons.terminal_rounded,
                   action: IconButton(
@@ -1938,6 +1985,7 @@ class _SettingsPage extends StatelessWidget {
                   ),
                 ),
                 _Panel(
+                  key: sectionKeys['补丁确认'],
                   title: '补丁确认',
                   icon: Icons.difference_rounded,
                   child: Column(
@@ -1953,6 +2001,7 @@ class _SettingsPage extends StatelessWidget {
                   ),
                 ),
                 _Panel(
+                  key: sectionKeys['审计日志'],
                   title: '审计日志',
                   icon: Icons.receipt_long_rounded,
                   child: Column(
@@ -1978,17 +2027,19 @@ class _SettingsPage extends StatelessWidget {
 }
 
 class _SettingsCategoryBar extends StatelessWidget {
-  const _SettingsCategoryBar();
+  const _SettingsCategoryBar({required this.onSelect});
+
+  final ValueChanged<String> onSelect;
 
   static const items = [
-    (Icons.memory_rounded, '模型'),
-    (Icons.badge_rounded, '角色'),
-    (Icons.groups_rounded, '成员'),
-    (Icons.folder_open_rounded, '项目'),
-    (Icons.terminal_rounded, '命令'),
-    (Icons.difference_rounded, '补丁'),
-    (Icons.ios_share_rounded, '导入导出'),
-    (Icons.receipt_long_rounded, '审计'),
+    (Icons.memory_rounded, '模型', '模型配置'),
+    (Icons.badge_rounded, '角色', '角色配置'),
+    (Icons.groups_rounded, '成员', '团队成员'),
+    (Icons.folder_open_rounded, '项目', '项目工作区'),
+    (Icons.terminal_rounded, '命令', '命令请求'),
+    (Icons.difference_rounded, '补丁', '补丁确认'),
+    (Icons.ios_share_rounded, '导入导出', '导入导出'),
+    (Icons.receipt_long_rounded, '审计', '审计日志'),
   ];
 
   @override
@@ -2008,7 +2059,8 @@ class _SettingsCategoryBar extends StatelessWidget {
         runSpacing: 6,
         children: [
           for (final item in items)
-            Chip(
+            ActionChip(
+              onPressed: () => onSelect(item.$3),
               avatar: Icon(item.$1, size: 16),
               label: Text(item.$2),
               side: const BorderSide(color: Color(0xFFE5E7EB)),
@@ -2025,6 +2077,7 @@ class _SettingsCategoryBar extends StatelessWidget {
 
 class _Panel extends StatelessWidget {
   const _Panel({
+    super.key,
     required this.title,
     required this.icon,
     required this.child,
