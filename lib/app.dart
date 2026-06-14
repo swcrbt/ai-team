@@ -1194,17 +1194,6 @@ class _ConversationList extends StatelessWidget {
               ],
             ),
           ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(18, 0, 18, 8),
-            child: Row(
-              children: [
-                _QuickAvatar(label: '秘', color: Color(0xFF4F7CFF)),
-                _QuickAvatar(label: '前', color: Color(0xFF16A34A)),
-                _QuickAvatar(label: '测', color: Color(0xFFF59E0B)),
-                _QuickAvatar(label: '项', color: Color(0xFF8B5CF6)),
-              ],
-            ),
-          ),
           Expanded(
             child: ListView(
               padding: EdgeInsets.zero,
@@ -1253,35 +1242,6 @@ class _ConversationList extends StatelessWidget {
                       .toList(),
                 ),
               ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _QuickAvatar extends StatelessWidget {
-  const _QuickAvatar({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(right: 12),
-      child: Column(
-        children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: color,
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-              ),
             ),
           ),
         ],

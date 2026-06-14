@@ -554,6 +554,25 @@ void main() {
     expect(find.text('补丁确认'), findsOneWidget);
   });
 
+  testWidgets(
+      'desktop chat sidebar does not show quick avatars above group chat',
+      (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    expect(find.text('群聊'), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget.runtimeType.toString() == '_QuickAvatar',
+      ),
+      findsNothing,
+    );
+  });
+
   testWidgets('sidebar team button switches back to the team chat',
       (tester) async {
     await tester.pumpWidget(
