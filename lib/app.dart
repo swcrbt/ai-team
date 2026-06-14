@@ -1330,14 +1330,18 @@ class AppController extends ChangeNotifier {
         ),
       ],
     );
+    final cancelledAssignments = _cancelOpenAssignments(
+      state.taskAssignments,
+      updated.id,
+    );
     _commit(
       state.copyWith(
         conversations: state.conversations
             .map((item) => item.id == updated.id ? updated : item)
             .toList(),
-        taskAssignments: _cancelOpenAssignments(
-          state.taskAssignments,
-          updated.id,
+        taskAssignments: _ensureCancelledAssignment(
+          cancelledAssignments,
+          updated,
         ),
         auditLog: [
           ...state.auditLog,
@@ -1368,6 +1372,45 @@ class AppController extends ChangeNotifier {
               : assignment,
         )
         .toList();
+  }
+
+  List<TaskAssignment> _ensureCancelledAssignment(
+    List<TaskAssignment> assignments,
+    Conversation conversation,
+  ) {
+    final hasCancelled = assignments.any(
+      (assignment) =>
+          assignment.conversationId == conversation.id &&
+          assignment.status == TaskAssignmentStatus.cancelled,
+    );
+    if (hasCancelled) {
+      return assignments;
+    }
+    TeamMember member;
+    if (conversation.memberId != null) {
+      member = _requireMember(conversation.memberId!);
+    } else {
+      member = currentMembers.firstWhere(
+        (item) => !item.isSecretary,
+        orElse: () => currentMembers.first,
+      );
+    }
+    final role = _requireRole(member.roleId);
+    return [
+      ...assignments,
+      TaskAssignment(
+        id: 'task-cancelled-${DateTime.now().microsecondsSinceEpoch}',
+        conversationId: conversation.id,
+        round: conversation.currentRound + 1,
+        memberId: member.id,
+        memberName: member.name,
+        roleName: role.name,
+        instruction: '请求已取消',
+        status: TaskAssignmentStatus.cancelled,
+        createdAt: DateTime.now(),
+        completedAt: DateTime.now(),
+      ),
+    ];
   }
 
   void _commit(AppState nextState) {
@@ -4370,8 +4413,18 @@ List<TeamMember> _typingMembers(
       controller.state.members.firstWhere((member) => member.id == memberId),
     ];
   }
-  return controller.currentTaskAssignments
+  final runningAssignments = controller.currentTaskAssignments
       .where((assignment) => assignment.status == TaskAssignmentStatus.running)
+      .toList();
+  if (runningAssignments.isEmpty) {
+    return [
+      controller.currentMembers.firstWhere(
+        (member) => !member.isSecretary,
+        orElse: () => controller.currentMembers.first,
+      ),
+    ];
+  }
+  return runningAssignments
       .map(
         (assignment) => controller.state.members.firstWhere(
           (member) => member.id == assignment.memberId,

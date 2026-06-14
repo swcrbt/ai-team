@@ -652,7 +652,6 @@ class ScriptedRecordingGateway implements ModelGateway {
 
 class FailsThenSucceedsRecordingGateway implements ModelGateway {
   final List<String> memberNames = [];
-  var _frontendAttempts = 0;
 
   @override
   Future<String> complete({
@@ -671,7 +670,6 @@ class FailsThenSucceedsRecordingGateway implements ModelGateway {
       return '前端工程师: 实现界面';
     }
     if (memberName == '前端工程师') {
-      _frontendAttempts += 1;
       throw const ModelGatewayException('前端失败');
     }
     return '$memberName 完成';
