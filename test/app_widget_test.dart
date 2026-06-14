@@ -533,6 +533,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('设置'), findsOneWidget);
+    expect(find.text('模型'), findsOneWidget);
+    expect(find.text('角色'), findsOneWidget);
+    expect(find.text('成员'), findsOneWidget);
+    expect(find.text('项目'), findsOneWidget);
+    expect(find.text('命令'), findsOneWidget);
+    expect(find.text('补丁'), findsOneWidget);
     expect(find.text('模型配置'), findsOneWidget);
     expect(find.text('角色配置'), findsOneWidget);
     expect(find.text('团队成员'), findsOneWidget);

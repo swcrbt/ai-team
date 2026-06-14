@@ -1708,6 +1708,7 @@ class _SettingsPage extends StatelessWidget {
             ],
           ),
         ),
+        const _SettingsCategoryBar(),
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(20),
@@ -1972,6 +1973,52 @@ class _SettingsPage extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _SettingsCategoryBar extends StatelessWidget {
+  const _SettingsCategoryBar();
+
+  static const items = [
+    (Icons.memory_rounded, '模型'),
+    (Icons.badge_rounded, '角色'),
+    (Icons.groups_rounded, '成员'),
+    (Icons.folder_open_rounded, '项目'),
+    (Icons.terminal_rounded, '命令'),
+    (Icons.difference_rounded, '补丁'),
+    (Icons.ios_share_rounded, '导入导出'),
+    (Icons.receipt_long_rounded, '审计'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minHeight: 56),
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+      decoration: const BoxDecoration(
+        color: Color(0xFFFAFAFB),
+        border: Border(
+          bottom: BorderSide(color: Color(0xFFE5E7EB)),
+        ),
+      ),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 6,
+        children: [
+          for (final item in items)
+            Chip(
+              avatar: Icon(item.$1, size: 16),
+              label: Text(item.$2),
+              side: const BorderSide(color: Color(0xFFE5E7EB)),
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
