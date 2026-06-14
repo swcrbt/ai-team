@@ -6,6 +6,7 @@ import 'package:ai_team/core/domain.dart';
 import 'package:ai_team/core/local_store.dart';
 import 'package:ai_team/core/orchestrator.dart';
 import 'package:ai_team/core/patching.dart';
+import 'package:ai_team/core/secret_store.dart';
 
 void main() {
   group('configuration export', () {
@@ -55,6 +56,60 @@ void main() {
       expect(imported.commandRequests.single.command, 'flutter test');
       expect(
           imported.commandRequests.single.status, CommandRequestStatus.pending);
+    });
+  });
+
+  group('secure local persistence', () {
+    test('saves app state without api keys and restores them from secrets',
+        () async {
+      final temp = await Directory.systemTemp.createTemp('ai_team_store_');
+      addTearDown(() async => temp.delete(recursive: true));
+      final secrets = MemorySecretStore();
+      final store = JsonLocalStore(
+        File('${temp.path}/state.json'),
+        secretStore: secrets,
+      );
+      final state = AppState.seed();
+
+      await store.save(state);
+      final raw = await File('${temp.path}/state.json').readAsString();
+      final loaded = await store.load();
+
+      expect(raw, isNot(contains('sk-local-placeholder')));
+      expect(raw, isNot(contains('"apiKey"')));
+      expect(loaded.models.first.apiKey, 'sk-local-placeholder');
+      expect(await secrets.read('model-main'), 'sk-local-placeholder');
+    });
+
+    test('exports secrets only when explicitly requested from secret store',
+        () async {
+      final secrets = MemorySecretStore();
+      await secrets.write('model-main', 'real-secret');
+      final state = AppState.seed().copyWith(
+        models: [
+          const ModelProfile(
+            id: 'model-main',
+            name: 'OpenAI Compatible',
+            baseUrl: 'https://api.openai.com/v1',
+            modelName: 'gpt-4.1',
+            apiKey: '',
+          ),
+        ],
+      );
+
+      final redacted = await ConfigExporter.exportStateWithSecrets(
+        state,
+        includeSecrets: false,
+        secretStore: secrets,
+      );
+      final withSecrets = await ConfigExporter.exportStateWithSecrets(
+        state,
+        includeSecrets: true,
+        secretStore: secrets,
+      );
+
+      expect(redacted['models'].first, isNot(contains('apiKey')));
+      expect(withSecrets['models'].first['apiKey'], 'real-secret');
     });
   });
 

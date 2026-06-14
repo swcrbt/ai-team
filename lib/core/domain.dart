@@ -165,6 +165,28 @@ class ModelProfile {
   final double temperature;
   final int maxTokens;
 
+  ModelProfile copyWith({
+    String? id,
+    String? name,
+    String? baseUrl,
+    String? modelName,
+    String? apiKey,
+    bool? streaming,
+    double? temperature,
+    int? maxTokens,
+  }) {
+    return ModelProfile(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      baseUrl: baseUrl ?? this.baseUrl,
+      modelName: modelName ?? this.modelName,
+      apiKey: apiKey ?? this.apiKey,
+      streaming: streaming ?? this.streaming,
+      temperature: temperature ?? this.temperature,
+      maxTokens: maxTokens ?? this.maxTokens,
+    );
+  }
+
   Map<String, Object?> toJson({bool includeSecrets = false}) {
     final json = <String, Object?>{
       'id': id,
