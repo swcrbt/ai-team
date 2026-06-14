@@ -873,6 +873,12 @@ class AppController extends ChangeNotifier {
         uri.host.isEmpty) {
       throw ArgumentError('Base URL 必须是有效的 http 或 https 地址');
     }
+    if (model.temperature < 0 || model.temperature > 2) {
+      throw ArgumentError('温度必须在 0 到 2 之间');
+    }
+    if (model.maxTokens <= 0) {
+      throw ArgumentError('最大 Token 必须大于 0');
+    }
   }
 
   void _validateRole(RoleTemplate role) {
@@ -1312,7 +1318,8 @@ class _InspectorPane extends StatelessWidget {
                   .map(
                     (model) => _KeyValueRow(
                       label: model.name,
-                      value: '${model.modelName}\n${model.baseUrl}',
+                      value:
+                          '${model.modelName}\n${model.baseUrl}\n流式: ${model.streaming ? '开' : '关'} · 温度: ${model.temperature} · 最大 Token: ${model.maxTokens}',
                       actions: [
                         IconButton(
                           tooltip: '编辑模型',
@@ -1764,6 +1771,13 @@ Future<void> _showModelDialog(
   );
   final modelName = TextEditingController(text: model?.modelName ?? '');
   final apiKey = TextEditingController(text: model?.apiKey ?? '');
+  final temperature = TextEditingController(
+    text: (model?.temperature ?? 0.4).toString(),
+  );
+  final maxTokens = TextEditingController(
+    text: (model?.maxTokens ?? 1600).toString(),
+  );
+  var streaming = model?.streaming ?? true;
   String? validationError;
   await showDialog<void>(
     context: context,
@@ -1780,6 +1794,14 @@ Future<void> _showModelDialog(
               _DialogField(controller: baseUrl, label: 'Base URL'),
               _DialogField(controller: modelName, label: '模型名称'),
               _DialogField(controller: apiKey, label: 'API Key', obscure: true),
+              SwitchListTile(
+                value: streaming,
+                onChanged: (value) => setDialogState(() => streaming = value),
+                title: const Text('流式输出'),
+                contentPadding: EdgeInsets.zero,
+              ),
+              _DialogField(controller: temperature, label: '温度 0-2'),
+              _DialogField(controller: maxTokens, label: '最大 Token'),
             ],
           ),
         ),
@@ -1791,6 +1813,13 @@ Future<void> _showModelDialog(
           FilledButton(
             onPressed: () {
               try {
+                final parsedTemperature = double.tryParse(
+                  temperature.text.trim(),
+                );
+                final parsedMaxTokens = int.tryParse(maxTokens.text.trim());
+                if (parsedTemperature == null || parsedMaxTokens == null) {
+                  throw ArgumentError('温度和最大 Token 必须是数字');
+                }
                 final next = ModelProfile(
                   id: model?.id ??
                       'model-${DateTime.now().microsecondsSinceEpoch}',
@@ -1798,9 +1827,9 @@ Future<void> _showModelDialog(
                   baseUrl: baseUrl.text.trim(),
                   modelName: modelName.text.trim(),
                   apiKey: apiKey.text.trim(),
-                  streaming: model?.streaming ?? true,
-                  temperature: model?.temperature ?? 0.4,
-                  maxTokens: model?.maxTokens ?? 1600,
+                  streaming: streaming,
+                  temperature: parsedTemperature,
+                  maxTokens: parsedMaxTokens,
                 );
                 if (model == null) {
                   controller.addModel(next);

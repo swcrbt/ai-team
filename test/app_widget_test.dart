@@ -116,6 +116,32 @@ void main() {
       ),
       throwsArgumentError,
     );
+    expect(
+      () => controller.addModel(
+        const ModelProfile(
+          id: 'model-hot',
+          name: 'Too Hot',
+          baseUrl: 'https://example.com/v1',
+          modelName: 'example-model',
+          apiKey: 'secret',
+          temperature: 3,
+        ),
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => controller.addModel(
+        const ModelProfile(
+          id: 'model-zero-token',
+          name: 'No Tokens',
+          baseUrl: 'https://example.com/v1',
+          modelName: 'example-model',
+          apiKey: 'secret',
+          maxTokens: 0,
+        ),
+      ),
+      throwsArgumentError,
+    );
   });
 
   test('controller dispatches messages to a selected member conversation',
