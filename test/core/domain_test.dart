@@ -9,6 +9,73 @@ import 'package:ai_team/core/patching.dart';
 import 'package:ai_team/core/secret_store.dart';
 
 void main() {
+  group('queued collaboration domain', () {
+    test('team mode and member priority persist with backward-compatible defaults',
+        () {
+      final oldTeam = Team.fromJson({
+        'id': 'team-old',
+        'name': '旧团队',
+        'memberIds': ['member-secretary'],
+        'secretaryMemberId': 'member-secretary',
+        'maxRounds': 8,
+      });
+      expect(oldTeam.collaborationMode, TeamCollaborationMode.serial);
+
+      final member = TeamMember.fromJson({
+        'id': 'member-a',
+        'name': '成员 A',
+        'roleId': 'role-frontend',
+        'modelId': 'model-main',
+        'isSecretary': false,
+      });
+      expect(member.executionPriority, 0);
+
+      final restored = Team.fromJson(oldTeam
+          .copyWith(
+            collaborationMode: TeamCollaborationMode.parallel,
+          )
+          .toJson());
+      expect(restored.collaborationMode, TeamCollaborationMode.parallel);
+    });
+
+    test('queued task persists priority notes status and message links', () {
+      final task = QueuedTask(
+        id: 'task-1',
+        conversationId: 'conv-team-default',
+        title: '实现登录页',
+        originalText: '实现登录页并补测试',
+        notes: const ['补充移动端适配', '优先检查失败态'],
+        priority: 10,
+        status: QueuedTaskStatus.paused,
+        createdAt: DateTime(2026, 6, 14, 10),
+        updatedAt: DateTime(2026, 6, 14, 11),
+        messageIds: const ['msg-1', 'msg-2'],
+      );
+
+      final restored = QueuedTask.fromJson(task.toJson());
+
+      expect(restored.title, '实现登录页');
+      expect(restored.notes, ['补充移动端适配', '优先检查失败态']);
+      expect(restored.priority, 10);
+      expect(restored.status, QueuedTaskStatus.paused);
+      expect(restored.messageIds, ['msg-1', 'msg-2']);
+    });
+
+    test('chat messages persist related task ids', () {
+      final message = ChatMessage(
+        id: 'msg-1',
+        authorName: '系统',
+        content: '已为任务追加备注',
+        createdAt: DateTime(2026, 6, 14),
+        taskIds: const ['task-1', 'task-2'],
+      );
+
+      final restored = ChatMessage.fromJson(message.toJson());
+
+      expect(restored.taskIds, ['task-1', 'task-2']);
+    });
+  });
+
   group('configuration export', () {
     test('exports model metadata without api keys by default', () {
       final state = AppState.seed();

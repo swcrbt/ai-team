@@ -1,5 +1,7 @@
 enum ConversationStatus { idle, running, paused, stopped, failed }
 
+enum TeamCollaborationMode { serial, parallel }
+
 enum CommandDecision { allowed, requiresConfirmation, denied }
 
 enum CommandRequestStatus { pending, approved, denied, executed, failed }
@@ -7,6 +9,8 @@ enum CommandRequestStatus { pending, approved, denied, executed, failed }
 enum PatchStatus { pending, applied, rejected }
 
 enum TaskAssignmentStatus { pending, running, completed, failed, cancelled }
+
+enum QueuedTaskStatus { pending, running, paused, completed, failed }
 
 class TaskAssignment {
   const TaskAssignment({
@@ -497,6 +501,7 @@ class TeamMember {
     required this.roleId,
     required this.modelId,
     this.isSecretary = false,
+    this.executionPriority = 0,
   });
 
   final String id;
@@ -504,6 +509,7 @@ class TeamMember {
   final String roleId;
   final String modelId;
   final bool isSecretary;
+  final int executionPriority;
 
   TeamMember copyWith({
     String? id,
@@ -511,6 +517,7 @@ class TeamMember {
     String? roleId,
     String? modelId,
     bool? isSecretary,
+    int? executionPriority,
   }) {
     return TeamMember(
       id: id ?? this.id,
@@ -518,6 +525,7 @@ class TeamMember {
       roleId: roleId ?? this.roleId,
       modelId: modelId ?? this.modelId,
       isSecretary: isSecretary ?? this.isSecretary,
+      executionPriority: executionPriority ?? this.executionPriority,
     );
   }
 
@@ -527,6 +535,7 @@ class TeamMember {
         'roleId': roleId,
         'modelId': modelId,
         'isSecretary': isSecretary,
+        'executionPriority': executionPriority,
       };
 
   factory TeamMember.fromJson(Map<String, Object?> json) => TeamMember(
@@ -534,7 +543,8 @@ class TeamMember {
         name: json['name'] as String,
         roleId: json['roleId'] as String,
         modelId: json['modelId'] as String,
-        isSecretary: json['isSecretary'] as bool,
+        isSecretary: (json['isSecretary'] as bool?) ?? false,
+        executionPriority: (json['executionPriority'] as num?)?.toInt() ?? 0,
       );
 }
 
@@ -545,6 +555,7 @@ class Team {
     required this.memberIds,
     required this.secretaryMemberId,
     this.maxRounds = 8,
+    this.collaborationMode = TeamCollaborationMode.serial,
   });
 
   final String id;
@@ -552,13 +563,20 @@ class Team {
   final List<String> memberIds;
   final String secretaryMemberId;
   final int maxRounds;
+  final TeamCollaborationMode collaborationMode;
 
-  Team copyWith({List<String>? memberIds, int? maxRounds}) => Team(
+  Team copyWith({
+    List<String>? memberIds,
+    int? maxRounds,
+    TeamCollaborationMode? collaborationMode,
+  }) =>
+      Team(
         id: id,
         name: name,
         memberIds: memberIds ?? this.memberIds,
         secretaryMemberId: secretaryMemberId,
         maxRounds: maxRounds ?? this.maxRounds,
+        collaborationMode: collaborationMode ?? this.collaborationMode,
       );
 
   Map<String, Object?> toJson() => {
@@ -567,6 +585,7 @@ class Team {
         'memberIds': memberIds,
         'secretaryMemberId': secretaryMemberId,
         'maxRounds': maxRounds,
+        'collaborationMode': collaborationMode.name,
       };
 
   factory Team.fromJson(Map<String, Object?> json) => Team(
@@ -574,7 +593,11 @@ class Team {
         name: json['name'] as String,
         memberIds: List<String>.from(json['memberIds'] as List),
         secretaryMemberId: json['secretaryMemberId'] as String,
-        maxRounds: (json['maxRounds'] as num).toInt(),
+        maxRounds: (json['maxRounds'] as num?)?.toInt() ?? 8,
+        collaborationMode: TeamCollaborationMode.values.byName(
+          json['collaborationMode'] as String? ??
+              TeamCollaborationMode.serial.name,
+        ),
       );
 }
 
@@ -586,6 +609,7 @@ class ChatMessage {
     required this.createdAt,
     this.memberId,
     this.isUser = false,
+    this.taskIds = const [],
   });
 
   final String id;
@@ -594,6 +618,7 @@ class ChatMessage {
   final DateTime createdAt;
   final String? memberId;
   final bool isUser;
+  final List<String> taskIds;
 
   Map<String, Object?> toJson() => {
         'id': id,
@@ -602,6 +627,7 @@ class ChatMessage {
         'createdAt': createdAt.toIso8601String(),
         'memberId': memberId,
         'isUser': isUser,
+        'taskIds': taskIds,
       };
 
   factory ChatMessage.fromJson(Map<String, Object?> json) => ChatMessage(
@@ -610,7 +636,82 @@ class ChatMessage {
         content: json['content'] as String,
         createdAt: DateTime.parse(json['createdAt'] as String),
         memberId: json['memberId'] as String?,
-        isUser: json['isUser'] as bool,
+        isUser: (json['isUser'] as bool?) ?? false,
+        taskIds: List<String>.from(json['taskIds'] as List? ?? const []),
+      );
+}
+
+class QueuedTask {
+  const QueuedTask({
+    required this.id,
+    required this.conversationId,
+    required this.title,
+    required this.originalText,
+    required this.priority,
+    required this.status,
+    required this.createdAt,
+    required this.updatedAt,
+    this.notes = const [],
+    this.messageIds = const [],
+  });
+
+  final String id;
+  final String conversationId;
+  final String title;
+  final String originalText;
+  final List<String> notes;
+  final int priority;
+  final QueuedTaskStatus status;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final List<String> messageIds;
+
+  QueuedTask copyWith({
+    String? title,
+    List<String>? notes,
+    int? priority,
+    QueuedTaskStatus? status,
+    DateTime? updatedAt,
+    List<String>? messageIds,
+  }) {
+    return QueuedTask(
+      id: id,
+      conversationId: conversationId,
+      title: title ?? this.title,
+      originalText: originalText,
+      notes: notes ?? this.notes,
+      priority: priority ?? this.priority,
+      status: status ?? this.status,
+      createdAt: createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      messageIds: messageIds ?? this.messageIds,
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+        'id': id,
+        'conversationId': conversationId,
+        'title': title,
+        'originalText': originalText,
+        'notes': notes,
+        'priority': priority,
+        'status': status.name,
+        'createdAt': createdAt.toIso8601String(),
+        'updatedAt': updatedAt.toIso8601String(),
+        'messageIds': messageIds,
+      };
+
+  factory QueuedTask.fromJson(Map<String, Object?> json) => QueuedTask(
+        id: json['id'] as String,
+        conversationId: json['conversationId'] as String,
+        title: json['title'] as String,
+        originalText: json['originalText'] as String,
+        notes: List<String>.from(json['notes'] as List? ?? const []),
+        priority: (json['priority'] as num?)?.toInt() ?? 0,
+        status: QueuedTaskStatus.values.byName(json['status'] as String),
+        createdAt: DateTime.parse(json['createdAt'] as String),
+        updatedAt: DateTime.parse(json['updatedAt'] as String),
+        messageIds: List<String>.from(json['messageIds'] as List? ?? const []),
       );
 }
 
@@ -735,6 +836,7 @@ class AppState {
     required this.conversations,
     required this.workspaces,
     required this.taskAssignments,
+    required this.queuedTasks,
     required this.commandRequests,
     required this.patchProposals,
     required this.auditLog,
@@ -747,6 +849,7 @@ class AppState {
   final List<Conversation> conversations;
   final List<ProjectWorkspace> workspaces;
   final List<TaskAssignment> taskAssignments;
+  final List<QueuedTask> queuedTasks;
   final List<CommandRequest> commandRequests;
   final List<PatchProposal> patchProposals;
   final List<AuditEntry> auditLog;
@@ -759,6 +862,7 @@ class AppState {
     List<Conversation>? conversations,
     List<ProjectWorkspace>? workspaces,
     List<TaskAssignment>? taskAssignments,
+    List<QueuedTask>? queuedTasks,
     List<CommandRequest>? commandRequests,
     List<PatchProposal>? patchProposals,
     List<AuditEntry>? auditLog,
@@ -771,6 +875,7 @@ class AppState {
       conversations: conversations ?? this.conversations,
       workspaces: workspaces ?? this.workspaces,
       taskAssignments: taskAssignments ?? this.taskAssignments,
+      queuedTasks: queuedTasks ?? this.queuedTasks,
       commandRequests: commandRequests ?? this.commandRequests,
       patchProposals: patchProposals ?? this.patchProposals,
       auditLog: auditLog ?? this.auditLog,
@@ -790,6 +895,7 @@ class AppState {
             workspaces.map((workspace) => workspace.toJson()).toList(),
         'taskAssignments':
             taskAssignments.map((assignment) => assignment.toJson()).toList(),
+        'queuedTasks': queuedTasks.map((task) => task.toJson()).toList(),
         'commandRequests':
             commandRequests.map((request) => request.toJson()).toList(),
         'patchProposals':
@@ -820,6 +926,9 @@ class AppState {
         taskAssignments: ((json['taskAssignments'] as List?) ?? const [])
             .map(
                 (item) => TaskAssignment.fromJson(item as Map<String, Object?>))
+            .toList(),
+        queuedTasks: ((json['queuedTasks'] as List?) ?? const [])
+            .map((item) => QueuedTask.fromJson(item as Map<String, Object?>))
             .toList(),
         commandRequests: ((json['commandRequests'] as List?) ?? const [])
             .map(
@@ -958,6 +1067,7 @@ class AppState {
       conversations: conversations,
       workspaces: const [],
       taskAssignments: const [],
+      queuedTasks: const [],
       commandRequests: const [],
       patchProposals: const [],
       auditLog: const [],
