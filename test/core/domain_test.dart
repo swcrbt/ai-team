@@ -156,6 +156,24 @@ void main() {
         policy.evaluate('flutter test', workingDirectory: '/tmp/app'),
         CommandDecision.denied,
       );
+      expect(
+        policy.evaluate(
+          'flutter test; rm -rf .',
+          workingDirectory: '/workspace/app',
+        ),
+        CommandDecision.denied,
+      );
+      expect(
+        policy.evaluate('flutter test', workingDirectory: '/workspace/app2'),
+        CommandDecision.denied,
+      );
+      expect(
+        policy.evaluate(
+          'flutter test --coverage',
+          workingDirectory: '/workspace/app/packages/core',
+        ),
+        CommandDecision.requiresConfirmation,
+      );
     });
   });
 

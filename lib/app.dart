@@ -537,6 +537,17 @@ class AppController extends ChangeNotifier {
     String requestId,
     CommandRequestStatus status,
   ) {
+    final existing =
+        state.commandRequests.firstWhere((item) => item.id == requestId);
+    if (existing.decision == CommandDecision.denied &&
+        status != CommandRequestStatus.denied) {
+      throw StateError('策略拒绝的命令不能被批准或执行');
+    }
+    if ((existing.status == CommandRequestStatus.executed ||
+            existing.status == CommandRequestStatus.failed) &&
+        status != existing.status) {
+      throw StateError('已结束的命令请求不能修改状态');
+    }
     _commit(
       state.copyWith(
         commandRequests: state.commandRequests

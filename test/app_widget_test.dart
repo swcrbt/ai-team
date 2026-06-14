@@ -209,6 +209,13 @@ void main() {
     expect(denied.status, CommandRequestStatus.denied);
     expect(controller.state.commandRequests.length, 2);
     expect(controller.state.auditLog.last.action, 'command_denied');
+    expect(
+      () => controller.updateCommandRequestStatus(
+        denied.id,
+        CommandRequestStatus.approved,
+      ),
+      throwsStateError,
+    );
   });
 
   test('controller executes only approved command requests', () async {

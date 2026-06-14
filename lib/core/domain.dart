@@ -91,21 +91,28 @@ class CommandPolicy {
     required String workingDirectory,
   }) {
     final normalized = command.trim();
+    if (normalized.isEmpty || _hasUnsafeShellSyntax(normalized)) {
+      return CommandDecision.denied;
+    }
+
     final isBlocked = blockedCommands.any(
-      (blocked) => normalized == blocked || normalized.startsWith('$blocked '),
+      (blocked) => _matchesCommandPrefix(normalized, blocked),
     );
     if (isBlocked) {
       return CommandDecision.denied;
     }
 
     final directoryAllowed = allowedDirectories.isEmpty ||
-        allowedDirectories.any(workingDirectory.startsWith);
+        allowedDirectories.any(
+          (directory) => _isSameOrChildPath(workingDirectory, directory),
+        );
     if (!directoryAllowed) {
       return CommandDecision.denied;
     }
 
-    final commandAllowed =
-        allowedCommands.any((allowed) => normalized.startsWith(allowed));
+    final commandAllowed = allowedCommands.any(
+      (allowed) => _matchesCommandPrefix(normalized, allowed),
+    );
     if (!commandAllowed) {
       return CommandDecision.denied;
     }
@@ -129,6 +136,32 @@ class CommandPolicy {
             List<String>.from(json['allowedDirectories'] as List),
         requiresConfirmation: json['requiresConfirmation'] as bool,
       );
+}
+
+bool _matchesCommandPrefix(String command, String policyCommand) {
+  final normalizedPolicy = policyCommand.trim();
+  return command == normalizedPolicy ||
+      command.startsWith('$normalizedPolicy ');
+}
+
+bool _hasUnsafeShellSyntax(String command) {
+  return RegExp(r'[;&|<>`$]|\r|\n').hasMatch(command);
+}
+
+bool _isSameOrChildPath(String path, String allowedRoot) {
+  final normalizedPath = _normalizePath(path);
+  final normalizedRoot = _normalizePath(allowedRoot);
+  return normalizedPath == normalizedRoot ||
+      normalizedPath.startsWith('$normalizedRoot/') ||
+      normalizedPath.startsWith('$normalizedRoot\\');
+}
+
+String _normalizePath(String path) {
+  var normalized = path.trim();
+  while (normalized.endsWith('/') || normalized.endsWith('\\')) {
+    normalized = normalized.substring(0, normalized.length - 1);
+  }
+  return normalized;
 }
 
 class CommandRequest {
