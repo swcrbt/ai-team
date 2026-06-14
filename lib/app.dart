@@ -126,14 +126,18 @@ class _AiTeamHomeState extends State<AiTeamHome> {
 
 class AppController extends ChangeNotifier {
   AppController(
-    this.state,
+    AppState initialState,
     this.orchestrator, {
     this.onStateChanged,
     this.fileDialogs = const SystemFileDialogService(),
     JsonLocalStore? exportStore,
-  }) : exportStore = exportStore ?? JsonLocalStore.defaultStore();
+  })  : state = _ensureMemberConversations(initialState),
+        exportStore = exportStore ?? JsonLocalStore.defaultStore(),
+        selectedConversationId =
+            _initialConversationId(_ensureMemberConversations(initialState));
 
   AppState state;
+  String selectedConversationId;
   final TeamOrchestrator orchestrator;
   final ValueChanged<AppState>? onStateChanged;
   final FileDialogService fileDialogs;
@@ -147,12 +151,32 @@ class AppController extends ChangeNotifier {
 
   List<PatchProposal> get patchProposals => state.patchProposals;
 
-  Conversation get currentConversation =>
-      state.conversations.firstWhere((item) => item.teamId == currentTeam.id);
+  Conversation get currentConversation => state.conversations.firstWhere(
+        (item) => item.id == selectedConversationId,
+        orElse: () => state.conversations.firstWhere(
+          (item) => item.teamId == currentTeam.id && item.memberId == null,
+        ),
+      );
+
+  Conversation get teamConversation => state.conversations.firstWhere(
+        (item) => item.teamId == currentTeam.id && item.memberId == null,
+      );
 
   List<TeamMember> get currentMembers => state.members
       .where((member) => currentTeam.memberIds.contains(member.id))
       .toList();
+
+  Conversation conversationForMember(String memberId) {
+    return state.conversations.firstWhere(
+      (item) => item.teamId == currentTeam.id && item.memberId == memberId,
+      orElse: () => throw StateError('成员会话不存在: $memberId'),
+    );
+  }
+
+  void selectConversation(String conversationId) {
+    selectedConversationId = conversationId;
+    notifyListeners();
+  }
 
   Future<void> dispatch(String text) async {
     final trimmed = text.trim();
@@ -166,15 +190,28 @@ class AppController extends ChangeNotifier {
     _requestedCancellationStatus = null;
     notifyListeners();
     try {
-      _commit(
-        await orchestrator.dispatchTeamTask(
-          state,
-          teamId: currentTeam.id,
-          userText: trimmed,
-          cancellation: cancellation,
-          onProgress: _commit,
-        ),
-      );
+      final conversation = currentConversation;
+      if (conversation.memberId == null) {
+        _commit(
+          await orchestrator.dispatchTeamTask(
+            state,
+            teamId: currentTeam.id,
+            userText: trimmed,
+            cancellation: cancellation,
+            onProgress: _commit,
+          ),
+        );
+      } else {
+        _commit(
+          await orchestrator.dispatchMemberChat(
+            state,
+            conversationId: conversation.id,
+            userText: trimmed,
+            cancellation: cancellation,
+            onProgress: _commit,
+          ),
+        );
+      }
     } catch (exception) {
       if (cancellation.isCancelled) {
         _commitCancelledDispatch(
@@ -334,6 +371,10 @@ class AppController extends ChangeNotifier {
     _commit(
       state.copyWith(
         members: [...state.members, member],
+        conversations: [
+          ...state.conversations,
+          _createMemberConversation(currentTeam.id, member),
+        ],
         teams: state.teams
             .map((team) => team.id == updatedTeam.id ? updatedTeam : team)
             .toList(),
@@ -350,6 +391,19 @@ class AppController extends ChangeNotifier {
             .map((item) => item.id == member.id
                 ? member.copyWith(isSecretary: existing.isSecretary)
                 : item)
+            .toList(),
+        conversations: state.conversations
+            .map((conversation) => conversation.memberId == member.id
+                ? Conversation(
+                    id: conversation.id,
+                    title: member.name,
+                    teamId: conversation.teamId,
+                    memberId: conversation.memberId,
+                    messages: conversation.messages,
+                    currentRound: conversation.currentRound,
+                    status: conversation.status,
+                  )
+                : conversation)
             .toList(),
         auditLog: [
           ...state.auditLog,
@@ -372,6 +426,9 @@ class AppController extends ChangeNotifier {
     _commit(
       state.copyWith(
         members: state.members.where((item) => item.id != memberId).toList(),
+        conversations: state.conversations
+            .where((conversation) => conversation.memberId != memberId)
+            .toList(),
         teams: state.teams
             .map((team) => team.copyWith(
                   memberIds:
@@ -719,7 +776,10 @@ class AppController extends ChangeNotifier {
   }
 
   void _commit(AppState nextState) {
-    state = nextState;
+    state = _ensureMemberConversations(nextState);
+    if (!state.conversations.any((item) => item.id == selectedConversationId)) {
+      selectedConversationId = _initialConversationId(state);
+    }
     onStateChanged?.call(state);
     notifyListeners();
   }
@@ -866,7 +926,10 @@ class _ConversationRail extends StatelessWidget {
                 icon: Icons.forum_rounded,
                 title: '团队会话',
                 subtitle: controller.currentTeam.name,
-                selected: true,
+                selected: controller.selectedConversationId ==
+                    controller.teamConversation.id,
+                onTap: () => controller
+                    .selectConversation(controller.teamConversation.id),
               ),
             ],
           ),
@@ -880,6 +943,11 @@ class _ConversationRail extends StatelessWidget {
                         : Icons.person_rounded,
                     title: member.name,
                     subtitle: _roleName(controller.state, member.roleId),
+                    selected: controller.selectedConversationId ==
+                        controller.conversationForMember(member.id).id,
+                    onTap: () => controller.selectConversation(
+                      controller.conversationForMember(member.id).id,
+                    ),
                   ),
                 )
                 .toList(),
@@ -936,27 +1004,35 @@ class _RailTile extends StatelessWidget {
     required this.title,
     required this.subtitle,
     this.selected = false,
+    this.onTap,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final bool selected;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 2),
-      decoration: BoxDecoration(
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Material(
         color: selected ? Colors.white : Colors.transparent,
-        borderRadius: BorderRadius.circular(6),
-        border: selected ? Border.all(color: const Color(0xFFE5E7EB)) : null,
-      ),
-      child: ListTile(
-        dense: true,
-        leading: Icon(icon, size: 18),
-        title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-        subtitle: Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(6),
+          side: selected
+              ? const BorderSide(color: Color(0xFFE5E7EB))
+              : BorderSide.none,
+        ),
+        child: ListTile(
+          dense: true,
+          onTap: onTap,
+          leading: Icon(icon, size: 18),
+          title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+          subtitle:
+              Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+        ),
       ),
     );
   }
@@ -2124,6 +2200,53 @@ String _roleName(AppState state, String roleId) =>
 
 String _modelName(AppState state, String modelId) =>
     state.models.firstWhere((model) => model.id == modelId).name;
+
+String _initialConversationId(AppState state) {
+  return state.conversations
+      .firstWhere(
+        (conversation) => conversation.memberId == null,
+        orElse: () => state.conversations.first,
+      )
+      .id;
+}
+
+Conversation _createMemberConversation(String teamId, TeamMember member) {
+  return Conversation(
+    id: 'conv-${member.id}',
+    title: member.name,
+    teamId: teamId,
+    memberId: member.id,
+    messages: [
+      ChatMessage(
+        id: 'msg-welcome-${member.id}',
+        authorName: member.name,
+        memberId: member.id,
+        content: '这里是和${member.name}的独立会话。',
+        createdAt: DateTime.now(),
+      ),
+    ],
+  );
+}
+
+AppState _ensureMemberConversations(AppState state) {
+  final conversations = [...state.conversations];
+  var changed = false;
+  for (final team in state.teams) {
+    for (final memberId in team.memberIds) {
+      final hasConversation = conversations.any(
+        (conversation) =>
+            conversation.teamId == team.id && conversation.memberId == memberId,
+      );
+      if (hasConversation) {
+        continue;
+      }
+      final member = state.members.firstWhere((item) => item.id == memberId);
+      conversations.add(_createMemberConversation(team.id, member));
+      changed = true;
+    }
+  }
+  return changed ? state.copyWith(conversations: conversations) : state;
+}
 
 String _basename(String path) {
   final normalized = path.replaceAll('\\', '/');

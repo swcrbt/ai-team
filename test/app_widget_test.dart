@@ -118,6 +118,51 @@ void main() {
     );
   });
 
+  test('controller dispatches messages to a selected member conversation',
+      () async {
+    final controller = AppController(
+      AppState.seed(),
+      TeamOrchestrator(FakeModelGateway()),
+    );
+    addTearDown(controller.dispose);
+    final teamMessageCount = controller.teamConversation.messages.length;
+    final memberConversation =
+        controller.conversationForMember('member-frontend');
+
+    controller.selectConversation(memberConversation.id);
+    await controller.dispatch('请只实现前端面板');
+
+    final updatedMemberConversation =
+        controller.conversationForMember('member-frontend');
+    expect(updatedMemberConversation.messages.map((message) => message.content),
+        contains('请只实现前端面板'));
+    expect(
+      updatedMemberConversation.messages
+          .any((message) => message.authorName == '前端工程师'),
+      isTrue,
+    );
+    expect(controller.teamConversation.messages.length, teamMessageCount);
+    expect(controller.state.auditLog.last.action, 'member_chat_dispatched');
+  });
+
+  test('controller backfills missing member conversations from old state', () {
+    final oldState = AppState.seed().copyWith(
+      conversations: [
+        AppState.seed().conversations.firstWhere(
+              (conversation) => conversation.memberId == null,
+            ),
+      ],
+    );
+    final controller = AppController(
+      oldState,
+      TeamOrchestrator(FakeModelGateway()),
+    );
+    addTearDown(controller.dispose);
+
+    expect(controller.conversationForMember('member-frontend').title, '前端工程师');
+    expect(controller.conversationForMember('member-tester').title, '测试工程师');
+  });
+
   test('controller registers workspace and creates patch proposal from file',
       () async {
     final temp = await Directory.systemTemp.createTemp('ai_team_workspace_');

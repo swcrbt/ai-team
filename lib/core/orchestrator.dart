@@ -14,8 +14,8 @@ class TeamOrchestrator {
     void Function(AppState state)? onProgress,
   }) async {
     final team = state.teams.firstWhere((item) => item.id == teamId);
-    final conversation =
-        state.conversations.firstWhere((item) => item.teamId == teamId);
+    final conversation = state.conversations
+        .firstWhere((item) => item.teamId == teamId && item.memberId == null);
     final secretary =
         state.members.firstWhere((item) => item.id == team.secretaryMemberId);
     final workerMembers = state.members
@@ -110,6 +110,79 @@ class TeamOrchestrator {
           id: _id('audit'),
           action: 'team_task_dispatched',
           detail: 'team=$teamId round=$round text=$userText',
+          createdAt: DateTime.now(),
+        ),
+      ],
+    );
+  }
+
+  Future<AppState> dispatchMemberChat(
+    AppState state, {
+    required String conversationId,
+    required String userText,
+    ModelRequestCancellation? cancellation,
+    void Function(AppState state)? onProgress,
+  }) async {
+    final conversation =
+        state.conversations.firstWhere((item) => item.id == conversationId);
+    final memberId = conversation.memberId;
+    if (memberId == null) {
+      throw StateError('成员私聊会话缺少成员: ${conversation.id}');
+    }
+    final member = state.members.firstWhere((item) => item.id == memberId);
+    final team =
+        state.teams.firstWhere((item) => item.id == conversation.teamId);
+    final role = state.roles.firstWhere((item) => item.id == member.roleId);
+    final model = state.models.firstWhere((item) => item.id == member.modelId);
+    final now = DateTime.now();
+    final messages = [
+      ...conversation.messages,
+      ChatMessage(
+        id: _id('msg'),
+        authorName: '我',
+        content: userText,
+        createdAt: now,
+        isUser: true,
+      ),
+    ];
+    var workingState = _replaceConversation(
+      state,
+      conversation.copyWith(
+        messages: messages,
+        status: ConversationStatus.running,
+      ),
+    );
+    onProgress?.call(workingState);
+
+    cancellation?.throwIfCancelled();
+    final content = await gateway.complete(
+      model: model,
+      systemPrompt: role.renderSystemPrompt(
+        memberName: member.name,
+        teamName: team.name,
+      ),
+      messages: messages,
+      cancellation: cancellation,
+    );
+    cancellation?.throwIfCancelled();
+    messages.add(ChatMessage(
+      id: _id('msg'),
+      authorName: member.name,
+      memberId: member.id,
+      content: content,
+      createdAt: DateTime.now(),
+    ));
+    final updatedConversation = conversation.copyWith(
+      messages: messages,
+      status: ConversationStatus.idle,
+    );
+    return _replaceConversation(workingState, updatedConversation).copyWith(
+      auditLog: [
+        ...workingState.auditLog,
+        AuditEntry(
+          id: _id('audit'),
+          action: 'member_chat_dispatched',
+          detail: 'member=${member.id} text=$userText',
           createdAt: DateTime.now(),
         ),
       ],

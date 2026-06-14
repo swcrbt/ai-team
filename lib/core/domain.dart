@@ -540,6 +540,7 @@ class Conversation {
     required this.title,
     required this.teamId,
     required this.messages,
+    this.memberId,
     this.currentRound = 0,
     this.status = ConversationStatus.idle,
   });
@@ -547,12 +548,14 @@ class Conversation {
   final String id;
   final String title;
   final String teamId;
+  final String? memberId;
   final List<ChatMessage> messages;
   final int currentRound;
   final ConversationStatus status;
 
   Conversation copyWith({
     List<ChatMessage>? messages,
+    String? memberId,
     int? currentRound,
     ConversationStatus? status,
   }) {
@@ -560,6 +563,7 @@ class Conversation {
       id: id,
       title: title,
       teamId: teamId,
+      memberId: memberId ?? this.memberId,
       messages: messages ?? this.messages,
       currentRound: currentRound ?? this.currentRound,
       status: status ?? this.status,
@@ -570,6 +574,7 @@ class Conversation {
         'id': id,
         'title': title,
         'teamId': teamId,
+        'memberId': memberId,
         'messages': messages.map((message) => message.toJson()).toList(),
         'currentRound': currentRound,
         'status': status.name,
@@ -579,6 +584,7 @@ class Conversation {
         id: json['id'] as String,
         title: json['title'] as String,
         teamId: json['teamId'] as String,
+        memberId: json['memberId'] as String?,
         messages: (json['messages'] as List)
             .map((item) => ChatMessage.fromJson(item as Map<String, Object?>))
             .toList(),
@@ -826,6 +832,7 @@ class AppState {
         id: 'conv-team-default',
         title: '团队会话',
         teamId: 'team-default',
+        memberId: null,
         messages: [
           ChatMessage(
             id: 'msg-welcome',
@@ -836,6 +843,22 @@ class AppState {
           ),
         ],
       ),
+      for (final member in members)
+        Conversation(
+          id: 'conv-${member.id}',
+          title: member.name,
+          teamId: 'team-default',
+          memberId: member.id,
+          messages: [
+            ChatMessage(
+              id: 'msg-welcome-${member.id}',
+              authorName: member.name,
+              memberId: member.id,
+              content: '这里是和${member.name}的独立会话。',
+              createdAt: DateTime(2026, 1, 1),
+            ),
+          ],
+        ),
     ];
     return AppState(
       models: models,

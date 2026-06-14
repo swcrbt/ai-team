@@ -68,6 +68,14 @@ void main() {
           imported.commandRequests.single.status, CommandRequestStatus.pending);
       expect(imported.patchProposals.single.memberName, '前端工程师');
       expect(imported.patchProposals.single.status, PatchStatus.pending);
+      expect(
+        ConfigExporter.importState(
+          ConfigExporter.exportState(AppState.seed(), includeSecrets: false),
+        ).conversations.any(
+              (conversation) => conversation.memberId == 'member-frontend',
+            ),
+        isTrue,
+      );
     });
   });
 
