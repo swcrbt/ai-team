@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ai_team/app.dart';
 import 'package:ai_team/core/domain.dart';
 import 'package:ai_team/core/file_dialogs.dart';
+import 'package:ai_team/core/model_gateway.dart';
 import 'package:ai_team/core/orchestrator.dart';
 
 void main() {
@@ -159,6 +161,30 @@ void main() {
     expect(controller.state.auditLog.last.action, 'command_executed');
   });
 
+  test('controller stops an in-flight team task by cancelling model requests',
+      () async {
+    final gateway = BlockingModelGateway();
+    final controller = AppController(
+      AppState.seed(),
+      TeamOrchestrator(gateway),
+    );
+    addTearDown(controller.dispose);
+
+    final dispatch = controller.dispatch('请实现大型功能');
+    await gateway.started.future;
+    controller.stopConversation();
+    await dispatch;
+
+    expect(gateway.cancellation!.isCancelled, isTrue);
+    expect(controller.isDispatching, isFalse);
+    expect(controller.currentConversation.status, ConversationStatus.stopped);
+    expect(
+      controller.currentConversation.messages.map((message) => message.content),
+      contains('任务已停止，本轮未完成的模型请求已取消。'),
+    );
+    expect(controller.state.auditLog.last.action, 'team_task_stopped');
+  });
+
   testWidgets('desktop workspace exposes chat, model, role, and team surfaces',
       (tester) async {
     await tester.pumpWidget(
@@ -194,4 +220,25 @@ void main() {
     expect(find.textContaining('前端工程师'), findsWidgets);
     expect(find.textContaining('汇总'), findsWidgets);
   });
+}
+
+class BlockingModelGateway implements ModelGateway {
+  final Completer<void> started = Completer<void>();
+  ModelRequestCancellation? cancellation;
+
+  @override
+  Future<String> complete({
+    required ModelProfile model,
+    required String systemPrompt,
+    required List<ChatMessage> messages,
+    ModelRequestCancellation? cancellation,
+  }) async {
+    this.cancellation = cancellation;
+    if (!started.isCompleted) {
+      started.complete();
+    }
+    await cancellation!.cancelled;
+    cancellation.throwIfCancelled();
+    return 'unreachable';
+  }
 }

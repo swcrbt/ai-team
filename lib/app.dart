@@ -141,6 +141,8 @@ class AppController extends ChangeNotifier {
   bool isDispatching = false;
   String? error;
   final List<PatchProposal> patchProposals = [];
+  ModelRequestCancellation? _activeCancellation;
+  ConversationStatus? _requestedCancellationStatus;
 
   Team get currentTeam => state.teams.first;
 
@@ -158,6 +160,9 @@ class AppController extends ChangeNotifier {
     }
     isDispatching = true;
     error = null;
+    final cancellation = ModelRequestCancellation();
+    _activeCancellation = cancellation;
+    _requestedCancellationStatus = null;
     notifyListeners();
     try {
       _commit(
@@ -165,9 +170,17 @@ class AppController extends ChangeNotifier {
           state,
           teamId: currentTeam.id,
           userText: trimmed,
+          cancellation: cancellation,
+          onProgress: _commit,
         ),
       );
     } catch (exception) {
+      if (cancellation.isCancelled) {
+        _commitCancelledDispatch(
+          _requestedCancellationStatus ?? ConversationStatus.stopped,
+        );
+        return;
+      }
       error = exception.toString();
       final failed = currentConversation.copyWith(
         status: ConversationStatus.failed,
@@ -190,11 +203,19 @@ class AppController extends ChangeNotifier {
       );
     } finally {
       isDispatching = false;
+      if (identical(_activeCancellation, cancellation)) {
+        _activeCancellation = null;
+      }
+      _requestedCancellationStatus = null;
       notifyListeners();
     }
   }
 
   void pauseConversation() {
+    if (isDispatching) {
+      _cancelActiveDispatch(ConversationStatus.paused);
+      return;
+    }
     _setConversationStatus(ConversationStatus.paused);
   }
 
@@ -203,6 +224,10 @@ class AppController extends ChangeNotifier {
   }
 
   void stopConversation() {
+    if (isDispatching) {
+      _cancelActiveDispatch(ConversationStatus.stopped);
+      return;
+    }
     _setConversationStatus(ConversationStatus.stopped);
   }
 
@@ -487,6 +512,49 @@ class AppController extends ChangeNotifier {
     );
   }
 
+  void _cancelActiveDispatch(ConversationStatus status) {
+    _requestedCancellationStatus = status;
+    _activeCancellation?.cancel();
+    _setConversationStatus(status);
+  }
+
+  void _commitCancelledDispatch(ConversationStatus status) {
+    final action = status == ConversationStatus.paused
+        ? 'team_task_paused'
+        : 'team_task_stopped';
+    final content = status == ConversationStatus.paused
+        ? '任务已暂停，继续后可以重新发起下一轮协作。'
+        : '任务已停止，本轮未完成的模型请求已取消。';
+    final updated = currentConversation.copyWith(
+      status: status,
+      messages: [
+        ...currentConversation.messages,
+        ChatMessage(
+          id: 'msg-${DateTime.now().microsecondsSinceEpoch}',
+          authorName: '系统',
+          content: content,
+          createdAt: DateTime.now(),
+        ),
+      ],
+    );
+    _commit(
+      state.copyWith(
+        conversations: state.conversations
+            .map((item) => item.id == updated.id ? updated : item)
+            .toList(),
+        auditLog: [
+          ...state.auditLog,
+          AuditEntry(
+            id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
+            action: action,
+            detail: currentTeam.id,
+            createdAt: DateTime.now(),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _commit(AppState nextState) {
     state = nextState;
     onStateChanged?.call(state);
@@ -729,17 +797,23 @@ class _ChatPaneState extends State<_ChatPane> {
               _StatusButton(
                 icon: Icons.pause_rounded,
                 label: '暂停',
-                onPressed: widget.controller.pauseConversation,
+                onPressed: widget.controller.isDispatching
+                    ? widget.controller.pauseConversation
+                    : null,
               ),
               _StatusButton(
                 icon: Icons.play_arrow_rounded,
                 label: '继续',
-                onPressed: widget.controller.resumeConversation,
+                onPressed: conversation.status == ConversationStatus.paused
+                    ? widget.controller.resumeConversation
+                    : null,
               ),
               _StatusButton(
                 icon: Icons.stop_rounded,
                 label: '停止',
-                onPressed: widget.controller.stopConversation,
+                onPressed: conversation.status != ConversationStatus.stopped
+                    ? widget.controller.stopConversation
+                    : null,
               ),
             ],
           ),
@@ -815,7 +889,7 @@ class _StatusButton extends StatelessWidget {
 
   final IconData icon;
   final String label;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {

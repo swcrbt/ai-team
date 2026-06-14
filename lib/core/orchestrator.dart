@@ -10,6 +10,8 @@ class TeamOrchestrator {
     AppState state, {
     required String teamId,
     required String userText,
+    ModelRequestCancellation? cancellation,
+    void Function(AppState state)? onProgress,
   }) async {
     final team = state.teams.firstWhere((item) => item.id == teamId);
     final conversation =
@@ -39,9 +41,18 @@ class TeamOrchestrator {
         createdAt: now.add(const Duration(milliseconds: 1)),
       ),
     ];
+    var workingState = _replaceConversation(
+      state,
+      conversation.copyWith(
+        messages: messages,
+        status: ConversationStatus.running,
+      ),
+    );
+    onProgress?.call(workingState);
 
     final round = conversation.currentRound + 1;
     for (final member in workerMembers) {
+      cancellation?.throwIfCancelled();
       final role = state.roles.firstWhere((item) => item.id == member.roleId);
       final model =
           state.models.firstWhere((item) => item.id == member.modelId);
@@ -52,7 +63,9 @@ class TeamOrchestrator {
           teamName: team.name,
         ),
         messages: messages,
+        cancellation: cancellation,
       );
+      cancellation?.throwIfCancelled();
       messages.add(ChatMessage(
         id: _id('msg'),
         authorName: member.name,
@@ -60,8 +73,17 @@ class TeamOrchestrator {
         content: content,
         createdAt: DateTime.now(),
       ));
+      workingState = _replaceConversation(
+        workingState,
+        conversation.copyWith(
+          messages: messages,
+          status: ConversationStatus.running,
+        ),
+      );
+      onProgress?.call(workingState);
     }
 
+    cancellation?.throwIfCancelled();
     messages.add(ChatMessage(
       id: _id('msg'),
       authorName: secretary.name,
@@ -78,13 +100,12 @@ class TeamOrchestrator {
       currentRound: round,
       status: nextStatus,
     );
-    return state.copyWith(
-      conversations: state.conversations
-          .map((item) =>
-              item.id == updatedConversation.id ? updatedConversation : item)
-          .toList(),
+    return _replaceConversation(
+      workingState,
+      updatedConversation,
+    ).copyWith(
       auditLog: [
-        ...state.auditLog,
+        ...workingState.auditLog,
         AuditEntry(
           id: _id('audit'),
           action: 'team_task_dispatched',
@@ -94,6 +115,14 @@ class TeamOrchestrator {
       ],
     );
   }
+}
+
+AppState _replaceConversation(AppState state, Conversation conversation) {
+  return state.copyWith(
+    conversations: state.conversations
+        .map((item) => item.id == conversation.id ? conversation : item)
+        .toList(),
+  );
 }
 
 class FakeModelGateway implements ModelGateway {
