@@ -1012,6 +1012,50 @@ void main() {
     expect(find.textContaining('登录任务'), findsOneWidget);
   });
 
+  testWidgets('history page lists all app tasks and filters by title',
+      (tester) async {
+    final state = AppState.seed().copyWith(
+      queuedTasks: [
+        QueuedTask(
+          id: 'task-1',
+          conversationId: 'conv-team-default',
+          title: '登录任务',
+          originalText: '实现登录',
+          priority: 0,
+          status: QueuedTaskStatus.completed,
+          createdAt: DateTime(2026, 6, 14),
+          updatedAt: DateTime(2026, 6, 14),
+        ),
+        QueuedTask(
+          id: 'task-2',
+          conversationId: 'conv-member-secretary',
+          title: '文档任务',
+          originalText: '写文档',
+          priority: 0,
+          status: QueuedTaskStatus.completed,
+          createdAt: DateTime(2026, 6, 14),
+          updatedAt: DateTime(2026, 6, 14),
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: state,
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('历史'));
+    await tester.pumpAndSettle();
+    expect(find.text('登录任务'), findsOneWidget);
+    expect(find.text('文档任务'), findsOneWidget);
+
+    await tester.enterText(find.widgetWithText(TextField, '搜索标题'), '登录');
+    await tester.pumpAndSettle();
+    expect(find.text('登录任务'), findsOneWidget);
+    expect(find.text('文档任务'), findsNothing);
+  });
+
   testWidgets('sidebar model button opens an independent model page',
       (tester) async {
     await tester.pumpWidget(

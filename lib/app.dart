@@ -114,6 +114,8 @@ class _AiTeamHomeState extends State<AiTeamHome> {
                             setState(() => mainView = _MainView.roles),
                         onMembers: () =>
                             setState(() => mainView = _MainView.members),
+                        onHistory: () =>
+                            setState(() => mainView = _MainView.history),
                         onProject: () =>
                             setState(() => mainView = _MainView.project),
                         onSettings: () =>
@@ -143,6 +145,10 @@ class _AiTeamHomeState extends State<AiTeamHome> {
                           onStartChat: () =>
                               setState(() => mainView = _MainView.chat),
                         ),
+                      )
+                    else if (mainView == _MainView.history)
+                      Expanded(
+                        child: _HistoryPage(controller: controller),
                       )
                     else if (mainView == _MainView.project)
                       Expanded(
@@ -182,7 +188,16 @@ class _AiTeamHomeState extends State<AiTeamHome> {
   }
 }
 
-enum _MainView { chat, teams, models, roles, members, project, settings }
+enum _MainView {
+  chat,
+  teams,
+  models,
+  roles,
+  members,
+  history,
+  project,
+  settings,
+}
 
 class AppController extends ChangeNotifier {
   AppController(
@@ -1504,6 +1519,7 @@ class _AppSidebar extends StatelessWidget {
     required this.onModels,
     required this.onRoles,
     required this.onMembers,
+    required this.onHistory,
     required this.onProject,
     required this.onSettings,
   });
@@ -1514,6 +1530,7 @@ class _AppSidebar extends StatelessWidget {
   final VoidCallback onModels;
   final VoidCallback onRoles;
   final VoidCallback onMembers;
+  final VoidCallback onHistory;
   final VoidCallback onProject;
   final VoidCallback onSettings;
 
@@ -1571,6 +1588,12 @@ class _AppSidebar extends StatelessWidget {
             label: '成员',
             selected: selectedView == _MainView.members,
             onPressed: onMembers,
+          ),
+          _SidebarButton(
+            icon: Icons.history_rounded,
+            label: '历史',
+            selected: selectedView == _MainView.history,
+            onPressed: onHistory,
           ),
           _SidebarButton(
             icon: Icons.folder_copy_rounded,
@@ -2379,6 +2402,121 @@ class _ProjectPage extends StatelessWidget {
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(20),
             child: _WorkspacePanel(controller: controller),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _HistoryPage extends StatefulWidget {
+  const _HistoryPage({required this.controller});
+
+  final AppController controller;
+
+  @override
+  State<_HistoryPage> createState() => _HistoryPageState();
+}
+
+class _HistoryPageState extends State<_HistoryPage> {
+  final searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = searchController.text.trim();
+    final tasks = widget.controller.state.queuedTasks
+        .where(
+          (task) => query.isEmpty || task.title.contains(query),
+        )
+        .toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return Column(
+      children: [
+        Container(
+          height: 72,
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              bottom: BorderSide(color: Color(0xFFE5E7EB)),
+            ),
+          ),
+          child: const Row(
+            children: [
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '历史',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text('跨会话查看任务历史和关联信息'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+          child: TextField(
+            controller: searchController,
+            decoration: const InputDecoration(
+              labelText: '搜索标题',
+              prefixIcon: Icon(Icons.search_rounded),
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+        ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.all(20),
+            itemCount: tasks.length,
+            itemBuilder: (context, index) {
+              final task = tasks[index];
+              return Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(6),
+                  side: const BorderSide(color: Color(0xFFE5E7EB)),
+                ),
+                child: ExpansionTile(
+                  title: Text(task.title),
+                  subtitle: Text(
+                    '${_queuedTaskStatusText(task.status)} · 优先级 ${task.priority}',
+                  ),
+                  trailing: IconButton(
+                    tooltip: '删除历史任务',
+                    onPressed: () {
+                      widget.controller.deleteTask(task.id);
+                      setState(() {});
+                    },
+                    icon: const Icon(Icons.delete_outline_rounded),
+                  ),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(task.originalText),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ),
       ],
