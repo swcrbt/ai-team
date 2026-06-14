@@ -35,6 +35,89 @@ void main() {
     expect(persisted!.models.map((model) => model.id), contains('model-extra'));
   });
 
+  test('controller edits and protects model role member configuration', () {
+    final controller = AppController(
+      AppState.seed(),
+      TeamOrchestrator(FakeModelGateway()),
+    );
+    addTearDown(controller.dispose);
+
+    const model = ModelProfile(
+      id: 'model-extra',
+      name: 'Extra',
+      baseUrl: 'https://example.com/v1',
+      modelName: 'example-model',
+      apiKey: 'secret',
+    );
+    const role = RoleTemplate(
+      id: 'role-extra',
+      name: 'Reviewer',
+      description: 'Review role',
+      identityPrompt: '你是代码审查员。',
+      goalPrompt: '检查风险。',
+      constraintPrompt: '只读。',
+      outputFormatPrompt: '列出问题。',
+      commandPolicy: CommandPolicy(
+        allowedCommands: ['rg'],
+        blockedCommands: ['rm'],
+        allowedDirectories: [],
+        requiresConfirmation: true,
+      ),
+    );
+    const member = TeamMember(
+      id: 'member-extra',
+      name: '代码审查员',
+      roleId: 'role-extra',
+      modelId: 'model-extra',
+    );
+
+    controller.addModel(model);
+    controller.addRole(role);
+    controller.addMember(member);
+    controller.updateModel(model.copyWith(name: 'Extra Updated'));
+    controller.updateRole(role.copyWith(name: 'Reviewer Updated'));
+    controller.updateMember(member.copyWith(name: '审查员'));
+
+    expect(controller.state.models.last.name, 'Extra Updated');
+    expect(controller.state.roles.last.name, 'Reviewer Updated');
+    expect(controller.state.members.last.name, '审查员');
+    expect(() => controller.deleteModel('model-extra'), throwsStateError);
+    expect(() => controller.deleteRole('role-extra'), throwsStateError);
+    expect(() => controller.deleteMember('member-secretary'), throwsStateError);
+
+    controller.deleteMember('member-extra');
+    controller.deleteRole('role-extra');
+    controller.deleteModel('model-extra');
+
+    expect(controller.state.members.map((item) => item.id),
+        isNot(contains('member-extra')));
+    expect(controller.state.roles.map((item) => item.id),
+        isNot(contains('role-extra')));
+    expect(controller.state.models.map((item) => item.id),
+        isNot(contains('model-extra')));
+  });
+
+  test('controller rejects invalid model configuration', () {
+    final controller = AppController(
+      AppState.seed(),
+      TeamOrchestrator(FakeModelGateway()),
+    );
+    addTearDown(controller.dispose);
+
+    expect(
+      () => controller.addModel(
+        const ModelProfile(
+          id: 'model-invalid',
+          name: '',
+          baseUrl: 'not-a-url',
+          modelName: '',
+          apiKey: '',
+        ),
+      ),
+      throwsArgumentError,
+    );
+  });
+
   test('controller registers workspace and creates patch proposal from file',
       () async {
     final temp = await Directory.systemTemp.createTemp('ai_team_workspace_');

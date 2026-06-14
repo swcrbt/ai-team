@@ -232,20 +232,103 @@ class AppController extends ChangeNotifier {
   }
 
   void addModel(ModelProfile model) {
+    _validateModel(model);
     _commit(state.copyWith(models: [...state.models, model]));
   }
 
+  void updateModel(ModelProfile model) {
+    _validateModel(model);
+    _requireModel(model.id);
+    _commit(
+      state.copyWith(
+        models: state.models
+            .map((item) => item.id == model.id ? model : item)
+            .toList(),
+        auditLog: [
+          ...state.auditLog,
+          AuditEntry(
+            id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
+            action: 'model_updated',
+            detail: model.name,
+            createdAt: DateTime.now(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void deleteModel(String modelId) {
+    final model = _requireModel(modelId);
+    if (state.members.any((member) => member.modelId == modelId)) {
+      throw StateError('模型正在被团队成员使用，不能删除');
+    }
+    _commit(
+      state.copyWith(
+        models: state.models.where((item) => item.id != modelId).toList(),
+        auditLog: [
+          ...state.auditLog,
+          AuditEntry(
+            id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
+            action: 'model_deleted',
+            detail: model.name,
+            createdAt: DateTime.now(),
+          ),
+        ],
+      ),
+    );
+  }
+
   void addRole(RoleTemplate role) {
+    _validateRole(role);
     _commit(state.copyWith(roles: [...state.roles, role]));
   }
 
+  void updateRole(RoleTemplate role) {
+    _validateRole(role);
+    _requireRole(role.id);
+    _commit(
+      state.copyWith(
+        roles: state.roles
+            .map((item) => item.id == role.id ? role : item)
+            .toList(),
+        auditLog: [
+          ...state.auditLog,
+          AuditEntry(
+            id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
+            action: 'role_updated',
+            detail: role.name,
+            createdAt: DateTime.now(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void deleteRole(String roleId) {
+    final role = _requireRole(roleId);
+    if (state.members.any((member) => member.roleId == roleId)) {
+      throw StateError('角色正在被团队成员使用，不能删除');
+    }
+    _commit(
+      state.copyWith(
+        roles: state.roles.where((item) => item.id != roleId).toList(),
+        auditLog: [
+          ...state.auditLog,
+          AuditEntry(
+            id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
+            action: 'role_deleted',
+            detail: role.name,
+            createdAt: DateTime.now(),
+          ),
+        ],
+      ),
+    );
+  }
+
   void addMember(TeamMember member) {
-    final updatedTeam = Team(
-      id: currentTeam.id,
-      name: currentTeam.name,
+    _validateMember(member);
+    final updatedTeam = currentTeam.copyWith(
       memberIds: [...currentTeam.memberIds, member.id],
-      secretaryMemberId: currentTeam.secretaryMemberId,
-      maxRounds: currentTeam.maxRounds,
     );
     _commit(
       state.copyWith(
@@ -253,6 +336,56 @@ class AppController extends ChangeNotifier {
         teams: state.teams
             .map((team) => team.id == updatedTeam.id ? updatedTeam : team)
             .toList(),
+      ),
+    );
+  }
+
+  void updateMember(TeamMember member) {
+    _validateMember(member);
+    final existing = _requireMember(member.id);
+    _commit(
+      state.copyWith(
+        members: state.members
+            .map((item) => item.id == member.id
+                ? member.copyWith(isSecretary: existing.isSecretary)
+                : item)
+            .toList(),
+        auditLog: [
+          ...state.auditLog,
+          AuditEntry(
+            id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
+            action: 'member_updated',
+            detail: member.name,
+            createdAt: DateTime.now(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void deleteMember(String memberId) {
+    final member = _requireMember(memberId);
+    if (member.isSecretary || currentTeam.secretaryMemberId == memberId) {
+      throw StateError('默认秘书不能删除');
+    }
+    _commit(
+      state.copyWith(
+        members: state.members.where((item) => item.id != memberId).toList(),
+        teams: state.teams
+            .map((team) => team.copyWith(
+                  memberIds:
+                      team.memberIds.where((id) => id != memberId).toList(),
+                ))
+            .toList(),
+        auditLog: [
+          ...state.auditLog,
+          AuditEntry(
+            id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
+            action: 'member_deleted',
+            detail: member.name,
+            createdAt: DateTime.now(),
+          ),
+        ],
       ),
     );
   }
@@ -559,6 +692,63 @@ class AppController extends ChangeNotifier {
     state = nextState;
     onStateChanged?.call(state);
     notifyListeners();
+  }
+
+  ModelProfile _requireModel(String modelId) {
+    return state.models.firstWhere(
+      (model) => model.id == modelId,
+      orElse: () => throw StateError('模型不存在: $modelId'),
+    );
+  }
+
+  RoleTemplate _requireRole(String roleId) {
+    return state.roles.firstWhere(
+      (role) => role.id == roleId,
+      orElse: () => throw StateError('角色不存在: $roleId'),
+    );
+  }
+
+  TeamMember _requireMember(String memberId) {
+    return state.members.firstWhere(
+      (member) => member.id == memberId,
+      orElse: () => throw StateError('成员不存在: $memberId'),
+    );
+  }
+
+  void _validateModel(ModelProfile model) {
+    if (model.name.trim().isEmpty) {
+      throw ArgumentError('模型名称不能为空');
+    }
+    if (model.modelName.trim().isEmpty) {
+      throw ArgumentError('模型标识不能为空');
+    }
+    if (model.apiKey.trim().isEmpty) {
+      throw ArgumentError('API Key 不能为空');
+    }
+    final uri = Uri.tryParse(model.baseUrl.trim());
+    if (uri == null ||
+        !uri.hasScheme ||
+        (uri.scheme != 'http' && uri.scheme != 'https') ||
+        uri.host.isEmpty) {
+      throw ArgumentError('Base URL 必须是有效的 http 或 https 地址');
+    }
+  }
+
+  void _validateRole(RoleTemplate role) {
+    if (role.name.trim().isEmpty) {
+      throw ArgumentError('角色名称不能为空');
+    }
+    if (role.identityPrompt.trim().isEmpty) {
+      throw ArgumentError('角色身份提示词不能为空');
+    }
+  }
+
+  void _validateMember(TeamMember member) {
+    if (member.name.trim().isEmpty) {
+      throw ArgumentError('成员名称不能为空');
+    }
+    _requireRole(member.roleId);
+    _requireModel(member.modelId);
   }
 
   File _workspaceFile(String workspaceId, String relativePath) {
@@ -962,6 +1152,22 @@ class _InspectorPane extends StatelessWidget {
                     (model) => _KeyValueRow(
                       label: model.name,
                       value: '${model.modelName}\n${model.baseUrl}',
+                      actions: [
+                        IconButton(
+                          tooltip: '编辑模型',
+                          onPressed: () => _showModelDialog(context, controller,
+                              model: model),
+                          icon: const Icon(Icons.edit_rounded),
+                        ),
+                        IconButton(
+                          tooltip: '删除模型',
+                          onPressed: () => _runConfigAction(
+                            context,
+                            () => controller.deleteModel(model.id),
+                          ),
+                          icon: const Icon(Icons.delete_outline_rounded),
+                        ),
+                      ],
                     ),
                   )
                   .toList(),
@@ -982,6 +1188,22 @@ class _InspectorPane extends StatelessWidget {
                       label: role.name,
                       value:
                           '${role.description}\n命令: ${role.commandPolicy.allowedCommands.join(', ')}',
+                      actions: [
+                        IconButton(
+                          tooltip: '编辑角色',
+                          onPressed: () =>
+                              _showRoleDialog(context, controller, role: role),
+                          icon: const Icon(Icons.edit_rounded),
+                        ),
+                        IconButton(
+                          tooltip: '删除角色',
+                          onPressed: () => _runConfigAction(
+                            context,
+                            () => controller.deleteRole(role.id),
+                          ),
+                          icon: const Icon(Icons.delete_outline_rounded),
+                        ),
+                      ],
                     ),
                   )
                   .toList(),
@@ -1002,6 +1224,27 @@ class _InspectorPane extends StatelessWidget {
                       label: member.name,
                       value:
                           '${_roleName(controller.state, member.roleId)} · ${_modelName(controller.state, member.modelId)}',
+                      actions: [
+                        IconButton(
+                          tooltip: '编辑成员',
+                          onPressed: () => _showMemberDialog(
+                            context,
+                            controller,
+                            member: member,
+                          ),
+                          icon: const Icon(Icons.edit_rounded),
+                        ),
+                        IconButton(
+                          tooltip: '删除成员',
+                          onPressed: member.isSecretary
+                              ? null
+                              : () => _runConfigAction(
+                                    context,
+                                    () => controller.deleteMember(member.id),
+                                  ),
+                          icon: const Icon(Icons.delete_outline_rounded),
+                        ),
+                      ],
                     ),
                   )
                   .toList(),
@@ -1143,10 +1386,15 @@ class _Panel extends StatelessWidget {
 }
 
 class _KeyValueRow extends StatelessWidget {
-  const _KeyValueRow({required this.label, required this.value});
+  const _KeyValueRow({
+    required this.label,
+    required this.value,
+    this.actions = const [],
+  });
 
   final String label;
   final String value;
+  final List<Widget> actions;
 
   @override
   Widget build(BuildContext context) {
@@ -1161,7 +1409,24 @@ class _KeyValueRow extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+              if (actions.isNotEmpty)
+                Wrap(
+                  spacing: 2,
+                  children: actions,
+                ),
+            ],
+          ),
           const SizedBox(height: 4),
           Text(value, style: TextStyle(color: Colors.grey.shade700)),
         ],
@@ -1303,119 +1568,161 @@ class _CommandRequestCard extends StatelessWidget {
 
 Future<void> _showModelDialog(
   BuildContext context,
-  AppController controller,
-) async {
-  final name = TextEditingController();
-  final baseUrl = TextEditingController(text: 'https://api.openai.com/v1');
-  final modelName = TextEditingController();
-  final apiKey = TextEditingController();
+  AppController controller, {
+  ModelProfile? model,
+}) async {
+  final name = TextEditingController(text: model?.name ?? '');
+  final baseUrl = TextEditingController(
+    text: model?.baseUrl ?? 'https://api.openai.com/v1',
+  );
+  final modelName = TextEditingController(text: model?.modelName ?? '');
+  final apiKey = TextEditingController(text: model?.apiKey ?? '');
+  String? validationError;
   await showDialog<void>(
     context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('新增模型配置'),
-      content: SizedBox(
-        width: 420,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _DialogField(controller: name, label: '名称'),
-            _DialogField(controller: baseUrl, label: 'Base URL'),
-            _DialogField(controller: modelName, label: '模型名称'),
-            _DialogField(controller: apiKey, label: 'API Key', obscure: true),
-          ],
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: Text(model == null ? '新增模型配置' : '编辑模型配置'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (validationError != null) _DialogError(validationError!),
+              _DialogField(controller: name, label: '名称'),
+              _DialogField(controller: baseUrl, label: 'Base URL'),
+              _DialogField(controller: modelName, label: '模型名称'),
+              _DialogField(controller: apiKey, label: 'API Key', obscure: true),
+            ],
+          ),
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () {
+              try {
+                final next = ModelProfile(
+                  id: model?.id ??
+                      'model-${DateTime.now().microsecondsSinceEpoch}',
+                  name: name.text.trim(),
+                  baseUrl: baseUrl.text.trim(),
+                  modelName: modelName.text.trim(),
+                  apiKey: apiKey.text.trim(),
+                  streaming: model?.streaming ?? true,
+                  temperature: model?.temperature ?? 0.4,
+                  maxTokens: model?.maxTokens ?? 1600,
+                );
+                if (model == null) {
+                  controller.addModel(next);
+                } else {
+                  controller.updateModel(next);
+                }
+                Navigator.pop(context);
+              } catch (exception) {
+                setDialogState(() => validationError = exception.toString());
+              }
+            },
+            child: const Text('保存'),
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
-        ),
-        FilledButton(
-          onPressed: () {
-            controller.addModel(ModelProfile(
-              id: 'model-${DateTime.now().microsecondsSinceEpoch}',
-              name: name.text.trim(),
-              baseUrl: baseUrl.text.trim(),
-              modelName: modelName.text.trim(),
-              apiKey: apiKey.text.trim(),
-            ));
-            Navigator.pop(context);
-          },
-          child: const Text('保存'),
-        ),
-      ],
     ),
   );
 }
 
 Future<void> _showRoleDialog(
   BuildContext context,
-  AppController controller,
-) async {
-  final name = TextEditingController();
-  final identity = TextEditingController();
+  AppController controller, {
+  RoleTemplate? role,
+}) async {
+  final name = TextEditingController(text: role?.name ?? '');
+  final identity = TextEditingController(text: role?.identityPrompt ?? '');
+  String? validationError;
   await showDialog<void>(
     context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('新增角色配置'),
-      content: SizedBox(
-        width: 420,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _DialogField(controller: name, label: '角色名称'),
-            _DialogField(controller: identity, label: '身份提示词'),
-          ],
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: Text(role == null ? '新增角色配置' : '编辑角色配置'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (validationError != null) _DialogError(validationError!),
+              _DialogField(controller: name, label: '角色名称'),
+              _DialogField(controller: identity, label: '身份提示词'),
+            ],
+          ),
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () {
+              try {
+                final next = role == null
+                    ? RoleTemplate(
+                        id: 'role-${DateTime.now().microsecondsSinceEpoch}',
+                        name: name.text.trim(),
+                        description: '自定义角色',
+                        identityPrompt: identity.text.trim(),
+                        goalPrompt: '按团队目标完成任务。',
+                        constraintPrompt: '遵守权限配置，不直接写入文件。',
+                        outputFormatPrompt: '输出结论、证据和下一步。',
+                        commandPolicy: const CommandPolicy(
+                          allowedCommands: ['flutter test', 'dart analyze'],
+                          blockedCommands: ['rm', 'sudo'],
+                          allowedDirectories: [],
+                          requiresConfirmation: true,
+                        ),
+                      )
+                    : role.copyWith(
+                        name: name.text.trim(),
+                        identityPrompt: identity.text.trim(),
+                      );
+                if (role == null) {
+                  controller.addRole(next);
+                } else {
+                  controller.updateRole(next);
+                }
+                Navigator.pop(context);
+              } catch (exception) {
+                setDialogState(() => validationError = exception.toString());
+              }
+            },
+            child: const Text('保存'),
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
-        ),
-        FilledButton(
-          onPressed: () {
-            controller.addRole(RoleTemplate(
-              id: 'role-${DateTime.now().microsecondsSinceEpoch}',
-              name: name.text.trim(),
-              description: '自定义角色',
-              identityPrompt: identity.text.trim(),
-              goalPrompt: '按团队目标完成任务。',
-              constraintPrompt: '遵守权限配置，不直接写入文件。',
-              outputFormatPrompt: '输出结论、证据和下一步。',
-              commandPolicy: const CommandPolicy(
-                allowedCommands: ['flutter test', 'dart analyze'],
-                blockedCommands: ['rm', 'sudo'],
-                allowedDirectories: [],
-                requiresConfirmation: true,
-              ),
-            ));
-            Navigator.pop(context);
-          },
-          child: const Text('保存'),
-        ),
-      ],
     ),
   );
 }
 
 Future<void> _showMemberDialog(
   BuildContext context,
-  AppController controller,
-) async {
-  final name = TextEditingController();
-  var roleId = controller.state.roles.first.id;
-  var modelId = controller.state.models.first.id;
+  AppController controller, {
+  TeamMember? member,
+}) async {
+  final name = TextEditingController(text: member?.name ?? '');
+  var roleId = member?.roleId ?? controller.state.roles.first.id;
+  var modelId = member?.modelId ?? controller.state.models.first.id;
+  String? validationError;
   await showDialog<void>(
     context: context,
     builder: (context) => StatefulBuilder(
       builder: (context, setDialogState) => AlertDialog(
-        title: const Text('新增团队成员'),
+        title: Text(member == null ? '新增团队成员' : '编辑团队成员'),
         content: SizedBox(
           width: 420,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              if (validationError != null) _DialogError(validationError!),
               _DialogField(controller: name, label: '成员名称'),
               DropdownButtonFormField<String>(
                 initialValue: roleId,
@@ -1453,13 +1760,24 @@ Future<void> _showMemberDialog(
           ),
           FilledButton(
             onPressed: () {
-              controller.addMember(TeamMember(
-                id: 'member-${DateTime.now().microsecondsSinceEpoch}',
-                name: name.text.trim(),
-                roleId: roleId,
-                modelId: modelId,
-              ));
-              Navigator.pop(context);
+              try {
+                final next = TeamMember(
+                  id: member?.id ??
+                      'member-${DateTime.now().microsecondsSinceEpoch}',
+                  name: name.text.trim(),
+                  roleId: roleId,
+                  modelId: modelId,
+                  isSecretary: member?.isSecretary ?? false,
+                );
+                if (member == null) {
+                  controller.addMember(next);
+                } else {
+                  controller.updateMember(next);
+                }
+                Navigator.pop(context);
+              } catch (exception) {
+                setDialogState(() => validationError = exception.toString());
+              }
             },
             child: const Text('保存'),
           ),
@@ -1582,6 +1900,42 @@ Future<void> _showExportDialog(
       ),
     ),
   );
+}
+
+class _DialogError extends StatelessWidget {
+  const _DialogError(this.message);
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF1F2),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        message,
+        style: const TextStyle(color: Color(0xFFBE123C)),
+      ),
+    );
+  }
+}
+
+void _runConfigAction(
+  BuildContext context,
+  VoidCallback action,
+) {
+  try {
+    action();
+  } catch (exception) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(exception.toString())),
+    );
+  }
 }
 
 class _DialogField extends StatelessWidget {

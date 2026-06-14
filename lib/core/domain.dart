@@ -240,6 +240,32 @@ class RoleTemplate {
   final bool canReadProject;
   final bool canProposePatch;
 
+  RoleTemplate copyWith({
+    String? id,
+    String? name,
+    String? description,
+    String? identityPrompt,
+    String? goalPrompt,
+    String? constraintPrompt,
+    String? outputFormatPrompt,
+    CommandPolicy? commandPolicy,
+    bool? canReadProject,
+    bool? canProposePatch,
+  }) {
+    return RoleTemplate(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      description: description ?? this.description,
+      identityPrompt: identityPrompt ?? this.identityPrompt,
+      goalPrompt: goalPrompt ?? this.goalPrompt,
+      constraintPrompt: constraintPrompt ?? this.constraintPrompt,
+      outputFormatPrompt: outputFormatPrompt ?? this.outputFormatPrompt,
+      commandPolicy: commandPolicy ?? this.commandPolicy,
+      canReadProject: canReadProject ?? this.canReadProject,
+      canProposePatch: canProposePatch ?? this.canProposePatch,
+    );
+  }
+
   String renderSystemPrompt({
     required String memberName,
     required String teamName,
@@ -299,6 +325,22 @@ class TeamMember {
   final String modelId;
   final bool isSecretary;
 
+  TeamMember copyWith({
+    String? id,
+    String? name,
+    String? roleId,
+    String? modelId,
+    bool? isSecretary,
+  }) {
+    return TeamMember(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      roleId: roleId ?? this.roleId,
+      modelId: modelId ?? this.modelId,
+      isSecretary: isSecretary ?? this.isSecretary,
+    );
+  }
+
   Map<String, Object?> toJson() => {
         'id': id,
         'name': name,
@@ -331,10 +373,10 @@ class Team {
   final String secretaryMemberId;
   final int maxRounds;
 
-  Team copyWith({int? maxRounds}) => Team(
+  Team copyWith({List<String>? memberIds, int? maxRounds}) => Team(
         id: id,
         name: name,
-        memberIds: memberIds,
+        memberIds: memberIds ?? this.memberIds,
         secretaryMemberId: secretaryMemberId,
         maxRounds: maxRounds ?? this.maxRounds,
       );
