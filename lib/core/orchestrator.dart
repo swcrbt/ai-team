@@ -6,6 +6,42 @@ class TeamOrchestrator {
 
   final ModelGateway gateway;
 
+  Future<AppState> dispatchQueuedTask(
+    AppState state, {
+    required String taskId,
+    ModelRequestCancellation? cancellation,
+    void Function(AppState state)? onProgress,
+  }) {
+    final task = state.queuedTasks.firstWhere((item) => item.id == taskId);
+    final conversation = state.conversations.firstWhere(
+      (item) => item.id == task.conversationId,
+    );
+    final userText = [
+      task.originalText,
+      if (task.notes.isNotEmpty) ...[
+        '',
+        '备注:',
+        ...task.notes.map((note) => '- $note'),
+      ],
+    ].join('\n');
+    if (conversation.memberId == null) {
+      return dispatchTeamTask(
+        state,
+        teamId: conversation.teamId,
+        userText: userText,
+        cancellation: cancellation,
+        onProgress: onProgress,
+      );
+    }
+    return dispatchMemberChat(
+      state,
+      conversationId: conversation.id,
+      userText: userText,
+      cancellation: cancellation,
+      onProgress: onProgress,
+    );
+  }
+
   Future<AppState> dispatchTeamTask(
     AppState state, {
     required String teamId,

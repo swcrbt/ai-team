@@ -215,6 +215,7 @@ class AppController extends ChangeNotifier {
   final JsonLocalStore exportStore;
   bool isDispatching = false;
   String? error;
+  String? _runningTaskId;
   ModelRequestCancellation? _activeCancellation;
   ConversationStatus? _requestedCancellationStatus;
 
@@ -255,6 +256,14 @@ class AppController extends ChangeNotifier {
         .toList();
     tasks.sort(_queuedTaskSort);
     return tasks;
+  }
+
+  QueuedTask? get currentRunningTask {
+    final id = _runningTaskId;
+    if (id == null) {
+      return null;
+    }
+    return _taskByIdOrNull(id);
   }
 
   Conversation get currentConversation => state.conversations.firstWhere(
@@ -484,6 +493,69 @@ class AppController extends ChangeNotifier {
             .toList(),
       ),
     );
+  }
+
+  Future<void> runNextQueuedTask() async {
+    if (_runningTaskId != null) {
+      return;
+    }
+    final next = _firstQueuedTaskOrNull(pendingTasksForCurrentConversation);
+    if (next == null) {
+      return;
+    }
+    _runningTaskId = next.id;
+    isDispatching = true;
+    error = null;
+    final cancellation = ModelRequestCancellation();
+    _activeCancellation = cancellation;
+    _updateTaskStatus(next.id, QueuedTaskStatus.running);
+    try {
+      final updated = await orchestrator.dispatchQueuedTask(
+        state,
+        taskId: next.id,
+        cancellation: cancellation,
+        onProgress: _commit,
+      );
+      if (!cancellation.isCancelled) {
+        _commit(updated);
+        _updateTaskStatus(next.id, QueuedTaskStatus.completed);
+      }
+    } on ModelGatewayException catch (exception) {
+      if (cancellation.isCancelled) {
+        _updateTaskStatus(next.id, QueuedTaskStatus.paused);
+      } else {
+        error = exception.toString();
+        _updateTaskStatus(next.id, QueuedTaskStatus.failed);
+      }
+    } catch (exception) {
+      if (cancellation.isCancelled) {
+        _updateTaskStatus(next.id, QueuedTaskStatus.paused);
+      } else {
+        error = exception.toString();
+        _updateTaskStatus(next.id, QueuedTaskStatus.failed);
+      }
+    } finally {
+      if (_runningTaskId == next.id) {
+        _runningTaskId = null;
+      }
+      if (identical(_activeCancellation, cancellation)) {
+        _activeCancellation = null;
+      }
+      isDispatching = false;
+      notifyListeners();
+    }
+  }
+
+  void pauseTask(String taskId) {
+    if (_runningTaskId == taskId) {
+      _activeCancellation?.cancel();
+    }
+    _updateTaskStatus(taskId, QueuedTaskStatus.paused);
+  }
+
+  Future<void> resumeTask(String taskId) async {
+    _updateTaskStatus(taskId, QueuedTaskStatus.pending);
+    await runNextQueuedTask();
   }
 
   bool _canDispatchCurrentConversation() {
@@ -1143,6 +1215,32 @@ class AppController extends ChangeNotifier {
     return state.conversations.firstWhere(
       (conversation) => conversation.id == conversationId,
       orElse: () => throw StateError('会话不存在: $conversationId'),
+    );
+  }
+
+  QueuedTask? _taskByIdOrNull(String taskId) {
+    for (final task in state.queuedTasks) {
+      if (task.id == taskId) {
+        return task;
+      }
+    }
+    return null;
+  }
+
+  void _updateTaskStatus(String taskId, QueuedTaskStatus status) {
+    _commit(
+      state.copyWith(
+        queuedTasks: state.queuedTasks
+            .map(
+              (task) => task.id == taskId
+                  ? task.copyWith(
+                      status: status,
+                      updatedAt: DateTime.now(),
+                    )
+                  : task,
+            )
+            .toList(),
+      ),
     );
   }
 
@@ -3938,6 +4036,13 @@ int _queuedTaskSort(QueuedTask a, QueuedTask b) {
     return priority;
   }
   return a.createdAt.compareTo(b.createdAt);
+}
+
+QueuedTask? _firstQueuedTaskOrNull(List<QueuedTask> tasks) {
+  if (tasks.isEmpty) {
+    return null;
+  }
+  return tasks.first;
 }
 
 String _initialConversationId(AppState state) {

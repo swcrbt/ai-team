@@ -247,6 +247,38 @@ void main() {
     expect(controller.currentConversation.messages, isEmpty);
   });
 
+  test('team pause cancels active request and resume reruns unfinished task',
+      () async {
+    final gateway = BlockingModelGateway();
+    final controller = AppController(
+      AppState.seed().copyWith(
+        queuedTasks: [
+          QueuedTask(
+            id: 'task-1',
+            conversationId: 'conv-team-default',
+            title: '长任务',
+            originalText: '执行长任务',
+            priority: 0,
+            status: QueuedTaskStatus.pending,
+            createdAt: DateTime(2026, 6, 14),
+            updatedAt: DateTime(2026, 6, 14),
+          ),
+        ],
+      ),
+      TeamOrchestrator(gateway),
+    );
+    addTearDown(controller.dispose);
+    controller.startTeamChat('team-default');
+
+    final run = controller.runNextQueuedTask();
+    await gateway.started.future.timeout(const Duration(seconds: 1));
+    controller.pauseTask('task-1');
+    await run;
+
+    expect(gateway.cancellation!.isCancelled, isTrue);
+    expect(controller.state.queuedTasks.single.status, QueuedTaskStatus.paused);
+  });
+
   test('controller rejects incomplete role prompt configuration', () {
     final controller = AppController(
       AppState.seed(),
