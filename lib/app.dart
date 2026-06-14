@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import 'core/domain.dart';
+import 'core/file_dialogs.dart';
 import 'core/local_store.dart';
 import 'core/model_gateway.dart';
 import 'core/orchestrator.dart';
@@ -15,11 +16,13 @@ class AiTeamApp extends StatelessWidget {
     required this.initialState,
     required this.modelGateway,
     this.onStateChanged,
+    this.fileDialogs = const SystemFileDialogService(),
   });
 
   final AppState initialState;
   final ModelGateway modelGateway;
   final ValueChanged<AppState>? onStateChanged;
+  final FileDialogService fileDialogs;
 
   @override
   Widget build(BuildContext context) {
@@ -38,6 +41,7 @@ class AiTeamApp extends StatelessWidget {
         initialState: initialState,
         modelGateway: modelGateway,
         onStateChanged: onStateChanged,
+        fileDialogs: fileDialogs,
       ),
     );
   }
@@ -49,11 +53,13 @@ class AiTeamHome extends StatefulWidget {
     required this.initialState,
     required this.modelGateway,
     this.onStateChanged,
+    this.fileDialogs = const SystemFileDialogService(),
   });
 
   final AppState initialState;
   final ModelGateway modelGateway;
   final ValueChanged<AppState>? onStateChanged;
+  final FileDialogService fileDialogs;
 
   @override
   State<AiTeamHome> createState() => _AiTeamHomeState();
@@ -69,6 +75,7 @@ class _AiTeamHomeState extends State<AiTeamHome> {
       widget.initialState,
       TeamOrchestrator(widget.modelGateway),
       onStateChanged: widget.onStateChanged,
+      fileDialogs: widget.fileDialogs,
     );
   }
 
@@ -118,11 +125,19 @@ class _AiTeamHomeState extends State<AiTeamHome> {
 }
 
 class AppController extends ChangeNotifier {
-  AppController(this.state, this.orchestrator, {this.onStateChanged});
+  AppController(
+    this.state,
+    this.orchestrator, {
+    this.onStateChanged,
+    this.fileDialogs = const SystemFileDialogService(),
+    JsonLocalStore? exportStore,
+  }) : exportStore = exportStore ?? JsonLocalStore.defaultStore();
 
   AppState state;
   final TeamOrchestrator orchestrator;
   final ValueChanged<AppState>? onStateChanged;
+  final FileDialogService fileDialogs;
+  final JsonLocalStore exportStore;
   bool isDispatching = false;
   String? error;
   final List<PatchProposal> patchProposals = [];
@@ -238,6 +253,44 @@ class AppController extends ChangeNotifier {
         ],
       ),
     );
+  }
+
+  Future<bool> pickAndAddWorkspace() async {
+    final path = await fileDialogs.pickDirectory();
+    if (path == null || path.trim().isEmpty) {
+      return false;
+    }
+    addWorkspacePath(path);
+    return true;
+  }
+
+  Future<bool> exportConfiguration({required bool includeSecrets}) async {
+    final path = await fileDialogs.pickSaveFile(
+      fileName: includeSecrets
+          ? 'ai-team-config-with-secrets.json'
+          : 'ai-team-config.json',
+      allowedExtensions: ['json'],
+    );
+    if (path == null || path.trim().isEmpty) {
+      return false;
+    }
+    await exportStore.exportTo(
+      File(path),
+      state,
+      includeSecrets: includeSecrets,
+    );
+    return true;
+  }
+
+  Future<bool> importConfiguration() async {
+    final path = await fileDialogs.pickOpenFile(allowedExtensions: ['json']);
+    if (path == null || path.trim().isEmpty) {
+      return false;
+    }
+    final decoded =
+        jsonDecode(await File(path).readAsString()) as Map<String, Object?>;
+    _commit(ConfigExporter.importState(decoded));
+    return true;
   }
 
   Future<String> readWorkspaceFile({
@@ -885,7 +938,7 @@ class _InspectorPane extends StatelessWidget {
             icon: Icons.folder_open_rounded,
             action: IconButton(
               tooltip: '添加工作区',
-              onPressed: () => _showWorkspaceDialog(context, controller),
+              onPressed: controller.pickAndAddWorkspace,
               icon: const Icon(Icons.add_rounded),
             ),
             child: Column(
@@ -1342,39 +1395,6 @@ Future<void> _showMemberDialog(
   );
 }
 
-Future<void> _showWorkspaceDialog(
-  BuildContext context,
-  AppController controller,
-) async {
-  final path = TextEditingController();
-  await showDialog<void>(
-    context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('添加项目工作区'),
-      content: SizedBox(
-        width: 460,
-        child: _DialogField(
-          controller: path,
-          label: '本地项目目录绝对路径',
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
-        ),
-        FilledButton(
-          onPressed: () {
-            controller.addWorkspacePath(path.text.trim());
-            Navigator.pop(context);
-          },
-          child: const Text('添加'),
-        ),
-      ],
-    ),
-  );
-}
-
 Future<void> _showCommandDialog(
   BuildContext context,
   AppController controller,
@@ -1460,12 +1480,7 @@ Future<void> _showExportDialog(
         actions: [
           TextButton.icon(
             onPressed: () async {
-              final importFile = File('.ai_team_data/import.json');
-              if (await importFile.exists()) {
-                final decoded = jsonDecode(await importFile.readAsString())
-                    as Map<String, Object?>;
-                controller._commit(ConfigExporter.importState(decoded));
-              }
+              await controller.importConfiguration();
               if (context.mounted) {
                 Navigator.pop(context);
               }
@@ -1479,14 +1494,7 @@ Future<void> _showExportDialog(
           ),
           FilledButton.icon(
             onPressed: () async {
-              final file = File(
-                includeSecrets
-                    ? '.ai_team_data/export-with-secrets.json'
-                    : '.ai_team_data/export-redacted.json',
-              );
-              await JsonLocalStore(File('.ai_team_data/state.json')).exportTo(
-                file,
-                controller.state,
+              await controller.exportConfiguration(
                 includeSecrets: includeSecrets,
               );
               if (context.mounted) {

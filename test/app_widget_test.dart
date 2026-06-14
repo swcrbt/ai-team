@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ai_team/app.dart';
 import 'package:ai_team/core/domain.dart';
+import 'package:ai_team/core/file_dialogs.dart';
 import 'package:ai_team/core/orchestrator.dart';
 
 void main() {
@@ -61,6 +62,41 @@ void main() {
     expect(preview, 'old docs\n');
     expect(controller.patchProposals.single.diff, contains('+new docs'));
     expect(await file.readAsString(), 'old docs\n');
+  });
+
+  test('controller adds workspace through file dialog service', () async {
+    final temp = await Directory.systemTemp.createTemp('ai_team_pick_');
+    addTearDown(() async => temp.delete(recursive: true));
+    final controller = AppController(
+      AppState.seed(),
+      TeamOrchestrator(FakeModelGateway()),
+      fileDialogs: FakeFileDialogService(directoryPath: temp.path),
+    );
+    addTearDown(controller.dispose);
+
+    final added = await controller.pickAndAddWorkspace();
+
+    expect(added, isTrue);
+    expect(controller.state.workspaces.single.path, temp.absolute.path);
+  });
+
+  test('controller exports configuration through file dialog service',
+      () async {
+    final temp = await Directory.systemTemp.createTemp('ai_team_export_');
+    addTearDown(() async => temp.delete(recursive: true));
+    final target = File('${temp.path}/config.json');
+    final controller = AppController(
+      AppState.seed(),
+      TeamOrchestrator(FakeModelGateway()),
+      fileDialogs: FakeFileDialogService(savePath: target.path),
+    );
+    addTearDown(controller.dispose);
+
+    final exported =
+        await controller.exportConfiguration(includeSecrets: false);
+
+    expect(exported, isTrue);
+    expect(await target.readAsString(), isNot(contains('"apiKey"')));
   });
 
   test(
