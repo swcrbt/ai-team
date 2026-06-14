@@ -101,6 +101,24 @@ void main() {
       expect(await secrets.read('model-main'), 'sk-local-placeholder');
     });
 
+    test('saves state through a temporary file without leaving temp artifacts',
+        () async {
+      final temp = await Directory.systemTemp.createTemp('ai_team_atomic_');
+      addTearDown(() async => temp.delete(recursive: true));
+      final stateFile = File('${temp.path}/state.json');
+      final store = JsonLocalStore(
+        stateFile,
+        secretStore: MemorySecretStore(),
+      );
+
+      await store.save(AppState.seed());
+
+      final files = temp.listSync().whereType<File>().toList();
+      expect(await stateFile.exists(), isTrue);
+      expect(files.map((file) => file.path), isNot(contains('.tmp')));
+      expect(await stateFile.readAsString(), contains('"models"'));
+    });
+
     test('backs up corrupt state files and falls back to seed state', () async {
       final temp = await Directory.systemTemp.createTemp('ai_team_corrupt_');
       addTearDown(() async => temp.delete(recursive: true));

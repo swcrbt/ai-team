@@ -98,9 +98,14 @@ class JsonLocalStore {
     }
     await file.parent.create(recursive: true);
     const encoder = JsonEncoder.withIndent('  ');
-    await file.writeAsString(
+    final tempFile = File('${file.path}.tmp');
+    await tempFile.writeAsString(
       encoder.convert(state.toJson(includeSecrets: false)),
     );
+    if (await file.exists()) {
+      await file.delete();
+    }
+    await tempFile.rename(file.path);
   }
 
   Future<void> exportTo(
