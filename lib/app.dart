@@ -1515,15 +1515,11 @@ class _ChatPaneState extends State<_ChatPane> {
                   icon: Icon(Icons.alternate_email_rounded),
                 ),
                 IconButton.filled(
-                  tooltip: widget.controller.isDispatching ? '停止生成' : '发送',
+                  tooltip: widget.controller.isDispatching ? '取消当前回复' : '发送',
                   onPressed: widget.controller.isDispatching
                       ? widget.controller.stopConversation
                       : _submit,
-                  icon: Icon(
-                    widget.controller.isDispatching
-                        ? Icons.stop_rounded
-                        : Icons.send_rounded,
-                  ),
+                  icon: const Icon(Icons.send_rounded),
                 ),
                 const SizedBox(width: 6),
               ],

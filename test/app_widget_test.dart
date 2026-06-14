@@ -685,9 +685,10 @@ void main() {
     await gateway.started.future.timeout(const Duration(seconds: 1));
     await tester.pump();
 
-    expect(find.byTooltip('停止生成'), findsOneWidget);
+    expect(find.byIcon(Icons.stop_rounded), findsNothing);
+    expect(find.byTooltip('取消当前回复'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('停止生成'));
+    await tester.tap(find.byTooltip('取消当前回复'));
     await tester.pumpAndSettle();
 
     expect(gateway.cancellation!.isCancelled, isTrue);
