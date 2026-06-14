@@ -195,6 +195,28 @@ void main() {
     expect(await file.readAsString(), 'old docs\n');
   });
 
+  test('controller lists workspace files as safe relative paths', () async {
+    final temp = await Directory.systemTemp.createTemp('ai_team_list_');
+    addTearDown(() async => temp.delete(recursive: true));
+    await Directory('${temp.path}/lib').create();
+    await Directory('${temp.path}/.git').create();
+    await File('${temp.path}/README.md').writeAsString('docs\n');
+    await File('${temp.path}/lib/main.dart').writeAsString('void main() {}\n');
+    await File('${temp.path}/.git/config').writeAsString('private\n');
+    final controller = AppController(
+      AppState.seed(),
+      TeamOrchestrator(FakeModelGateway()),
+    );
+    addTearDown(controller.dispose);
+
+    controller.addWorkspacePath(temp.path);
+    final files = await controller.listWorkspaceFiles(
+      workspaceId: controller.state.workspaces.single.id,
+    );
+
+    expect(files, ['README.md', 'lib/main.dart']);
+  });
+
   test('controller adds workspace through file dialog service', () async {
     final temp = await Directory.systemTemp.createTemp('ai_team_pick_');
     addTearDown(() async => temp.delete(recursive: true));

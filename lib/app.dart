@@ -527,6 +527,33 @@ class AppController extends ChangeNotifier {
     return file.readAsString();
   }
 
+  Future<List<String>> listWorkspaceFiles({
+    required String workspaceId,
+    int maxFiles = 500,
+  }) async {
+    final root = _workspaceRoot(workspaceId);
+    if (!await root.exists()) {
+      throw StateError('工作区不存在: ${root.path}');
+    }
+    final rootPath = root.absolute.path;
+    final files = <String>[];
+    await for (final entity in root.list(recursive: true, followLinks: false)) {
+      if (files.length >= maxFiles) {
+        break;
+      }
+      final path = entity.absolute.path;
+      final relative = _relativeWorkspacePath(rootPath, path);
+      if (_isHiddenWorkspacePath(relative)) {
+        continue;
+      }
+      if (entity is File) {
+        files.add(relative);
+      }
+    }
+    files.sort();
+    return files;
+  }
+
   Future<PatchProposal> proposeWorkspacePatch({
     required String workspaceId,
     required String relativePath,
@@ -854,14 +881,18 @@ class AppController extends ChangeNotifier {
         relativePath.split('/').contains('..')) {
       throw ArgumentError('非法相对路径: $relativePath');
     }
-    final workspace =
-        state.workspaces.firstWhere((item) => item.id == workspaceId);
-    final root = Directory(workspace.path).absolute.path;
+    final root = _workspaceRoot(workspaceId).absolute.path;
     final file = File('$root/$relativePath').absolute;
     if (!file.path.startsWith('$root/')) {
       throw ArgumentError('文件路径越过工作区边界: $relativePath');
     }
     return file;
+  }
+
+  Directory _workspaceRoot(String workspaceId) {
+    final workspace =
+        state.workspaces.firstWhere((item) => item.id == workspaceId);
+    return Directory(workspace.path).absolute;
   }
 
   Future<ProcessResult> _runShellCommand(
@@ -1377,6 +1408,13 @@ class _InspectorPane extends StatelessWidget {
                   icon: const Icon(Icons.difference_rounded),
                 ),
                 IconButton(
+                  tooltip: '浏览文件',
+                  onPressed: controller.state.workspaces.isEmpty
+                      ? null
+                      : () => _showWorkspaceFilesDialog(context, controller),
+                  icon: const Icon(Icons.list_alt_rounded),
+                ),
+                IconButton(
                   tooltip: '添加工作区',
                   onPressed: controller.pickAndAddWorkspace,
                   icon: const Icon(Icons.add_rounded),
@@ -1494,14 +1532,21 @@ class _Panel extends StatelessWidget {
             children: [
               Icon(icon, size: 18),
               const SizedBox(width: 8),
-              Text(
-                title,
-                style: const TextStyle(fontWeight: FontWeight.w700),
+              Expanded(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
               ),
-              const Spacer(),
-              if (action != null) action!,
             ],
           ),
+          if (action != null)
+            Align(
+              alignment: Alignment.centerRight,
+              child: action!,
+            ),
           const SizedBox(height: 8),
           child,
         ],
@@ -2027,6 +2072,79 @@ Future<void> _showWorkspacePatchDialog(
   );
 }
 
+Future<void> _showWorkspaceFilesDialog(
+  BuildContext context,
+  AppController controller,
+) async {
+  var workspaceId = controller.state.workspaces.first.id;
+  var filesFuture = controller.listWorkspaceFiles(workspaceId: workspaceId);
+  await showDialog<void>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: const Text('工作区文件'),
+        content: SizedBox(
+          width: 520,
+          height: 420,
+          child: Column(
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: workspaceId,
+                decoration: const InputDecoration(labelText: '工作区'),
+                items: controller.state.workspaces
+                    .map(
+                      (workspace) => DropdownMenuItem(
+                        value: workspace.id,
+                        child: Text(workspace.name),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) => setDialogState(() {
+                  workspaceId = value!;
+                  filesFuture =
+                      controller.listWorkspaceFiles(workspaceId: workspaceId);
+                }),
+              ),
+              const SizedBox(height: 10),
+              Expanded(
+                child: FutureBuilder<List<String>>(
+                  future: filesFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState != ConnectionState.done) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      return _DialogError('读取文件列表失败：${snapshot.error}');
+                    }
+                    final files = snapshot.data ?? const [];
+                    if (files.isEmpty) {
+                      return const Center(child: Text('没有可显示的文件'));
+                    }
+                    return ListView.builder(
+                      itemCount: files.length,
+                      itemBuilder: (context, index) => ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.description_rounded),
+                        title: SelectableText(files[index]),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 Future<void> _showCommandDialog(
   BuildContext context,
   AppController controller,
@@ -2253,6 +2371,22 @@ AppState _ensureMemberConversations(AppState state) {
     }
   }
   return changed ? state.copyWith(conversations: conversations) : state;
+}
+
+String _relativeWorkspacePath(String rootPath, String entityPath) {
+  final normalizedRoot = rootPath.replaceAll('\\', '/');
+  final normalizedEntity = entityPath.replaceAll('\\', '/');
+  if (normalizedEntity == normalizedRoot) {
+    return '';
+  }
+  return normalizedEntity.substring(normalizedRoot.length + 1);
+}
+
+bool _isHiddenWorkspacePath(String relativePath) {
+  return relativePath
+      .split('/')
+      .where((segment) => segment.isNotEmpty)
+      .any((segment) => segment.startsWith('.'));
 }
 
 String _basename(String path) {
