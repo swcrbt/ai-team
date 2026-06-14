@@ -102,7 +102,9 @@ class FakeModelGateway implements ModelGateway {
     required ModelProfile model,
     required String systemPrompt,
     required List<ChatMessage> messages,
+    ModelRequestCancellation? cancellation,
   }) async {
+    cancellation?.throwIfCancelled();
     final latestUser = messages.lastWhere((message) => message.isUser).content;
     if (systemPrompt.contains('测试工程师')) {
       return '测试工程师：为“$latestUser”补充单元测试、Widget 测试和回归验收。';
