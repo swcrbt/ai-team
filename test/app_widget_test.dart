@@ -146,6 +146,7 @@ void main() {
 
     expect(preview, 'old docs\n');
     expect(controller.patchProposals.single.diff, contains('+new docs'));
+    expect(persisted!.patchProposals.single.diff, contains('+new docs'));
     expect(await file.readAsString(), 'old docs\n');
   });
 

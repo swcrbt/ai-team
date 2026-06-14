@@ -29,7 +29,7 @@ void main() {
       expect(exported['models'].first['apiKey'], isNotEmpty);
     });
 
-    test('round trips workspaces and command requests', () {
+    test('round trips workspaces, command requests, and patch proposals', () {
       final state = AppState.seed().copyWith(
         workspaces: const [
           ProjectWorkspace(
@@ -47,6 +47,16 @@ void main() {
             decision: CommandDecision.requiresConfirmation,
           ),
         ],
+        patchProposals: const [
+          PatchProposal(
+            id: 'patch-1',
+            filePath: '/workspace/app/lib/main.dart',
+            originalContent: 'old',
+            proposedContent: 'new',
+            memberName: '前端工程师',
+            diff: '--- file\n+++ file\n@@\n-old\n+new\n',
+          ),
+        ],
       );
 
       final exported = ConfigExporter.exportState(state, includeSecrets: false);
@@ -56,6 +66,8 @@ void main() {
       expect(imported.commandRequests.single.command, 'flutter test');
       expect(
           imported.commandRequests.single.status, CommandRequestStatus.pending);
+      expect(imported.patchProposals.single.memberName, '前端工程师');
+      expect(imported.patchProposals.single.status, PatchStatus.pending);
     });
   });
 

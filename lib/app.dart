@@ -140,11 +140,12 @@ class AppController extends ChangeNotifier {
   final JsonLocalStore exportStore;
   bool isDispatching = false;
   String? error;
-  final List<PatchProposal> patchProposals = [];
   ModelRequestCancellation? _activeCancellation;
   ConversationStatus? _requestedCancellationStatus;
 
   Team get currentTeam => state.teams.first;
+
+  List<PatchProposal> get patchProposals => state.patchProposals;
 
   Conversation get currentConversation =>
       state.conversations.firstWhere((item) => item.teamId == currentTeam.id);
@@ -478,9 +479,9 @@ class AppController extends ChangeNotifier {
       proposedContent: proposedContent,
       memberName: memberName,
     );
-    patchProposals.add(proposal);
     _commit(
       state.copyWith(
+        patchProposals: [...state.patchProposals, proposal],
         auditLog: [
           ...state.auditLog,
           AuditEntry(
@@ -600,15 +601,18 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> applyPatch(PatchProposal proposal) async {
-    final index = patchProposals.indexWhere((item) => item.id == proposal.id);
+    final index =
+        state.patchProposals.indexWhere((item) => item.id == proposal.id);
     if (index < 0) {
       return;
     }
     try {
       final applied = await PatchApplier().apply(proposal);
-      patchProposals[index] = applied;
+      final proposals = [...state.patchProposals];
+      proposals[index] = applied;
       _commit(
         state.copyWith(
+          patchProposals: proposals,
           auditLog: [
             ...state.auditLog,
             AuditEntry(
@@ -627,10 +631,25 @@ class AppController extends ChangeNotifier {
   }
 
   void rejectPatch(PatchProposal proposal) {
-    final index = patchProposals.indexWhere((item) => item.id == proposal.id);
+    final index =
+        state.patchProposals.indexWhere((item) => item.id == proposal.id);
     if (index >= 0) {
-      patchProposals[index] = proposal.copyWith(status: PatchStatus.rejected);
-      notifyListeners();
+      final proposals = [...state.patchProposals];
+      proposals[index] = proposal.copyWith(status: PatchStatus.rejected);
+      _commit(
+        state.copyWith(
+          patchProposals: proposals,
+          auditLog: [
+            ...state.auditLog,
+            AuditEntry(
+              id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
+              action: 'patch_rejected',
+              detail: proposal.filePath,
+              createdAt: DateTime.now(),
+            ),
+          ],
+        ),
+      );
     }
   }
 

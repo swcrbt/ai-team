@@ -6,6 +6,73 @@ enum CommandRequestStatus { pending, approved, denied, executed, failed }
 
 enum PatchStatus { pending, applied, rejected }
 
+class PatchProposal {
+  const PatchProposal({
+    required this.id,
+    required this.filePath,
+    required this.originalContent,
+    required this.proposedContent,
+    required this.memberName,
+    required this.diff,
+    this.status = PatchStatus.pending,
+  });
+
+  factory PatchProposal.fromFileChange({
+    required String id,
+    required String filePath,
+    required String originalContent,
+    required String proposedContent,
+    required String memberName,
+  }) {
+    return PatchProposal(
+      id: id,
+      filePath: filePath,
+      originalContent: originalContent,
+      proposedContent: proposedContent,
+      memberName: memberName,
+      diff: _createUnifiedDiff(filePath, originalContent, proposedContent),
+    );
+  }
+
+  factory PatchProposal.fromJson(Map<String, Object?> json) => PatchProposal(
+        id: json['id'] as String,
+        filePath: json['filePath'] as String,
+        originalContent: json['originalContent'] as String,
+        proposedContent: json['proposedContent'] as String,
+        memberName: json['memberName'] as String,
+        diff: json['diff'] as String,
+        status: PatchStatus.values.byName(json['status'] as String),
+      );
+
+  final String id;
+  final String filePath;
+  final String originalContent;
+  final String proposedContent;
+  final String memberName;
+  final String diff;
+  final PatchStatus status;
+
+  PatchProposal copyWith({PatchStatus? status}) => PatchProposal(
+        id: id,
+        filePath: filePath,
+        originalContent: originalContent,
+        proposedContent: proposedContent,
+        memberName: memberName,
+        diff: diff,
+        status: status ?? this.status,
+      );
+
+  Map<String, Object?> toJson() => {
+        'id': id,
+        'filePath': filePath,
+        'originalContent': originalContent,
+        'proposedContent': proposedContent,
+        'memberName': memberName,
+        'diff': diff,
+        'status': status.name,
+      };
+}
+
 class CommandPolicy {
   const CommandPolicy({
     required this.allowedCommands,
@@ -549,6 +616,7 @@ class AppState {
     required this.conversations,
     required this.workspaces,
     required this.commandRequests,
+    required this.patchProposals,
     required this.auditLog,
   });
 
@@ -559,6 +627,7 @@ class AppState {
   final List<Conversation> conversations;
   final List<ProjectWorkspace> workspaces;
   final List<CommandRequest> commandRequests;
+  final List<PatchProposal> patchProposals;
   final List<AuditEntry> auditLog;
 
   AppState copyWith({
@@ -569,6 +638,7 @@ class AppState {
     List<Conversation>? conversations,
     List<ProjectWorkspace>? workspaces,
     List<CommandRequest>? commandRequests,
+    List<PatchProposal>? patchProposals,
     List<AuditEntry>? auditLog,
   }) {
     return AppState(
@@ -579,6 +649,7 @@ class AppState {
       conversations: conversations ?? this.conversations,
       workspaces: workspaces ?? this.workspaces,
       commandRequests: commandRequests ?? this.commandRequests,
+      patchProposals: patchProposals ?? this.patchProposals,
       auditLog: auditLog ?? this.auditLog,
     );
   }
@@ -596,6 +667,8 @@ class AppState {
             workspaces.map((workspace) => workspace.toJson()).toList(),
         'commandRequests':
             commandRequests.map((request) => request.toJson()).toList(),
+        'patchProposals':
+            patchProposals.map((proposal) => proposal.toJson()).toList(),
         'auditLog': auditLog.map((entry) => entry.toJson()).toList(),
       };
 
@@ -622,6 +695,9 @@ class AppState {
         commandRequests: ((json['commandRequests'] as List?) ?? const [])
             .map(
                 (item) => CommandRequest.fromJson(item as Map<String, Object?>))
+            .toList(),
+        patchProposals: ((json['patchProposals'] as List?) ?? const [])
+            .map((item) => PatchProposal.fromJson(item as Map<String, Object?>))
             .toList(),
         auditLog: (json['auditLog'] as List)
             .map((item) => AuditEntry.fromJson(item as Map<String, Object?>))
@@ -736,7 +812,41 @@ class AppState {
       conversations: conversations,
       workspaces: const [],
       commandRequests: const [],
+      patchProposals: const [],
       auditLog: const [],
     );
   }
+}
+
+String _createUnifiedDiff(
+  String filePath,
+  String originalContent,
+  String proposedContent,
+) {
+  final originalLines = originalContent.split('\n');
+  final proposedLines = proposedContent.split('\n');
+  final buffer = StringBuffer()
+    ..writeln('--- $filePath')
+    ..writeln('+++ $filePath')
+    ..writeln('@@');
+  final maxLength = originalLines.length > proposedLines.length
+      ? originalLines.length
+      : proposedLines.length;
+  for (var index = 0; index < maxLength; index++) {
+    final oldLine = index < originalLines.length ? originalLines[index] : null;
+    final newLine = index < proposedLines.length ? proposedLines[index] : null;
+    if (oldLine == newLine) {
+      if (oldLine != null && oldLine.isNotEmpty) {
+        buffer.writeln(' $oldLine');
+      }
+      continue;
+    }
+    if (oldLine != null && oldLine.isNotEmpty) {
+      buffer.writeln('-$oldLine');
+    }
+    if (newLine != null && newLine.isNotEmpty) {
+      buffer.writeln('+$newLine');
+    }
+  }
+  return buffer.toString();
 }
