@@ -669,6 +669,7 @@ class AppController extends ChangeNotifier {
   Team addTeam({
     required String name,
     required List<String> memberIds,
+    TeamCollaborationMode collaborationMode = TeamCollaborationMode.serial,
   }) {
     final trimmedName = name.trim();
     if (trimmedName.isEmpty) {
@@ -692,6 +693,7 @@ class AppController extends ChangeNotifier {
       name: trimmedName,
       memberIds: uniqueMemberIds.toList(),
       secretaryMemberId: secretary.id,
+      collaborationMode: collaborationMode,
     );
     _commit(
       state.copyWith(
@@ -2267,7 +2269,8 @@ class _TeamCard extends StatelessWidget {
         .toList();
     return _KeyValueRow(
       label: team.name,
-      value: members.map((member) => member.name).join('、'),
+      value:
+          '${_collaborationModeLabel(team.collaborationMode)}协同 · ${members.map((member) => member.name).join('、')}',
       actions: [
         FilledButton(
           onPressed: onStartChat,
@@ -2717,7 +2720,7 @@ class _MemberConfigPanel extends StatelessWidget {
               (member) => _KeyValueRow(
                 label: member.name,
                 value:
-                    '${_roleName(controller.state, member.roleId)} · ${_modelName(controller.state, member.modelId)}',
+                    '${_roleName(controller.state, member.roleId)} · ${_modelName(controller.state, member.modelId)} · 优先级 ${member.executionPriority}',
                 actions: [
                   FilledButton(
                     onPressed: () {
@@ -3131,6 +3134,7 @@ Future<void> _showTeamDialog(
   AppController controller,
 ) async {
   final nameController = TextEditingController();
+  var collaborationMode = TeamCollaborationMode.serial;
   final selectedMemberIds = <String>{
     for (final member in controller.state.members)
       if (!member.isSecretary) member.id,
@@ -3152,6 +3156,36 @@ Future<void> _showTeamDialog(
                   controller: nameController,
                   label: '团队名称',
                 ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '协同模式',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: SegmentedButton<TeamCollaborationMode>(
+                    segments: const [
+                      ButtonSegment(
+                        value: TeamCollaborationMode.serial,
+                        label: Text('串行'),
+                      ),
+                      ButtonSegment(
+                        value: TeamCollaborationMode.parallel,
+                        label: Text('并行'),
+                      ),
+                    ],
+                    selected: {collaborationMode},
+                    onSelectionChanged: (selection) {
+                      setDialogState(
+                        () => collaborationMode = selection.single,
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 12),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
@@ -3198,6 +3232,7 @@ Future<void> _showTeamDialog(
                 controller.addTeam(
                   name: nameController.text,
                   memberIds: selectedMemberIds.toList(),
+                  collaborationMode: collaborationMode,
                 );
                 FocusScope.of(context).unfocus();
                 Navigator.of(context).pop();
@@ -3486,6 +3521,9 @@ Future<void> _showMemberDialog(
   TeamMember? member,
 }) async {
   final name = TextEditingController(text: member?.name ?? '');
+  final priority = TextEditingController(
+    text: (member?.executionPriority ?? 0).toString(),
+  );
   var roleId = member?.roleId ?? controller.state.roles.first.id;
   var modelId = member?.modelId ?? controller.state.models.first.id;
   String? validationError;
@@ -3501,6 +3539,7 @@ Future<void> _showMemberDialog(
             children: [
               if (validationError != null) _DialogError(validationError!),
               _DialogField(controller: name, label: '成员名称'),
+              _DialogField(controller: priority, label: '执行优先级'),
               DropdownButtonFormField<String>(
                 initialValue: roleId,
                 decoration: const InputDecoration(labelText: '角色'),
@@ -3538,6 +3577,10 @@ Future<void> _showMemberDialog(
           FilledButton(
             onPressed: () {
               try {
+                final executionPriority = int.tryParse(priority.text.trim());
+                if (executionPriority == null) {
+                  throw ArgumentError('执行优先级必须是整数');
+                }
                 final next = TeamMember(
                   id: member?.id ??
                       'member-${DateTime.now().microsecondsSinceEpoch}',
@@ -3545,6 +3588,7 @@ Future<void> _showMemberDialog(
                   roleId: roleId,
                   modelId: modelId,
                   isSecretary: member?.isSecretary ?? false,
+                  executionPriority: executionPriority,
                 );
                 if (member == null) {
                   controller.addMember(next);
@@ -4142,6 +4186,13 @@ String _statusText(ConversationStatus status) {
     ConversationStatus.paused => '已暂停',
     ConversationStatus.stopped => '已停止',
     ConversationStatus.failed => '失败',
+  };
+}
+
+String _collaborationModeLabel(TeamCollaborationMode mode) {
+  return switch (mode) {
+    TeamCollaborationMode.serial => '串行',
+    TeamCollaborationMode.parallel => '并行',
   };
 }
 

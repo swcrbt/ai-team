@@ -927,6 +927,54 @@ void main() {
     expect(find.textContaining('前端工程师、测试工程师'), findsWidgets);
   });
 
+  testWidgets('team dialog defaults to serial mode and can select parallel',
+      (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+    await tester.tap(find.byTooltip('团队'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('新增团队'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.widgetWithText(
+        SegmentedButton<TeamCollaborationMode>,
+        '串行',
+      ),
+      findsOneWidget,
+    );
+
+    await tester.enterText(find.widgetWithText(TextField, '团队名称'), '并行小队');
+    await tester.tap(find.text('并行'));
+    await tester.tap(find.widgetWithText(FilledButton, '保存'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('并行协同'), findsOneWidget);
+  });
+
+  testWidgets('member dialog edits execution priority', (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+    await tester.tap(find.byTooltip('成员'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('编辑成员').first);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.widgetWithText(TextField, '执行优先级'), '20');
+    await tester.tap(find.widgetWithText(FilledButton, '保存'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('优先级 20'), findsOneWidget);
+  });
+
   testWidgets('sidebar model button opens an independent model page',
       (tester) async {
     await tester.pumpWidget(
