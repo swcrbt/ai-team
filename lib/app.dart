@@ -178,9 +178,26 @@ class AppController extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool _canDispatchCurrentConversation() {
+    final status = currentConversation.status;
+    if (status == ConversationStatus.paused) {
+      error = '当前会话已暂停，请先点击继续。';
+      return false;
+    }
+    if (status == ConversationStatus.stopped) {
+      error = '当前会话已停止，不能继续调度。';
+      return false;
+    }
+    return true;
+  }
+
   Future<void> dispatch(String text) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty || isDispatching) {
+      return;
+    }
+    if (!_canDispatchCurrentConversation()) {
+      notifyListeners();
       return;
     }
     isDispatching = true;

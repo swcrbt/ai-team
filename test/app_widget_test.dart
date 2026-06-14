@@ -364,6 +364,35 @@ void main() {
     expect(controller.state.auditLog.last.action, 'team_task_stopped');
   });
 
+  test('controller blocks dispatch while a conversation is paused or stopped',
+      () async {
+    final controller = AppController(
+      AppState.seed(),
+      TeamOrchestrator(FakeModelGateway()),
+    );
+    addTearDown(controller.dispose);
+    final messageCount = controller.currentConversation.messages.length;
+
+    controller.pauseConversation();
+    await controller.dispatch('暂停时不应执行');
+
+    expect(controller.currentConversation.messages.length, messageCount);
+    expect(controller.error, contains('已暂停'));
+
+    controller.resumeConversation();
+    await controller.dispatch('继续后可以执行');
+
+    expect(controller.currentConversation.messages.length,
+        greaterThan(messageCount));
+
+    controller.stopConversation();
+    final stoppedCount = controller.currentConversation.messages.length;
+    await controller.dispatch('停止后不应执行');
+
+    expect(controller.currentConversation.messages.length, stoppedCount);
+    expect(controller.error, contains('已停止'));
+  });
+
   testWidgets('desktop workspace exposes chat, model, role, and team surfaces',
       (tester) async {
     await tester.pumpWidget(
