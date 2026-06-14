@@ -59,8 +59,17 @@ class JsonLocalStore {
     if (!await file.exists()) {
       return AppState.seed();
     }
-    final raw = await file.readAsString();
-    final state = AppState.fromJson(jsonDecode(raw) as Map<String, Object?>);
+    late AppState state;
+    try {
+      final raw = await file.readAsString();
+      state = AppState.fromJson(jsonDecode(raw) as Map<String, Object?>);
+    } on FormatException {
+      await _backupCorruptState();
+      return AppState.seed();
+    } on TypeError {
+      await _backupCorruptState();
+      return AppState.seed();
+    }
     final models = <ModelProfile>[];
     for (final model in state.models) {
       models.add(model.copyWith(
@@ -68,6 +77,17 @@ class JsonLocalStore {
       ));
     }
     return state.copyWith(models: models);
+  }
+
+  Future<void> _backupCorruptState() async {
+    if (!await file.exists()) {
+      return;
+    }
+    final timestamp = DateTime.now()
+        .toUtc()
+        .toIso8601String()
+        .replaceAll(RegExp(r'[^0-9A-Za-z]'), '');
+    await file.rename('${file.path}.corrupt-$timestamp');
   }
 
   Future<void> save(AppState state) async {

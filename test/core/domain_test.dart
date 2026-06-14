@@ -101,6 +101,28 @@ void main() {
       expect(await secrets.read('model-main'), 'sk-local-placeholder');
     });
 
+    test('backs up corrupt state files and falls back to seed state', () async {
+      final temp = await Directory.systemTemp.createTemp('ai_team_corrupt_');
+      addTearDown(() async => temp.delete(recursive: true));
+      final stateFile = File('${temp.path}/state.json');
+      await stateFile.writeAsString('{not valid json');
+      final store = JsonLocalStore(
+        stateFile,
+        secretStore: MemorySecretStore(),
+      );
+
+      final loaded = await store.load();
+      final backups = temp
+          .listSync()
+          .whereType<File>()
+          .where((file) => file.path.contains('state.json.corrupt'))
+          .toList();
+
+      expect(loaded.teams.single.name, '默认开发团队');
+      expect(backups, hasLength(1));
+      expect(await stateFile.exists(), isFalse);
+    });
+
     test('exports secrets only when explicitly requested from secret store',
         () async {
       final secrets = MemorySecretStore();
