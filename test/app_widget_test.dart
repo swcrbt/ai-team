@@ -510,7 +510,7 @@ void main() {
     expect(controller.error, contains('已停止'));
   });
 
-  testWidgets('desktop workspace exposes chat, model, role, and team surfaces',
+  testWidgets('desktop workspace separates chat and settings surfaces',
       (tester) async {
     await tester.pumpWidget(
       AiTeamApp(
@@ -519,8 +519,20 @@ void main() {
       ),
     );
 
-    expect(find.text('AI Team'), findsOneWidget);
-    expect(find.text('团队会话'), findsOneWidget);
+    expect(find.text('群聊'), findsOneWidget);
+    expect(find.text('私聊'), findsOneWidget);
+    expect(find.text('默认开发团队'), findsWidgets);
+    expect(find.textContaining('群聊 · 默认开发团队'), findsOneWidget);
+    expect(find.byTooltip('设置'), findsOneWidget);
+    expect(find.text('模型配置'), findsNothing);
+    expect(find.text('角色配置'), findsNothing);
+    expect(find.text('团队成员'), findsNothing);
+    expect(find.text('补丁确认'), findsNothing);
+
+    await tester.tap(find.byTooltip('设置'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('设置'), findsOneWidget);
     expect(find.text('模型配置'), findsOneWidget);
     expect(find.text('角色配置'), findsOneWidget);
     expect(find.text('团队成员'), findsOneWidget);
@@ -544,7 +556,7 @@ void main() {
     expect(find.textContaining('请实现设置页面'), findsWidgets);
     expect(find.textContaining('秘书'), findsWidgets);
     expect(find.textContaining('前端工程师'), findsWidgets);
-    expect(find.text('已完成'), findsWidgets);
+    expect(find.textContaining('群聊 · 默认开发团队'), findsOneWidget);
     expect(find.textContaining('汇总'), findsWidgets);
   });
 }

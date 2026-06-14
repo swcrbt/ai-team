@@ -67,6 +67,7 @@ class AiTeamHome extends StatefulWidget {
 
 class _AiTeamHomeState extends State<AiTeamHome> {
   late AppController controller;
+  _MainView mainView = _MainView.chat;
 
   @override
   void initState() {
@@ -94,24 +95,37 @@ class _AiTeamHomeState extends State<AiTeamHome> {
           body: SafeArea(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final railWidth =
-                    (constraints.maxWidth * 0.24).clamp(180.0, 244.0);
-                final inspectorWidth =
-                    (constraints.maxWidth * 0.32).clamp(248.0, 332.0);
                 return Row(
                   children: [
                     SizedBox(
-                      width: railWidth,
-                      child: _ConversationRail(controller: controller),
+                      width: 72,
+                      child: _AppSidebar(
+                        selectedView: mainView,
+                        onChat: () => setState(() => mainView = _MainView.chat),
+                        onSettings: () =>
+                            setState(() => mainView = _MainView.settings),
+                      ),
+                    ),
+                    SizedBox(
+                      width: (constraints.maxWidth * 0.28).clamp(300.0, 360.0),
+                      child: _ConversationList(
+                        controller: controller,
+                        selectedView: mainView,
+                        onSelectConversation: (conversationId) {
+                          controller.selectConversation(conversationId);
+                          setState(() => mainView = _MainView.chat);
+                        },
+                      ),
                     ),
                     const VerticalDivider(width: 1),
                     Expanded(
-                      child: _ChatPane(controller: controller),
-                    ),
-                    const VerticalDivider(width: 1),
-                    SizedBox(
-                      width: inspectorWidth,
-                      child: _InspectorPane(controller: controller),
+                      child: mainView == _MainView.settings
+                          ? _SettingsPage(
+                              controller: controller,
+                              onBack: () =>
+                                  setState(() => mainView = _MainView.chat),
+                            )
+                          : _ChatPane(controller: controller),
                     ),
                   ],
                 );
@@ -123,6 +137,8 @@ class _AiTeamHomeState extends State<AiTeamHome> {
     );
   }
 }
+
+enum _MainView { chat, settings }
 
 class AppController extends ChangeNotifier {
   AppController(
@@ -987,87 +1003,258 @@ class AppController extends ChangeNotifier {
   }
 }
 
-class _ConversationRail extends StatelessWidget {
-  const _ConversationRail({required this.controller});
+class _AppSidebar extends StatelessWidget {
+  const _AppSidebar({
+    required this.selectedView,
+    required this.onChat,
+    required this.onSettings,
+  });
 
-  final AppController controller;
+  final _MainView selectedView;
+  final VoidCallback onChat;
+  final VoidCallback onSettings;
 
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
-      color: const Color(0xFFF7F8FA),
+      color: const Color(0xFF25324A),
+      child: Column(
+        children: [
+          const SizedBox(height: 16),
+          Container(
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: const Color(0xFF4F7CFF),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: Colors.white70, width: 2),
+            ),
+            child: const Text(
+              'AI',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          _SidebarButton(
+            icon: Icons.chat_bubble_rounded,
+            label: '消息',
+            selected: selectedView == _MainView.chat,
+            onPressed: onChat,
+          ),
+          _SidebarButton(
+            icon: Icons.groups_rounded,
+            label: '团队',
+            selected: false,
+            onPressed: onChat,
+          ),
+          _SidebarButton(
+            icon: Icons.folder_copy_rounded,
+            label: '项目',
+            selected: false,
+            onPressed: onSettings,
+          ),
+          _SidebarButton(
+            icon: Icons.difference_rounded,
+            label: '补丁',
+            selected: false,
+            onPressed: onSettings,
+          ),
+          const Spacer(),
+          _SidebarButton(
+            icon: Icons.settings_rounded,
+            label: '设置',
+            selected: selectedView == _MainView.settings,
+            onPressed: onSettings,
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+}
+
+class _SidebarButton extends StatelessWidget {
+  const _SidebarButton({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: label,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: IconButton(
+          onPressed: onPressed,
+          style: IconButton.styleFrom(
+            backgroundColor:
+                selected ? const Color(0xFF3B82F6) : Colors.transparent,
+            foregroundColor: selected ? Colors.white : const Color(0xFFB8C2D8),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+          icon: Icon(icon),
+        ),
+      ),
+    );
+  }
+}
+
+class _ConversationList extends StatelessWidget {
+  const _ConversationList({
+    required this.controller,
+    required this.selectedView,
+    required this.onSelectConversation,
+  });
+
+  final AppController controller;
+  final _MainView selectedView;
+  final ValueChanged<String> onSelectConversation;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: const Color(0xFFF7F8FB),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(14, 14, 12, 10),
             child: Row(
               children: [
-                Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Icon(
-                    Icons.hub_rounded,
-                    color: Colors.white,
-                    size: 18,
+                Expanded(
+                  child: SizedBox(
+                    height: 38,
+                    child: TextField(
+                      enabled: false,
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.search_rounded, size: 18),
+                        hintText: '搜索',
+                        isDense: true,
+                        filled: true,
+                        fillColor: Colors.white,
+                        contentPadding:
+                            const EdgeInsets.symmetric(vertical: 10),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          borderSide: const BorderSide(
+                            color: Color(0xFFE5E7EB),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 10),
-                const Expanded(
-                  child: Text(
-                    'AI Team',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
-                  ),
+                IconButton.filledTonal(
+                  tooltip: '新增',
+                  onPressed: () => _showMemberDialog(context, controller),
+                  icon: const Icon(Icons.add_rounded),
                 ),
               ],
             ),
           ),
-          _RailSection(
-            title: '团队',
-            children: [
-              _RailTile(
-                icon: Icons.forum_rounded,
-                title: '团队会话',
-                subtitle: controller.currentTeam.name,
-                selected: controller.selectedConversationId ==
-                    controller.teamConversation.id,
-                onTap: () => controller
-                    .selectConversation(controller.teamConversation.id),
-              ),
-            ],
+          const Padding(
+            padding: EdgeInsets.fromLTRB(18, 0, 18, 8),
+            child: Row(
+              children: [
+                _QuickAvatar(label: '秘', color: Color(0xFF4F7CFF)),
+                _QuickAvatar(label: '前', color: Color(0xFF16A34A)),
+                _QuickAvatar(label: '测', color: Color(0xFFF59E0B)),
+                _QuickAvatar(label: '项', color: Color(0xFF8B5CF6)),
+              ],
+            ),
           ),
-          _RailSection(
-            title: '成员私聊',
-            children: controller.currentMembers
-                .map(
-                  (member) => _RailTile(
-                    icon: member.isSecretary
-                        ? Icons.assignment_ind_rounded
-                        : Icons.person_rounded,
-                    title: member.name,
-                    subtitle: _roleName(controller.state, member.roleId),
-                    selected: controller.selectedConversationId ==
-                        controller.conversationForMember(member.id).id,
-                    onTap: () => controller.selectConversation(
-                      controller.conversationForMember(member.id).id,
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                _RailSection(
+                  title: '群聊',
+                  children: [
+                    _RailTile(
+                      icon: Icons.forum_rounded,
+                      title: controller.currentTeam.name,
+                      subtitle:
+                          _conversationPreview(controller.teamConversation),
+                      badge: '${controller.currentMembers.length}',
+                      selected: selectedView == _MainView.chat &&
+                          controller.selectedConversationId ==
+                              controller.teamConversation.id,
+                      onTap: () =>
+                          onSelectConversation(controller.teamConversation.id),
                     ),
-                  ),
-                )
-                .toList(),
+                  ],
+                ),
+                _RailSection(
+                  title: '私聊',
+                  children: controller.currentMembers
+                      .map(
+                        (member) => _RailTile(
+                          icon: member.isSecretary
+                              ? Icons.assignment_ind_rounded
+                              : Icons.person_rounded,
+                          title: member.name,
+                          subtitle: _memberConversationPreview(
+                            controller,
+                            member,
+                          ),
+                          badge: member.isSecretary ? 'BOT' : null,
+                          selected: selectedView == _MainView.chat &&
+                              controller.selectedConversationId ==
+                                  controller
+                                      .conversationForMember(member.id)
+                                      .id,
+                          onTap: () => onSelectConversation(
+                            controller.conversationForMember(member.id).id,
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ],
+            ),
           ),
-          const Spacer(),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: OutlinedButton.icon(
-              onPressed: () => _showExportDialog(context, controller),
-              icon: const Icon(Icons.ios_share_rounded),
-              label: const Text('导入 / 导出配置'),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickAvatar extends StatelessWidget {
+  const _QuickAvatar({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 12),
+      child: Column(
+        children: [
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: color,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -1112,6 +1299,7 @@ class _RailTile extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.subtitle,
+    this.badge,
     this.selected = false,
     this.onTap,
   });
@@ -1119,6 +1307,7 @@ class _RailTile extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
+  final String? badge;
   final bool selected;
   final VoidCallback? onTap;
 
@@ -1129,18 +1318,65 @@ class _RailTile extends StatelessWidget {
       child: Material(
         color: selected ? Colors.white : Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(0),
           side: selected
               ? const BorderSide(color: Color(0xFFE5E7EB))
               : BorderSide.none,
         ),
-        child: ListTile(
-          dense: true,
-          onTap: onTap,
-          leading: Icon(icon, size: 18),
-          title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
-          subtitle:
-              Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: selected
+                ? const Border(
+                    left: BorderSide(color: Color(0xFF2563EB), width: 3),
+                  )
+                : null,
+          ),
+          child: ListTile(
+            dense: true,
+            minLeadingWidth: 38,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+            onTap: onTap,
+            leading: CircleAvatar(
+              radius: 20,
+              backgroundColor:
+                  selected ? const Color(0xFFDCFCE7) : const Color(0xFFEFF6FF),
+              child: Icon(icon, size: 18, color: const Color(0xFF2563EB)),
+            ),
+            title: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+                if (badge != null)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFF7ED),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      badge!,
+                      style: const TextStyle(
+                        color: Color(0xFFD97706),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            subtitle: Text(
+              subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ),
       ),
     );
@@ -1171,27 +1407,46 @@ class _ChatPaneState extends State<_ChatPane> {
     return Column(
       children: [
         Container(
-          height: 64,
-          padding: const EdgeInsets.symmetric(horizontal: 20),
+          height: 74,
+          padding: const EdgeInsets.symmetric(horizontal: 24),
           alignment: Alignment.centerLeft,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              bottom: BorderSide(color: Color(0xFFE5E7EB)),
+            ),
+          ),
           child: Row(
             children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: conversation.memberId == null
+                    ? const Color(0xFF22C55E)
+                    : const Color(0xFF3B82F6),
+                child: Icon(
+                  conversation.memberId == null
+                      ? Icons.forum_rounded
+                      : Icons.person_rounded,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      '${conversation.title} · ${widget.controller.currentTeam.name}',
+                      _conversationTitle(widget.controller, conversation),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 18,
+                        fontSize: 20,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                     Text(
-                      '第 ${conversation.currentRound} 轮 · ${_statusText(conversation.status)}',
+                      _conversationMeta(widget.controller, conversation),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(color: Colors.grey.shade600),
@@ -1223,14 +1478,16 @@ class _ChatPaneState extends State<_ChatPane> {
             ],
           ),
         ),
-        const Divider(height: 1),
         Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.all(20),
-            itemCount: conversation.messages.length,
-            itemBuilder: (context, index) {
-              return _MessageBubble(message: conversation.messages[index]);
-            },
+          child: ColoredBox(
+            color: const Color(0xFFFCFCFD),
+            child: ListView.builder(
+              padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
+              itemCount: conversation.messages.length,
+              itemBuilder: (context, index) {
+                return _MessageBubble(message: conversation.messages[index]);
+              },
+            ),
           ),
         ),
         if (widget.controller.error != null)
@@ -1244,34 +1501,56 @@ class _ChatPaneState extends State<_ChatPane> {
             ),
           ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: textController,
-                  minLines: 1,
-                  maxLines: 4,
-                  decoration: const InputDecoration(
-                    hintText: '像飞书聊天一样描述任务，秘书会自动分配给团队成员',
-                    border: OutlineInputBorder(),
-                    isDense: true,
+          padding: const EdgeInsets.fromLTRB(24, 10, 24, 18),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: textController,
+                    minLines: 1,
+                    maxLines: 4,
+                    decoration: InputDecoration(
+                      hintText: _inputHint(widget.controller, conversation),
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 13,
+                      ),
+                    ),
+                    onSubmitted: (_) => _submit(),
                   ),
-                  onSubmitted: (_) => _submit(),
                 ),
-              ),
-              const SizedBox(width: 10),
-              FilledButton(
-                onPressed: widget.controller.isDispatching ? null : _submit,
-                child: widget.controller.isDispatching
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.send_rounded),
-              ),
-            ],
+                const IconButton(
+                  tooltip: '表情',
+                  onPressed: null,
+                  icon: Icon(Icons.mood_rounded),
+                ),
+                const IconButton(
+                  tooltip: '提及',
+                  onPressed: null,
+                  icon: Icon(Icons.alternate_email_rounded),
+                ),
+                IconButton.filled(
+                  tooltip: '发送',
+                  onPressed: widget.controller.isDispatching ? null : _submit,
+                  icon: widget.controller.isDispatching
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.send_rounded),
+                ),
+                const SizedBox(width: 6),
+              ],
+            ),
           ),
         ),
       ],
@@ -1316,282 +1595,383 @@ class _MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final alignRight = message.isUser;
-    return Align(
-      alignment: alignRight ? Alignment.centerRight : Alignment.centerLeft,
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 680),
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: alignRight ? const Color(0xFFEFF6FF) : const Color(0xFFF3F4F6),
-          borderRadius: BorderRadius.circular(8),
+    final bubble = Container(
+      constraints: const BoxConstraints(maxWidth: 680),
+      margin: const EdgeInsets.only(bottom: 18),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: alignRight ? const Color(0xFFE8F1FF) : Colors.white,
+        border: Border.all(
+          color: alignRight ? const Color(0xFFCFE0FF) : const Color(0xFFE5E7EB),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (!alignRight) ...[
             Text(
               message.authorName,
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
-            const SizedBox(height: 6),
-            Text(message.content),
+            const SizedBox(height: 8),
           ],
-        ),
+          Text(message.content),
+        ],
       ),
+    );
+    return Row(
+      mainAxisAlignment:
+          alignRight ? MainAxisAlignment.end : MainAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (!alignRight) ...[
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: _avatarColor(message.authorName),
+            child: Text(
+              _avatarText(message.authorName),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+        ],
+        Flexible(child: bubble),
+        if (alignRight) ...[
+          const SizedBox(width: 10),
+          const CircleAvatar(
+            radius: 18,
+            backgroundColor: Color(0xFF2563EB),
+            child: Text(
+              '我',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
 
-class _InspectorPane extends StatelessWidget {
-  const _InspectorPane({required this.controller});
+class _SettingsPage extends StatelessWidget {
+  const _SettingsPage({
+    required this.controller,
+    required this.onBack,
+  });
 
   final AppController controller;
+  final VoidCallback onBack;
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          _Panel(
-            title: '模型配置',
-            icon: Icons.memory_rounded,
-            action: IconButton(
-              tooltip: '新增模型',
-              onPressed: () => _showModelDialog(context, controller),
-              icon: const Icon(Icons.add_rounded),
-            ),
-            child: Column(
-              children: controller.state.models
-                  .map(
-                    (model) => _KeyValueRow(
-                      label: model.name,
-                      value:
-                          '${model.modelName}\n${model.baseUrl}\n流式: ${model.streaming ? '开' : '关'} · 温度: ${model.temperature} · 最大 Token: ${model.maxTokens}',
-                      actions: [
-                        IconButton(
-                          tooltip: '编辑模型',
-                          onPressed: () => _showModelDialog(context, controller,
-                              model: model),
-                          icon: const Icon(Icons.edit_rounded),
-                        ),
-                        IconButton(
-                          tooltip: '删除模型',
-                          onPressed: () => _runConfigAction(
-                            context,
-                            () => controller.deleteModel(model.id),
-                          ),
-                          icon: const Icon(Icons.delete_outline_rounded),
-                        ),
-                      ],
-                    ),
-                  )
-                  .toList(),
+    return Column(
+      children: [
+        Container(
+          height: 72,
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              bottom: BorderSide(color: Color(0xFFE5E7EB)),
             ),
           ),
-          _Panel(
-            title: '角色配置',
-            icon: Icons.badge_rounded,
-            action: IconButton(
-              tooltip: '新增角色',
-              onPressed: () => _showRoleDialog(context, controller),
-              icon: const Icon(Icons.add_rounded),
-            ),
-            child: Column(
-              children: controller.state.roles
-                  .map(
-                    (role) => _KeyValueRow(
-                      label: role.name,
-                      value:
-                          '${role.description}\n命令: ${role.commandPolicy.allowedCommands.join(', ')}',
-                      actions: [
-                        IconButton(
-                          tooltip: '编辑角色',
-                          onPressed: () =>
-                              _showRoleDialog(context, controller, role: role),
-                          icon: const Icon(Icons.edit_rounded),
-                        ),
-                        IconButton(
-                          tooltip: '删除角色',
-                          onPressed: () => _runConfigAction(
-                            context,
-                            () => controller.deleteRole(role.id),
-                          ),
-                          icon: const Icon(Icons.delete_outline_rounded),
-                        ),
-                      ],
-                    ),
-                  )
-                  .toList(),
-            ),
-          ),
-          _Panel(
-            title: '团队成员',
-            icon: Icons.groups_rounded,
-            action: IconButton(
-              tooltip: '新增成员',
-              onPressed: () => _showMemberDialog(context, controller),
-              icon: const Icon(Icons.add_rounded),
-            ),
-            child: Column(
-              children: controller.currentMembers
-                  .map(
-                    (member) => _KeyValueRow(
-                      label: member.name,
-                      value:
-                          '${_roleName(controller.state, member.roleId)} · ${_modelName(controller.state, member.modelId)}',
-                      actions: [
-                        IconButton(
-                          tooltip: '编辑成员',
-                          onPressed: () => _showMemberDialog(
-                            context,
-                            controller,
-                            member: member,
-                          ),
-                          icon: const Icon(Icons.edit_rounded),
-                        ),
-                        IconButton(
-                          tooltip: '删除成员',
-                          onPressed: member.isSecretary
-                              ? null
-                              : () => _runConfigAction(
-                                    context,
-                                    () => controller.deleteMember(member.id),
-                                  ),
-                          icon: const Icon(Icons.delete_outline_rounded),
-                        ),
-                      ],
-                    ),
-                  )
-                  .toList(),
-            ),
-          ),
-          _Panel(
-            title: '任务轮次',
-            icon: Icons.account_tree_rounded,
-            child: Column(
-              children: controller.currentTaskAssignments.isEmpty
-                  ? [
-                      _KeyValueRow(
-                        label: '当前轮次',
-                        value:
-                            '第 ${controller.currentConversation.currentRound} 轮',
+          child: Row(
+            children: [
+              IconButton(
+                tooltip: '返回聊天',
+                onPressed: onBack,
+                icon: const Icon(Icons.arrow_back_rounded),
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '设置',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
                       ),
-                      const Text('暂无成员任务'),
-                    ]
-                  : controller.currentTaskAssignments
-                      .map(
-                        (assignment) =>
-                            _TaskAssignmentCard(assignment: assignment),
-                      )
-                      .toList(),
-            ),
+                    ),
+                    Text('模型、角色、团队和本地项目配置保存在本机'),
+                  ],
+                ),
+              ),
+            ],
           ),
-          _Panel(
-            title: '项目工作区',
-            icon: Icons.folder_open_rounded,
-            action: Wrap(
-              spacing: 2,
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
               children: [
-                IconButton(
-                  tooltip: '创建补丁',
-                  onPressed: controller.state.workspaces.isEmpty
-                      ? null
-                      : () => _showWorkspacePatchDialog(context, controller),
-                  icon: const Icon(Icons.difference_rounded),
+                _Panel(
+                  title: '导入导出',
+                  icon: Icons.ios_share_rounded,
+                  action: IconButton(
+                    tooltip: '导入 / 导出配置',
+                    onPressed: () => _showExportDialog(context, controller),
+                    icon: const Icon(Icons.open_in_new_rounded),
+                  ),
+                  child: const Text('配置文件和密钥导出选项集中在这里管理。'),
                 ),
-                IconButton(
-                  tooltip: '浏览文件',
-                  onPressed: controller.state.workspaces.isEmpty
-                      ? null
-                      : () => _showWorkspaceFilesDialog(context, controller),
-                  icon: const Icon(Icons.list_alt_rounded),
+                _Panel(
+                  title: '模型配置',
+                  icon: Icons.memory_rounded,
+                  action: IconButton(
+                    tooltip: '新增模型',
+                    onPressed: () => _showModelDialog(context, controller),
+                    icon: const Icon(Icons.add_rounded),
+                  ),
+                  child: Column(
+                    children: controller.state.models
+                        .map(
+                          (model) => _KeyValueRow(
+                            label: model.name,
+                            value:
+                                '${model.modelName}\n${model.baseUrl}\n流式: ${model.streaming ? '开' : '关'} · 温度: ${model.temperature} · 最大 Token: ${model.maxTokens}',
+                            actions: [
+                              IconButton(
+                                tooltip: '编辑模型',
+                                onPressed: () => _showModelDialog(
+                                    context, controller,
+                                    model: model),
+                                icon: const Icon(Icons.edit_rounded),
+                              ),
+                              IconButton(
+                                tooltip: '删除模型',
+                                onPressed: () => _runConfigAction(
+                                  context,
+                                  () => controller.deleteModel(model.id),
+                                ),
+                                icon: const Icon(Icons.delete_outline_rounded),
+                              ),
+                            ],
+                          ),
+                        )
+                        .toList(),
+                  ),
                 ),
-                IconButton(
-                  tooltip: '添加工作区',
-                  onPressed: controller.pickAndAddWorkspace,
-                  icon: const Icon(Icons.add_rounded),
+                _Panel(
+                  title: '角色配置',
+                  icon: Icons.badge_rounded,
+                  action: IconButton(
+                    tooltip: '新增角色',
+                    onPressed: () => _showRoleDialog(context, controller),
+                    icon: const Icon(Icons.add_rounded),
+                  ),
+                  child: Column(
+                    children: controller.state.roles
+                        .map(
+                          (role) => _KeyValueRow(
+                            label: role.name,
+                            value:
+                                '${role.description}\n命令: ${role.commandPolicy.allowedCommands.join(', ')}',
+                            actions: [
+                              IconButton(
+                                tooltip: '编辑角色',
+                                onPressed: () => _showRoleDialog(
+                                    context, controller,
+                                    role: role),
+                                icon: const Icon(Icons.edit_rounded),
+                              ),
+                              IconButton(
+                                tooltip: '删除角色',
+                                onPressed: () => _runConfigAction(
+                                  context,
+                                  () => controller.deleteRole(role.id),
+                                ),
+                                icon: const Icon(Icons.delete_outline_rounded),
+                              ),
+                            ],
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+                _Panel(
+                  title: '团队成员',
+                  icon: Icons.groups_rounded,
+                  action: IconButton(
+                    tooltip: '新增成员',
+                    onPressed: () => _showMemberDialog(context, controller),
+                    icon: const Icon(Icons.add_rounded),
+                  ),
+                  child: Column(
+                    children: controller.currentMembers
+                        .map(
+                          (member) => _KeyValueRow(
+                            label: member.name,
+                            value:
+                                '${_roleName(controller.state, member.roleId)} · ${_modelName(controller.state, member.modelId)}',
+                            actions: [
+                              IconButton(
+                                tooltip: '编辑成员',
+                                onPressed: () => _showMemberDialog(
+                                  context,
+                                  controller,
+                                  member: member,
+                                ),
+                                icon: const Icon(Icons.edit_rounded),
+                              ),
+                              IconButton(
+                                tooltip: '删除成员',
+                                onPressed: member.isSecretary
+                                    ? null
+                                    : () => _runConfigAction(
+                                          context,
+                                          () => controller
+                                              .deleteMember(member.id),
+                                        ),
+                                icon: const Icon(Icons.delete_outline_rounded),
+                              ),
+                            ],
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+                _Panel(
+                  title: '任务轮次',
+                  icon: Icons.account_tree_rounded,
+                  child: Column(
+                    children: controller.currentTaskAssignments.isEmpty
+                        ? [
+                            _KeyValueRow(
+                              label: '当前轮次',
+                              value:
+                                  '第 ${controller.currentConversation.currentRound} 轮',
+                            ),
+                            const Text('暂无成员任务'),
+                          ]
+                        : controller.currentTaskAssignments
+                            .map(
+                              (assignment) =>
+                                  _TaskAssignmentCard(assignment: assignment),
+                            )
+                            .toList(),
+                  ),
+                ),
+                _Panel(
+                  title: '项目工作区',
+                  icon: Icons.folder_open_rounded,
+                  action: Wrap(
+                    spacing: 2,
+                    children: [
+                      IconButton(
+                        tooltip: '创建补丁',
+                        onPressed: controller.state.workspaces.isEmpty
+                            ? null
+                            : () =>
+                                _showWorkspacePatchDialog(context, controller),
+                        icon: const Icon(Icons.difference_rounded),
+                      ),
+                      IconButton(
+                        tooltip: '浏览文件',
+                        onPressed: controller.state.workspaces.isEmpty
+                            ? null
+                            : () =>
+                                _showWorkspaceFilesDialog(context, controller),
+                        icon: const Icon(Icons.list_alt_rounded),
+                      ),
+                      IconButton(
+                        tooltip: '添加工作区',
+                        onPressed: controller.pickAndAddWorkspace,
+                        icon: const Icon(Icons.add_rounded),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: controller.state.workspaces.isEmpty
+                        ? [const Text('还没有选择本地项目目录')]
+                        : controller.state.workspaces
+                            .map(
+                              (workspace) => _KeyValueRow(
+                                label: workspace.name,
+                                value: workspace.path,
+                              ),
+                            )
+                            .toList(),
+                  ),
+                ),
+                _Panel(
+                  title: '命令请求',
+                  icon: Icons.terminal_rounded,
+                  action: IconButton(
+                    tooltip: '创建命令请求',
+                    onPressed: () => _showCommandDialog(context, controller),
+                    icon: const Icon(Icons.add_rounded),
+                  ),
+                  child: Column(
+                    children: controller.state.commandRequests.isEmpty
+                        ? [const Text('暂无命令请求')]
+                        : controller.state.commandRequests
+                            .map(
+                              (request) => _CommandRequestCard(
+                                request: request,
+                                onApprove: () =>
+                                    controller.updateCommandRequestStatus(
+                                  request.id,
+                                  CommandRequestStatus.approved,
+                                ),
+                                onDeny: () =>
+                                    controller.updateCommandRequestStatus(
+                                  request.id,
+                                  CommandRequestStatus.denied,
+                                ),
+                                onExecute: () =>
+                                    controller.executeCommandRequest(
+                                  request.id,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                  ),
+                ),
+                _Panel(
+                  title: '补丁确认',
+                  icon: Icons.difference_rounded,
+                  child: Column(
+                    children: controller.patchProposals
+                        .map(
+                          (patch) => _PatchCard(
+                            patch: patch,
+                            onApply: () => controller.applyPatch(patch),
+                            onReject: () => controller.rejectPatch(patch),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+                _Panel(
+                  title: '审计日志',
+                  icon: Icons.receipt_long_rounded,
+                  child: Column(
+                    children: controller.state.auditLog.isEmpty
+                        ? [const Text('暂无操作记录')]
+                        : controller.state.auditLog
+                            .map(
+                              (entry) => _KeyValueRow(
+                                label: entry.action,
+                                value: entry.detail,
+                              ),
+                            )
+                            .toList(),
+                  ),
                 ),
               ],
             ),
-            child: Column(
-              children: controller.state.workspaces.isEmpty
-                  ? [const Text('还没有选择本地项目目录')]
-                  : controller.state.workspaces
-                      .map(
-                        (workspace) => _KeyValueRow(
-                          label: workspace.name,
-                          value: workspace.path,
-                        ),
-                      )
-                      .toList(),
-            ),
           ),
-          _Panel(
-            title: '命令请求',
-            icon: Icons.terminal_rounded,
-            action: IconButton(
-              tooltip: '创建命令请求',
-              onPressed: () => _showCommandDialog(context, controller),
-              icon: const Icon(Icons.add_rounded),
-            ),
-            child: Column(
-              children: controller.state.commandRequests.isEmpty
-                  ? [const Text('暂无命令请求')]
-                  : controller.state.commandRequests
-                      .map(
-                        (request) => _CommandRequestCard(
-                          request: request,
-                          onApprove: () =>
-                              controller.updateCommandRequestStatus(
-                            request.id,
-                            CommandRequestStatus.approved,
-                          ),
-                          onDeny: () => controller.updateCommandRequestStatus(
-                            request.id,
-                            CommandRequestStatus.denied,
-                          ),
-                          onExecute: () => controller.executeCommandRequest(
-                            request.id,
-                          ),
-                        ),
-                      )
-                      .toList(),
-            ),
-          ),
-          _Panel(
-            title: '补丁确认',
-            icon: Icons.difference_rounded,
-            child: Column(
-              children: controller.patchProposals
-                  .map(
-                    (patch) => _PatchCard(
-                      patch: patch,
-                      onApply: () => controller.applyPatch(patch),
-                      onReject: () => controller.rejectPatch(patch),
-                    ),
-                  )
-                  .toList(),
-            ),
-          ),
-          _Panel(
-            title: '审计日志',
-            icon: Icons.receipt_long_rounded,
-            child: Column(
-              children: controller.state.auditLog.isEmpty
-                  ? [const Text('暂无操作记录')]
-                  : controller.state.auditLog
-                      .map(
-                        (entry) => _KeyValueRow(
-                          label: entry.action,
-                          value: entry.detail,
-                        ),
-                      )
-                      .toList(),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
@@ -2625,6 +3005,68 @@ String _roleName(AppState state, String roleId) =>
 
 String _modelName(AppState state, String modelId) =>
     state.models.firstWhere((model) => model.id == modelId).name;
+
+String _conversationTitle(AppController controller, Conversation conversation) {
+  if (conversation.memberId == null) {
+    return '群聊 · ${controller.currentTeam.name}';
+  }
+  return '私聊 · ${conversation.title}';
+}
+
+String _conversationMeta(AppController controller, Conversation conversation) {
+  final status = _statusText(conversation.status);
+  if (conversation.memberId == null) {
+    return '${controller.currentMembers.length} 位成员 · 第 ${conversation.currentRound} 轮 · $status';
+  }
+  final member = controller.currentMembers.firstWhere(
+    (item) => item.id == conversation.memberId,
+  );
+  return '${_roleName(controller.state, member.roleId)} · ${_modelName(controller.state, member.modelId)} · $status';
+}
+
+String _inputHint(AppController controller, Conversation conversation) {
+  if (conversation.memberId == null) {
+    return '发给 ${controller.currentTeam.name}';
+  }
+  return '发给 ${conversation.title}';
+}
+
+String _avatarText(String name) {
+  final trimmed = name.trim();
+  return trimmed.isEmpty ? '?' : trimmed.substring(0, 1);
+}
+
+Color _avatarColor(String name) {
+  if (name == '秘书') {
+    return const Color(0xFF22C55E);
+  }
+  if (name.contains('测试')) {
+    return const Color(0xFFF59E0B);
+  }
+  if (name.contains('前端')) {
+    return const Color(0xFF3B82F6);
+  }
+  return const Color(0xFF64748B);
+}
+
+String _conversationPreview(Conversation conversation) {
+  if (conversation.messages.isEmpty) {
+    return '暂无消息';
+  }
+  final message = conversation.messages.last;
+  return '${message.authorName}: ${message.content}'.replaceAll('\n', ' ');
+}
+
+String _memberConversationPreview(
+  AppController controller,
+  TeamMember member,
+) {
+  final conversation = controller.conversationForMember(member.id);
+  if (conversation.messages.length > 1) {
+    return _conversationPreview(conversation);
+  }
+  return _roleName(controller.state, member.roleId);
+}
 
 String _initialConversationId(AppState state) {
   return state.conversations
