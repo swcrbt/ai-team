@@ -2,6 +2,8 @@ enum ConversationStatus { idle, running, paused, stopped, failed }
 
 enum CommandDecision { allowed, requiresConfirmation, denied }
 
+enum CommandRequestStatus { pending, approved, denied, executed, failed }
+
 enum PatchStatus { pending, applied, rejected }
 
 class CommandPolicy {
@@ -59,6 +61,86 @@ class CommandPolicy {
         allowedDirectories:
             List<String>.from(json['allowedDirectories'] as List),
         requiresConfirmation: json['requiresConfirmation'] as bool,
+      );
+}
+
+class CommandRequest {
+  const CommandRequest({
+    required this.id,
+    required this.memberName,
+    required this.command,
+    required this.workingDirectory,
+    required this.decision,
+    required this.status,
+    required this.createdAt,
+    this.output,
+  });
+
+  factory CommandRequest.pending({
+    required String id,
+    required String memberName,
+    required String command,
+    required String workingDirectory,
+    required CommandDecision decision,
+  }) {
+    return CommandRequest(
+      id: id,
+      memberName: memberName,
+      command: command,
+      workingDirectory: workingDirectory,
+      decision: decision,
+      status: decision == CommandDecision.denied
+          ? CommandRequestStatus.denied
+          : CommandRequestStatus.pending,
+      createdAt: DateTime.now(),
+    );
+  }
+
+  final String id;
+  final String memberName;
+  final String command;
+  final String workingDirectory;
+  final CommandDecision decision;
+  final CommandRequestStatus status;
+  final DateTime createdAt;
+  final String? output;
+
+  CommandRequest copyWith({
+    CommandRequestStatus? status,
+    String? output,
+  }) {
+    return CommandRequest(
+      id: id,
+      memberName: memberName,
+      command: command,
+      workingDirectory: workingDirectory,
+      decision: decision,
+      status: status ?? this.status,
+      createdAt: createdAt,
+      output: output ?? this.output,
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+        'id': id,
+        'memberName': memberName,
+        'command': command,
+        'workingDirectory': workingDirectory,
+        'decision': decision.name,
+        'status': status.name,
+        'createdAt': createdAt.toIso8601String(),
+        'output': output,
+      };
+
+  factory CommandRequest.fromJson(Map<String, Object?> json) => CommandRequest(
+        id: json['id'] as String,
+        memberName: json['memberName'] as String,
+        command: json['command'] as String,
+        workingDirectory: json['workingDirectory'] as String,
+        decision: CommandDecision.values.byName(json['decision'] as String),
+        status: CommandRequestStatus.values.byName(json['status'] as String),
+        createdAt: DateTime.parse(json['createdAt'] as String),
+        output: json['output'] as String?,
       );
 }
 
@@ -402,6 +484,7 @@ class AppState {
     required this.teams,
     required this.conversations,
     required this.workspaces,
+    required this.commandRequests,
     required this.auditLog,
   });
 
@@ -411,6 +494,7 @@ class AppState {
   final List<Team> teams;
   final List<Conversation> conversations;
   final List<ProjectWorkspace> workspaces;
+  final List<CommandRequest> commandRequests;
   final List<AuditEntry> auditLog;
 
   AppState copyWith({
@@ -420,6 +504,7 @@ class AppState {
     List<Team>? teams,
     List<Conversation>? conversations,
     List<ProjectWorkspace>? workspaces,
+    List<CommandRequest>? commandRequests,
     List<AuditEntry>? auditLog,
   }) {
     return AppState(
@@ -429,6 +514,7 @@ class AppState {
       teams: teams ?? this.teams,
       conversations: conversations ?? this.conversations,
       workspaces: workspaces ?? this.workspaces,
+      commandRequests: commandRequests ?? this.commandRequests,
       auditLog: auditLog ?? this.auditLog,
     );
   }
@@ -444,6 +530,8 @@ class AppState {
             conversations.map((conversation) => conversation.toJson()).toList(),
         'workspaces':
             workspaces.map((workspace) => workspace.toJson()).toList(),
+        'commandRequests':
+            commandRequests.map((request) => request.toJson()).toList(),
         'auditLog': auditLog.map((entry) => entry.toJson()).toList(),
       };
 
@@ -466,6 +554,10 @@ class AppState {
         workspaces: (json['workspaces'] as List)
             .map((item) =>
                 ProjectWorkspace.fromJson(item as Map<String, Object?>))
+            .toList(),
+        commandRequests: ((json['commandRequests'] as List?) ?? const [])
+            .map(
+                (item) => CommandRequest.fromJson(item as Map<String, Object?>))
             .toList(),
         auditLog: (json['auditLog'] as List)
             .map((item) => AuditEntry.fromJson(item as Map<String, Object?>))
@@ -579,6 +671,7 @@ class AppState {
       teams: teams,
       conversations: conversations,
       workspaces: const [],
+      commandRequests: const [],
       auditLog: const [],
     );
   }

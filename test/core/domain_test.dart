@@ -27,6 +27,45 @@ void main() {
 
       expect(exported['models'].first['apiKey'], isNotEmpty);
     });
+
+    test('round trips workspaces and command requests', () {
+      final state = AppState.seed().copyWith(
+        workspaces: const [
+          ProjectWorkspace(
+            id: 'workspace-1',
+            name: 'App',
+            path: '/workspace/app',
+          ),
+        ],
+        commandRequests: [
+          CommandRequest.pending(
+            id: 'command-1',
+            memberName: '测试工程师',
+            command: 'flutter test',
+            workingDirectory: '/workspace/app',
+            decision: CommandDecision.requiresConfirmation,
+          ),
+        ],
+      );
+
+      final exported = ConfigExporter.exportState(state, includeSecrets: false);
+      final imported = ConfigExporter.importState(exported);
+
+      expect(imported.workspaces.single.path, '/workspace/app');
+      expect(imported.commandRequests.single.command, 'flutter test');
+      expect(
+          imported.commandRequests.single.status, CommandRequestStatus.pending);
+    });
+  });
+
+  group('local store paths', () {
+    test('uses the user home directory for production data by default', () {
+      final store = JsonLocalStore.defaultStore(
+        environment: {'HOME': '/Users/example'},
+      );
+
+      expect(store.file.path, '/Users/example/.ai_team/state.json');
+    });
   });
 
   group('role command policy', () {

@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 
 import 'app.dart';
@@ -8,7 +6,7 @@ import 'core/model_gateway.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final store = JsonLocalStore(File('.ai_team_data/state.json'));
+  final store = JsonLocalStore.defaultStore();
   final state = await store.load();
   runApp(AiTeamApp(
     initialState: state,

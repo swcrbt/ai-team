@@ -22,6 +22,14 @@ class ConfigExporter {
 class JsonLocalStore {
   JsonLocalStore(this.file);
 
+  factory JsonLocalStore.defaultStore({
+    Map<String, String>? environment,
+  }) {
+    final env = environment ?? Platform.environment;
+    final home = env['HOME'] ?? env['USERPROFILE'] ?? Directory.current.path;
+    return JsonLocalStore(File('$home/.ai_team/state.json'));
+  }
+
   final File file;
 
   Future<AppState> load() async {

@@ -125,15 +125,7 @@ class AppController extends ChangeNotifier {
   final ValueChanged<AppState>? onStateChanged;
   bool isDispatching = false;
   String? error;
-  final List<PatchProposal> patchProposals = [
-    PatchProposal.fromFileChange(
-      id: 'patch-demo',
-      filePath: 'lib/example.dart',
-      originalContent: 'class Example {}\n',
-      proposedContent: 'class Example {\n  void run() {}\n}\n',
-      memberName: '前端工程师',
-    ),
-  ];
+  final List<PatchProposal> patchProposals = [];
 
   Team get currentTeam => state.teams.first;
 
@@ -225,6 +217,177 @@ class AppController extends ChangeNotifier {
     );
   }
 
+  void addWorkspacePath(String path) {
+    final normalized = Directory(path).absolute.path;
+    final workspace = ProjectWorkspace(
+      id: 'workspace-${DateTime.now().microsecondsSinceEpoch}',
+      name: _basename(normalized),
+      path: normalized,
+    );
+    _commit(
+      state.copyWith(
+        workspaces: [...state.workspaces, workspace],
+        auditLog: [
+          ...state.auditLog,
+          AuditEntry(
+            id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
+            action: 'workspace_added',
+            detail: normalized,
+            createdAt: DateTime.now(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<String> readWorkspaceFile({
+    required String workspaceId,
+    required String relativePath,
+  }) async {
+    final file = _workspaceFile(workspaceId, relativePath);
+    if (!await file.exists()) {
+      throw StateError('文件不存在: $relativePath');
+    }
+    return file.readAsString();
+  }
+
+  Future<PatchProposal> proposeWorkspacePatch({
+    required String workspaceId,
+    required String relativePath,
+    required String proposedContent,
+    required String memberName,
+  }) async {
+    final file = _workspaceFile(workspaceId, relativePath);
+    final originalContent =
+        await file.exists() ? await file.readAsString() : '';
+    final proposal = PatchProposal.fromFileChange(
+      id: 'patch-${DateTime.now().microsecondsSinceEpoch}',
+      filePath: file.path,
+      originalContent: originalContent,
+      proposedContent: proposedContent,
+      memberName: memberName,
+    );
+    patchProposals.add(proposal);
+    _commit(
+      state.copyWith(
+        auditLog: [
+          ...state.auditLog,
+          AuditEntry(
+            id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
+            action: 'patch_proposed',
+            detail: '${proposal.memberName}: ${proposal.filePath}',
+            createdAt: DateTime.now(),
+          ),
+        ],
+      ),
+    );
+    return proposal;
+  }
+
+  CommandRequest requestCommand({
+    required String memberId,
+    required String command,
+    required String workingDirectory,
+  }) {
+    final member = state.members.firstWhere((item) => item.id == memberId);
+    final role = state.roles.firstWhere((item) => item.id == member.roleId);
+    final decision = role.commandPolicy.evaluate(
+      command,
+      workingDirectory: workingDirectory,
+    );
+    final request = CommandRequest.pending(
+      id: 'command-${DateTime.now().microsecondsSinceEpoch}',
+      memberName: member.name,
+      command: command,
+      workingDirectory: workingDirectory,
+      decision: decision,
+    );
+    _commit(
+      state.copyWith(
+        commandRequests: [...state.commandRequests, request],
+        auditLog: [
+          ...state.auditLog,
+          AuditEntry(
+            id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
+            action: decision == CommandDecision.denied
+                ? 'command_denied'
+                : 'command_requested',
+            detail: '${member.name}: $command',
+            createdAt: DateTime.now(),
+          ),
+        ],
+      ),
+    );
+    return request;
+  }
+
+  void updateCommandRequestStatus(
+    String requestId,
+    CommandRequestStatus status,
+  ) {
+    _commit(
+      state.copyWith(
+        commandRequests: state.commandRequests
+            .map((request) => request.id == requestId
+                ? request.copyWith(status: status)
+                : request)
+            .toList(),
+        auditLog: [
+          ...state.auditLog,
+          AuditEntry(
+            id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
+            action: 'command_${status.name}',
+            detail: requestId,
+            createdAt: DateTime.now(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<CommandRequest> executeCommandRequest(
+    String requestId, {
+    Future<ProcessResult> Function(String command, String workingDirectory)?
+        runner,
+  }) async {
+    final request =
+        state.commandRequests.firstWhere((item) => item.id == requestId);
+    if (request.status != CommandRequestStatus.approved) {
+      throw StateError('只有已批准的命令请求才能执行');
+    }
+    final run = runner ?? _runShellCommand;
+    final result = await run(request.command, request.workingDirectory);
+    final output = [
+      if (result.stdout.toString().trim().isNotEmpty)
+        result.stdout.toString().trim(),
+      if (result.stderr.toString().trim().isNotEmpty)
+        result.stderr.toString().trim(),
+    ].join('\n');
+    final status = result.exitCode == 0
+        ? CommandRequestStatus.executed
+        : CommandRequestStatus.failed;
+    final updated = request.copyWith(status: status, output: output);
+    _commit(
+      state.copyWith(
+        commandRequests: state.commandRequests
+            .map((item) => item.id == requestId ? updated : item)
+            .toList(),
+        auditLog: [
+          ...state.auditLog,
+          AuditEntry(
+            id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
+            action: status == CommandRequestStatus.executed
+                ? 'command_executed'
+                : 'command_failed',
+            detail: '${request.command} exit=${result.exitCode}',
+            createdAt: DateTime.now(),
+          ),
+        ],
+      ),
+    );
+    return updated;
+  }
+
   Future<void> applyPatch(PatchProposal proposal) async {
     final index = patchProposals.indexWhere((item) => item.id == proposal.id);
     if (index < 0) {
@@ -275,6 +438,42 @@ class AppController extends ChangeNotifier {
     state = nextState;
     onStateChanged?.call(state);
     notifyListeners();
+  }
+
+  File _workspaceFile(String workspaceId, String relativePath) {
+    if (relativePath.trim().isEmpty ||
+        relativePath.startsWith('/') ||
+        relativePath.split('/').contains('..')) {
+      throw ArgumentError('非法相对路径: $relativePath');
+    }
+    final workspace =
+        state.workspaces.firstWhere((item) => item.id == workspaceId);
+    final root = Directory(workspace.path).absolute.path;
+    final file = File('$root/$relativePath').absolute;
+    if (!file.path.startsWith('$root/')) {
+      throw ArgumentError('文件路径越过工作区边界: $relativePath');
+    }
+    return file;
+  }
+
+  Future<ProcessResult> _runShellCommand(
+    String command,
+    String workingDirectory,
+  ) {
+    if (Platform.isWindows) {
+      return Process.run(
+        'cmd',
+        ['/c', command],
+        workingDirectory: workingDirectory,
+        runInShell: false,
+      );
+    }
+    return Process.run(
+      '/bin/sh',
+      ['-lc', command],
+      workingDirectory: workingDirectory,
+      runInShell: false,
+    );
   }
 }
 
@@ -682,6 +881,59 @@ class _InspectorPane extends StatelessWidget {
             ),
           ),
           _Panel(
+            title: '项目工作区',
+            icon: Icons.folder_open_rounded,
+            action: IconButton(
+              tooltip: '添加工作区',
+              onPressed: () => _showWorkspaceDialog(context, controller),
+              icon: const Icon(Icons.add_rounded),
+            ),
+            child: Column(
+              children: controller.state.workspaces.isEmpty
+                  ? [const Text('还没有选择本地项目目录')]
+                  : controller.state.workspaces
+                      .map(
+                        (workspace) => _KeyValueRow(
+                          label: workspace.name,
+                          value: workspace.path,
+                        ),
+                      )
+                      .toList(),
+            ),
+          ),
+          _Panel(
+            title: '命令请求',
+            icon: Icons.terminal_rounded,
+            action: IconButton(
+              tooltip: '创建命令请求',
+              onPressed: () => _showCommandDialog(context, controller),
+              icon: const Icon(Icons.add_rounded),
+            ),
+            child: Column(
+              children: controller.state.commandRequests.isEmpty
+                  ? [const Text('暂无命令请求')]
+                  : controller.state.commandRequests
+                      .map(
+                        (request) => _CommandRequestCard(
+                          request: request,
+                          onApprove: () =>
+                              controller.updateCommandRequestStatus(
+                            request.id,
+                            CommandRequestStatus.approved,
+                          ),
+                          onDeny: () => controller.updateCommandRequestStatus(
+                            request.id,
+                            CommandRequestStatus.denied,
+                          ),
+                          onExecute: () => controller.executeCommandRequest(
+                            request.id,
+                          ),
+                        ),
+                      )
+                      .toList(),
+            ),
+          ),
+          _Panel(
             title: '补丁确认',
             icon: Icons.difference_rounded,
             child: Column(
@@ -841,6 +1093,81 @@ class _PatchCard extends StatelessWidget {
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CommandRequestCard extends StatelessWidget {
+  const _CommandRequestCard({
+    required this.request,
+    required this.onApprove,
+    required this.onDeny,
+    required this.onExecute,
+  });
+
+  final CommandRequest request;
+  final VoidCallback onApprove;
+  final VoidCallback onDeny;
+  final VoidCallback onExecute;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${request.memberName} · ${request.status.name}',
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          SelectableText(
+            '${request.workingDirectory}\n\$ ${request.command}',
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+          ),
+          if (request.status == CommandRequestStatus.pending) ...[
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: onApprove,
+                  icon: const Icon(Icons.check_rounded),
+                  label: const Text('批准'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onDeny,
+                  icon: const Icon(Icons.close_rounded),
+                  label: const Text('拒绝'),
+                ),
+              ],
+            ),
+          ],
+          if (request.status == CommandRequestStatus.approved) ...[
+            const SizedBox(height: 8),
+            FilledButton.icon(
+              onPressed: onExecute,
+              icon: const Icon(Icons.play_arrow_rounded),
+              label: const Text('执行'),
+            ),
+          ],
+          if (request.output != null && request.output!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            SelectableText(
+              request.output!,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            ),
+          ],
         ],
       ),
     );
@@ -1015,6 +1342,105 @@ Future<void> _showMemberDialog(
   );
 }
 
+Future<void> _showWorkspaceDialog(
+  BuildContext context,
+  AppController controller,
+) async {
+  final path = TextEditingController();
+  await showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('添加项目工作区'),
+      content: SizedBox(
+        width: 460,
+        child: _DialogField(
+          controller: path,
+          label: '本地项目目录绝对路径',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () {
+            controller.addWorkspacePath(path.text.trim());
+            Navigator.pop(context);
+          },
+          child: const Text('添加'),
+        ),
+      ],
+    ),
+  );
+}
+
+Future<void> _showCommandDialog(
+  BuildContext context,
+  AppController controller,
+) async {
+  final command = TextEditingController(text: 'flutter test');
+  final workingDirectory = TextEditingController(
+    text: controller.state.workspaces.isEmpty
+        ? Directory.current.path
+        : controller.state.workspaces.first.path,
+  );
+  var memberId = controller.currentMembers
+      .firstWhere(
+        (member) => !member.isSecretary,
+        orElse: () => controller.currentMembers.first,
+      )
+      .id;
+  await showDialog<void>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: const Text('创建命令请求'),
+        content: SizedBox(
+          width: 460,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: memberId,
+                decoration: const InputDecoration(labelText: '成员'),
+                items: controller.currentMembers
+                    .map(
+                      (member) => DropdownMenuItem(
+                        value: member.id,
+                        child: Text(member.name),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) => setDialogState(() => memberId = value!),
+              ),
+              _DialogField(controller: workingDirectory, label: '工作目录'),
+              _DialogField(controller: command, label: '命令'),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () {
+              controller.requestCommand(
+                memberId: memberId,
+                command: command.text.trim(),
+                workingDirectory: workingDirectory.text.trim(),
+              );
+              Navigator.pop(context);
+            },
+            child: const Text('创建'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 Future<void> _showExportDialog(
   BuildContext context,
   AppController controller,
@@ -1105,6 +1531,15 @@ String _roleName(AppState state, String roleId) =>
 
 String _modelName(AppState state, String modelId) =>
     state.models.firstWhere((model) => model.id == modelId).name;
+
+String _basename(String path) {
+  final normalized = path.replaceAll('\\', '/');
+  final trimmed = normalized.endsWith('/')
+      ? normalized.substring(0, normalized.length - 1)
+      : normalized;
+  final index = trimmed.lastIndexOf('/');
+  return index >= 0 ? trimmed.substring(index + 1) : trimmed;
+}
 
 String _statusText(ConversationStatus status) {
   return switch (status) {

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -28,6 +30,97 @@ void main() {
 
     expect(persisted, isNotNull);
     expect(persisted!.models.map((model) => model.id), contains('model-extra'));
+  });
+
+  test('controller registers workspace and creates patch proposal from file',
+      () async {
+    final temp = await Directory.systemTemp.createTemp('ai_team_workspace_');
+    addTearDown(() async => temp.delete(recursive: true));
+    final file = File('${temp.path}/README.md');
+    await file.writeAsString('old docs\n');
+    AppState? persisted;
+    final controller = AppController(
+      AppState.seed(),
+      TeamOrchestrator(FakeModelGateway()),
+      onStateChanged: (state) => persisted = state,
+    );
+    addTearDown(controller.dispose);
+
+    controller.addWorkspacePath(temp.path);
+    final preview = await controller.readWorkspaceFile(
+      workspaceId: persisted!.workspaces.single.id,
+      relativePath: 'README.md',
+    );
+    await controller.proposeWorkspacePatch(
+      workspaceId: persisted!.workspaces.single.id,
+      relativePath: 'README.md',
+      proposedContent: 'new docs\n',
+      memberName: '前端工程师',
+    );
+
+    expect(preview, 'old docs\n');
+    expect(controller.patchProposals.single.diff, contains('+new docs'));
+    expect(await file.readAsString(), 'old docs\n');
+  });
+
+  test(
+      'controller creates command confirmation requests and audits denied commands',
+      () {
+    final controller = AppController(
+      AppState.seed(),
+      TeamOrchestrator(FakeModelGateway()),
+    );
+    addTearDown(controller.dispose);
+
+    final pending = controller.requestCommand(
+      memberId: 'member-frontend',
+      command: 'flutter test',
+      workingDirectory: '/tmp/project',
+    );
+    final denied = controller.requestCommand(
+      memberId: 'member-frontend',
+      command: 'rm -rf .',
+      workingDirectory: '/tmp/project',
+    );
+
+    expect(pending.status, CommandRequestStatus.pending);
+    expect(denied.status, CommandRequestStatus.denied);
+    expect(controller.state.commandRequests.length, 2);
+    expect(controller.state.auditLog.last.action, 'command_denied');
+  });
+
+  test('controller executes only approved command requests', () async {
+    final controller = AppController(
+      AppState.seed(),
+      TeamOrchestrator(FakeModelGateway()),
+    );
+    addTearDown(controller.dispose);
+    final request = controller.requestCommand(
+      memberId: 'member-frontend',
+      command: 'flutter test',
+      workingDirectory: Directory.current.path,
+    );
+
+    await expectLater(
+      controller.executeCommandRequest(
+        request.id,
+        runner: (_, __) async => ProcessResult(1, 0, 'ok', ''),
+      ),
+      throwsStateError,
+    );
+
+    controller.updateCommandRequestStatus(
+      request.id,
+      CommandRequestStatus.approved,
+    );
+    final executed = await controller.executeCommandRequest(
+      request.id,
+      runner: (_, __) async => ProcessResult(1, 0, 'ok', ''),
+    );
+
+    expect(executed.status, CommandRequestStatus.executed);
+    expect(executed.output, 'ok');
+    expect(controller.state.auditLog.last.action, 'command_executed');
   });
 
   testWidgets('desktop workspace exposes chat, model, role, and team surfaces',
