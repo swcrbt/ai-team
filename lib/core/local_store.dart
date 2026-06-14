@@ -72,8 +72,14 @@ class JsonLocalStore {
     }
     final models = <ModelProfile>[];
     for (final model in state.models) {
+      String? apiKey;
+      try {
+        apiKey = await secretStore.read(model.id);
+      } catch (_) {
+        apiKey = null;
+      }
       models.add(model.copyWith(
-        apiKey: await secretStore.read(model.id) ?? model.apiKey,
+        apiKey: apiKey ?? model.apiKey,
       ));
     }
     return state.copyWith(models: models);
@@ -93,7 +99,12 @@ class JsonLocalStore {
   Future<void> save(AppState state) async {
     for (final model in state.models) {
       if (model.apiKey.isNotEmpty) {
-        await secretStore.write(model.id, model.apiKey);
+        try {
+          await secretStore.write(model.id, model.apiKey);
+        } catch (_) {
+          // Keep non-secret configuration durable even if the platform secret
+          // store is unavailable. API keys still stay out of the JSON file.
+        }
       }
     }
     await file.parent.create(recursive: true);

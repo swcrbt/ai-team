@@ -146,6 +146,64 @@ void main() {
       expect(await stateFile.readAsString(), contains('"models"'));
     });
 
+    test('persists non-secret configuration when secret storage fails',
+        () async {
+      final temp =
+          await Directory.systemTemp.createTemp('ai_team_secret_fail_');
+      addTearDown(() async => temp.delete(recursive: true));
+      final stateFile = File('${temp.path}/state.json');
+      final store = JsonLocalStore(
+        stateFile,
+        secretStore: ThrowingSecretStore(),
+      );
+      final state = AppState.seed().copyWith(
+        models: [
+          AppState.seed().models.first.copyWith(
+                name: 'Persisted model',
+                baseUrl: 'https://persist.example/v1',
+                apiKey: 'secret-that-stays-out-of-json',
+              ),
+        ],
+      );
+
+      await store.save(state);
+      final raw = await stateFile.readAsString();
+
+      expect(raw, contains('Persisted model'));
+      expect(raw, contains('https://persist.example/v1'));
+      expect(raw, isNot(contains('secret-that-stays-out-of-json')));
+    });
+
+    test('loads non-secret configuration when secret storage fails', () async {
+      final temp =
+          await Directory.systemTemp.createTemp('ai_team_secret_load_');
+      addTearDown(() async => temp.delete(recursive: true));
+      final stateFile = File('${temp.path}/state.json');
+      final state = AppState.seed().copyWith(
+        models: [
+          AppState.seed().models.first.copyWith(
+                name: 'Loaded model',
+                baseUrl: 'https://loaded.example/v1',
+                apiKey: '',
+              ),
+        ],
+      );
+      await JsonLocalStore(
+        stateFile,
+        secretStore: MemorySecretStore(),
+      ).save(state);
+      final store = JsonLocalStore(
+        stateFile,
+        secretStore: ThrowingSecretStore(),
+      );
+
+      final loaded = await store.load();
+
+      expect(loaded.models.single.name, 'Loaded model');
+      expect(loaded.models.single.baseUrl, 'https://loaded.example/v1');
+      expect(loaded.models.single.apiKey, isEmpty);
+    });
+
     test('backs up corrupt state files and falls back to seed state', () async {
       final temp = await Directory.systemTemp.createTemp('ai_team_corrupt_');
       addTearDown(() async => temp.delete(recursive: true));
@@ -329,4 +387,21 @@ void main() {
       expect(await file.readAsString(), 'new line\n');
     });
   });
+}
+
+class ThrowingSecretStore implements SecretStore {
+  @override
+  Future<void> write(String key, String value) async {
+    throw StateError('secret storage unavailable');
+  }
+
+  @override
+  Future<String?> read(String key) async {
+    throw StateError('secret storage unavailable');
+  }
+
+  @override
+  Future<void> delete(String key) async {
+    throw StateError('secret storage unavailable');
+  }
 }
