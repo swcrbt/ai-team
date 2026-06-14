@@ -107,8 +107,7 @@ void main() {
   });
 
   group('secure local persistence', () {
-    test('saves app state without api keys and restores them from secrets',
-        () async {
+    test('saves api keys in local app state and restores them', () async {
       final temp = await Directory.systemTemp.createTemp('ai_team_store_');
       addTearDown(() async => temp.delete(recursive: true));
       final secrets = MemorySecretStore();
@@ -122,8 +121,8 @@ void main() {
       final raw = await File('${temp.path}/state.json').readAsString();
       final loaded = await store.load();
 
-      expect(raw, isNot(contains('sk-local-placeholder')));
-      expect(raw, isNot(contains('"apiKey"')));
+      expect(raw, contains('sk-local-placeholder'));
+      expect(raw, contains('"apiKey"'));
       expect(loaded.models.first.apiKey, 'sk-local-placeholder');
       expect(await secrets.read('model-main'), 'sk-local-placeholder');
     });
@@ -146,8 +145,7 @@ void main() {
       expect(await stateFile.readAsString(), contains('"models"'));
     });
 
-    test('persists non-secret configuration when secret storage fails',
-        () async {
+    test('persists api keys in local state when secret storage fails', () async {
       final temp =
           await Directory.systemTemp.createTemp('ai_team_secret_fail_');
       addTearDown(() async => temp.delete(recursive: true));
@@ -171,10 +169,10 @@ void main() {
 
       expect(raw, contains('Persisted model'));
       expect(raw, contains('https://persist.example/v1'));
-      expect(raw, isNot(contains('secret-that-stays-out-of-json')));
+      expect(raw, contains('secret-that-stays-out-of-json'));
     });
 
-    test('loads non-secret configuration when secret storage fails', () async {
+    test('loads api keys from local state when secret storage fails', () async {
       final temp =
           await Directory.systemTemp.createTemp('ai_team_secret_load_');
       addTearDown(() async => temp.delete(recursive: true));
@@ -184,7 +182,7 @@ void main() {
           AppState.seed().models.first.copyWith(
                 name: 'Loaded model',
                 baseUrl: 'https://loaded.example/v1',
-                apiKey: '',
+                apiKey: 'loaded-secret',
               ),
         ],
       );
@@ -201,7 +199,7 @@ void main() {
 
       expect(loaded.models.single.name, 'Loaded model');
       expect(loaded.models.single.baseUrl, 'https://loaded.example/v1');
-      expect(loaded.models.single.apiKey, isEmpty);
+      expect(loaded.models.single.apiKey, 'loaded-secret');
     });
 
     test('backs up corrupt state files and falls back to seed state', () async {
