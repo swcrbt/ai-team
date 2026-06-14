@@ -4449,13 +4449,13 @@ Conversation _createTeamConversation(Team team) {
 
 Conversation _createMemberConversation(String teamId, TeamMember member) {
   return Conversation(
-    id: 'conv-${member.id}',
+    id: 'conv-$teamId-${member.id}',
     title: member.name,
     teamId: teamId,
     memberId: member.id,
     messages: [
       ChatMessage(
-        id: 'msg-welcome-${member.id}',
+        id: 'msg-welcome-$teamId-${member.id}',
         authorName: member.name,
         memberId: member.id,
         content: '这里是和${member.name}的独立会话。',

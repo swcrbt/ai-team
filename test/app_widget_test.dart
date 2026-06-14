@@ -279,6 +279,35 @@ void main() {
     expect(controller.state.queuedTasks.single.status, QueuedTaskStatus.paused);
   });
 
+  test(
+      'controller starts member chat in the active team without conversation id collisions',
+      () {
+    final controller = AppController(
+      AppState.seed(),
+      TeamOrchestrator(FakeModelGateway()),
+    );
+    addTearDown(controller.dispose);
+
+    final mobileTeam = controller.addTeam(
+      name: '移动端小队',
+      memberIds: const ['member-frontend', 'member-tester'],
+      collaborationMode: TeamCollaborationMode.serial,
+    );
+
+    controller.startTeamChat(mobileTeam.id);
+    controller.startMemberChat('member-frontend');
+
+    expect(controller.currentConversation.teamId, mobileTeam.id);
+    expect(controller.currentConversation.memberId, 'member-frontend');
+    expect(
+      controller.state.conversations
+          .map((conversation) => conversation.id)
+          .toSet()
+          .length,
+      controller.state.conversations.length,
+    );
+  });
+
   test('controller rejects incomplete role prompt configuration', () {
     final controller = AppController(
       AppState.seed(),
