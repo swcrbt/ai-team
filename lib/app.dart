@@ -888,6 +888,15 @@ class AppController extends ChangeNotifier {
     if (role.identityPrompt.trim().isEmpty) {
       throw ArgumentError('角色身份提示词不能为空');
     }
+    if (role.goalPrompt.trim().isEmpty) {
+      throw ArgumentError('角色目标提示词不能为空');
+    }
+    if (role.constraintPrompt.trim().isEmpty) {
+      throw ArgumentError('角色约束提示词不能为空');
+    }
+    if (role.outputFormatPrompt.trim().isEmpty) {
+      throw ArgumentError('角色输出格式提示词不能为空');
+    }
   }
 
   void _validateMember(TeamMember member) {
@@ -1855,7 +1864,21 @@ Future<void> _showRoleDialog(
   RoleTemplate? role,
 }) async {
   final name = TextEditingController(text: role?.name ?? '');
+  final description = TextEditingController(
+    text: role?.description ?? '自定义角色',
+  );
   final identity = TextEditingController(text: role?.identityPrompt ?? '');
+  final goal = TextEditingController(
+    text: role?.goalPrompt ?? '按团队目标完成任务。',
+  );
+  final constraint = TextEditingController(
+    text: role?.constraintPrompt ?? '遵守权限配置，不直接写入文件。',
+  );
+  final outputFormat = TextEditingController(
+    text: role?.outputFormatPrompt ?? '输出结论、证据和下一步。',
+  );
+  var canReadProject = role?.canReadProject ?? true;
+  var canProposePatch = role?.canProposePatch ?? true;
   String? validationError;
   await showDialog<void>(
     context: context,
@@ -1869,7 +1892,25 @@ Future<void> _showRoleDialog(
             children: [
               if (validationError != null) _DialogError(validationError!),
               _DialogField(controller: name, label: '角色名称'),
+              _DialogField(controller: description, label: '角色描述'),
               _DialogField(controller: identity, label: '身份提示词'),
+              _DialogField(controller: goal, label: '目标提示词'),
+              _DialogField(controller: constraint, label: '约束提示词'),
+              _DialogField(controller: outputFormat, label: '输出格式提示词'),
+              CheckboxListTile(
+                value: canReadProject,
+                onChanged: (value) =>
+                    setDialogState(() => canReadProject = value!),
+                title: const Text('允许读取项目'),
+                contentPadding: EdgeInsets.zero,
+              ),
+              CheckboxListTile(
+                value: canProposePatch,
+                onChanged: (value) =>
+                    setDialogState(() => canProposePatch = value!),
+                title: const Text('允许生成补丁'),
+                contentPadding: EdgeInsets.zero,
+              ),
             ],
           ),
         ),
@@ -1885,21 +1926,29 @@ Future<void> _showRoleDialog(
                     ? RoleTemplate(
                         id: 'role-${DateTime.now().microsecondsSinceEpoch}',
                         name: name.text.trim(),
-                        description: '自定义角色',
+                        description: description.text.trim(),
                         identityPrompt: identity.text.trim(),
-                        goalPrompt: '按团队目标完成任务。',
-                        constraintPrompt: '遵守权限配置，不直接写入文件。',
-                        outputFormatPrompt: '输出结论、证据和下一步。',
+                        goalPrompt: goal.text.trim(),
+                        constraintPrompt: constraint.text.trim(),
+                        outputFormatPrompt: outputFormat.text.trim(),
                         commandPolicy: const CommandPolicy(
                           allowedCommands: ['flutter test', 'dart analyze'],
                           blockedCommands: ['rm', 'sudo'],
                           allowedDirectories: [],
                           requiresConfirmation: true,
                         ),
+                        canReadProject: canReadProject,
+                        canProposePatch: canProposePatch,
                       )
                     : role.copyWith(
                         name: name.text.trim(),
+                        description: description.text.trim(),
                         identityPrompt: identity.text.trim(),
+                        goalPrompt: goal.text.trim(),
+                        constraintPrompt: constraint.text.trim(),
+                        outputFormatPrompt: outputFormat.text.trim(),
+                        canReadProject: canReadProject,
+                        canProposePatch: canProposePatch,
                       );
                 if (role == null) {
                   controller.addRole(next);

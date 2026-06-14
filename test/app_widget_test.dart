@@ -144,6 +144,35 @@ void main() {
     );
   });
 
+  test('controller rejects incomplete role prompt configuration', () {
+    final controller = AppController(
+      AppState.seed(),
+      TeamOrchestrator(FakeModelGateway()),
+    );
+    addTearDown(controller.dispose);
+
+    expect(
+      () => controller.addRole(
+        const RoleTemplate(
+          id: 'role-invalid',
+          name: 'Invalid',
+          description: 'Bad role',
+          identityPrompt: '你是一个角色。',
+          goalPrompt: '',
+          constraintPrompt: '遵守限制。',
+          outputFormatPrompt: '输出结果。',
+          commandPolicy: CommandPolicy(
+            allowedCommands: ['rg'],
+            blockedCommands: ['rm'],
+            allowedDirectories: [],
+            requiresConfirmation: true,
+          ),
+        ),
+      ),
+      throwsArgumentError,
+    );
+  });
+
   test('controller dispatches messages to a selected member conversation',
       () async {
     final controller = AppController(
