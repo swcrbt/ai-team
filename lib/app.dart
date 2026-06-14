@@ -1253,10 +1253,22 @@ class _InspectorPane extends StatelessWidget {
           _Panel(
             title: '项目工作区',
             icon: Icons.folder_open_rounded,
-            action: IconButton(
-              tooltip: '添加工作区',
-              onPressed: controller.pickAndAddWorkspace,
-              icon: const Icon(Icons.add_rounded),
+            action: Wrap(
+              spacing: 2,
+              children: [
+                IconButton(
+                  tooltip: '创建补丁',
+                  onPressed: controller.state.workspaces.isEmpty
+                      ? null
+                      : () => _showWorkspacePatchDialog(context, controller),
+                  icon: const Icon(Icons.difference_rounded),
+                ),
+                IconButton(
+                  tooltip: '添加工作区',
+                  onPressed: controller.pickAndAddWorkspace,
+                  icon: const Icon(Icons.add_rounded),
+                ),
+              ],
             ),
             child: Column(
               children: controller.state.workspaces.isEmpty
@@ -1780,6 +1792,121 @@ Future<void> _showMemberDialog(
               }
             },
             child: const Text('保存'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+Future<void> _showWorkspacePatchDialog(
+  BuildContext context,
+  AppController controller,
+) async {
+  var workspaceId = controller.state.workspaces.first.id;
+  var memberName = controller.currentMembers
+      .firstWhere(
+        (member) => !member.isSecretary,
+        orElse: () => controller.currentMembers.first,
+      )
+      .name;
+  final relativePath = TextEditingController();
+  final proposedContent = TextEditingController();
+  String? validationError;
+  await showDialog<void>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: const Text('创建补丁提案'),
+        content: SizedBox(
+          width: 520,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (validationError != null) _DialogError(validationError!),
+              DropdownButtonFormField<String>(
+                initialValue: workspaceId,
+                decoration: const InputDecoration(labelText: '工作区'),
+                items: controller.state.workspaces
+                    .map(
+                      (workspace) => DropdownMenuItem(
+                        value: workspace.id,
+                        child: Text(workspace.name),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) =>
+                    setDialogState(() => workspaceId = value!),
+              ),
+              DropdownButtonFormField<String>(
+                initialValue: memberName,
+                decoration: const InputDecoration(labelText: '提案成员'),
+                items: controller.currentMembers
+                    .map(
+                      (member) => DropdownMenuItem(
+                        value: member.name,
+                        child: Text(member.name),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) => setDialogState(() => memberName = value!),
+              ),
+              _DialogField(controller: relativePath, label: '相对路径'),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: TextField(
+                  controller: proposedContent,
+                  minLines: 8,
+                  maxLines: 12,
+                  decoration: const InputDecoration(
+                    labelText: '目标文件内容',
+                    border: OutlineInputBorder(),
+                    alignLabelWithHint: true,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('取消'),
+          ),
+          TextButton.icon(
+            onPressed: () async {
+              try {
+                final content = await controller.readWorkspaceFile(
+                  workspaceId: workspaceId,
+                  relativePath: relativePath.text.trim(),
+                );
+                proposedContent.text = content;
+                setDialogState(() => validationError = null);
+              } catch (exception) {
+                setDialogState(() => validationError = exception.toString());
+              }
+            },
+            icon: const Icon(Icons.file_open_rounded),
+            label: const Text('读取文件'),
+          ),
+          FilledButton.icon(
+            onPressed: () async {
+              try {
+                await controller.proposeWorkspacePatch(
+                  workspaceId: workspaceId,
+                  relativePath: relativePath.text.trim(),
+                  proposedContent: proposedContent.text,
+                  memberName: memberName,
+                );
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
+              } catch (exception) {
+                setDialogState(() => validationError = exception.toString());
+              }
+            },
+            icon: const Icon(Icons.difference_rounded),
+            label: const Text('创建补丁'),
           ),
         ],
       ),
