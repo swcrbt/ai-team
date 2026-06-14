@@ -144,6 +144,109 @@ void main() {
     );
   });
 
+  test(
+      'controller enqueues titled tasks by priority without preempting running work',
+      () async {
+    final gateway = ScriptedTitleGateway(title: '登录任务');
+    final controller = AppController(
+      AppState.seed(),
+      TeamOrchestrator(gateway),
+    );
+    addTearDown(controller.dispose);
+    controller.startTeamChat('team-default');
+
+    await controller.enqueueCurrentConversationTask('低优先级', priority: 0);
+    await controller.enqueueCurrentConversationTask('高优先级', priority: 10);
+    await controller.enqueueCurrentConversationTask('同优先级', priority: 10);
+
+    expect(
+      controller.pendingTasksForCurrentConversation
+          .map((task) => task.originalText),
+      ['高优先级', '同优先级', '低优先级'],
+    );
+  });
+
+  test('controller appends task notes and links the system message', () {
+    final controller = AppController(
+      AppState.seed().copyWith(
+        queuedTasks: [
+          QueuedTask(
+            id: 'task-1',
+            conversationId: 'conv-team-default',
+            title: '登录任务',
+            originalText: '实现登录',
+            priority: 0,
+            status: QueuedTaskStatus.pending,
+            createdAt: DateTime(2026, 6, 14),
+            updatedAt: DateTime(2026, 6, 14),
+          ),
+        ],
+      ),
+      TeamOrchestrator(FakeModelGateway()),
+    );
+    addTearDown(controller.dispose);
+    controller.startTeamChat('team-default');
+
+    controller.appendTaskNote('task-1', '补充移动端');
+
+    final task = controller.state.queuedTasks.single;
+    expect(task.notes, ['补充移动端']);
+    expect(controller.currentConversation.messages.last.content, '已为任务追加备注');
+    expect(controller.currentConversation.messages.last.taskIds, ['task-1']);
+    expect(
+      task.messageIds,
+      contains(controller.currentConversation.messages.last.id),
+    );
+  });
+
+  test(
+      'controller deletes a queued task and associated messages after confirmation path',
+      () {
+    final message = ChatMessage(
+      id: 'msg-task',
+      authorName: '我',
+      content: '实现登录',
+      createdAt: DateTime(2026, 6, 14),
+      isUser: true,
+      taskIds: const ['task-1'],
+    );
+    final seed = AppState.seed();
+    final state = seed.copyWith(
+      queuedTasks: [
+        QueuedTask(
+          id: 'task-1',
+          conversationId: 'conv-team-default',
+          title: '登录任务',
+          originalText: '实现登录',
+          priority: 0,
+          status: QueuedTaskStatus.pending,
+          createdAt: DateTime(2026, 6, 14),
+          updatedAt: DateTime(2026, 6, 14),
+          messageIds: const ['msg-task'],
+        ),
+      ],
+      conversations: [
+        seed.conversations
+            .firstWhere(
+          (conversation) => conversation.id == 'conv-team-default',
+        )
+            .copyWith(messages: [message]),
+        ...seed.conversations.where(
+          (conversation) => conversation.id != 'conv-team-default',
+        ),
+      ],
+    );
+    final controller =
+        AppController(state, TeamOrchestrator(FakeModelGateway()));
+    addTearDown(controller.dispose);
+    controller.startTeamChat('team-default');
+
+    controller.deleteTask('task-1');
+
+    expect(controller.state.queuedTasks, isEmpty);
+    expect(controller.currentConversation.messages, isEmpty);
+  });
+
   test('controller rejects incomplete role prompt configuration', () {
     final controller = AppController(
       AppState.seed(),
@@ -239,10 +342,8 @@ void main() {
     );
     addTearDown(controller.dispose);
     final teamMessageCount = controller.teamConversation.messages.length;
-    final memberConversation =
-        controller.conversationForMember('member-frontend');
 
-    controller.selectConversation(memberConversation.id);
+    controller.startMemberChat('member-frontend');
     await controller.dispatch('请只实现前端面板');
 
     final updatedMemberConversation =
@@ -256,6 +357,76 @@ void main() {
     );
     expect(controller.teamConversation.messages.length, teamMessageCount);
     expect(controller.state.auditLog.last.action, 'member_chat_dispatched');
+  });
+
+  test('controller dispatches selected member chat with the configured model',
+      () async {
+    final gateway = RecordingModelGateway();
+    final controller = AppController(
+      AppState.seed(),
+      TeamOrchestrator(gateway),
+    );
+    addTearDown(controller.dispose);
+    const doubao = ModelProfile(
+      id: 'model-doubao',
+      name: 'Doubao',
+      baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+      modelName: 'doubao-test-endpoint',
+      apiKey: 'secret',
+    );
+
+    controller.addModel(doubao);
+    final tester = controller.state.members.firstWhere(
+      (member) => member.id == 'member-tester',
+    );
+    controller.updateMember(tester.copyWith(modelId: doubao.id));
+    controller.startMemberChat('member-tester');
+    await controller.dispatch('请验证模型绑定');
+
+    expect(gateway.modelIds, ['model-doubao']);
+    expect(gateway.modelNames, ['doubao-test-endpoint']);
+    expect(
+      controller.conversationForMember('member-tester').messages.last.content,
+      contains('doubao-test-endpoint'),
+    );
+  });
+
+  test('controller creates teams and starts team chat explicitly', () {
+    final controller = AppController(
+      AppState.seed(),
+      TeamOrchestrator(FakeModelGateway()),
+    );
+    addTearDown(controller.dispose);
+
+    final team = controller.addTeam(
+      name: '移动端小队',
+      memberIds: const ['member-frontend', 'member-tester'],
+    );
+
+    expect(team.name, '移动端小队');
+    expect(team.memberIds, [
+      'member-secretary',
+      'member-frontend',
+      'member-tester',
+    ]);
+    expect(controller.activeTeamId, isNull);
+    expect(
+      controller.state.conversations
+          .where(
+            (conversation) =>
+                conversation.teamId == team.id && conversation.memberId == null,
+          )
+          .single
+          .title,
+      '团队会话',
+    );
+
+    controller.startTeamChat(team.id);
+
+    expect(controller.activeTeamId, team.id);
+    expect(controller.currentTeam.id, team.id);
+    expect(controller.currentConversation.memberId, isNull);
+    expect(controller.currentConversation.teamId, team.id);
   });
 
   test('controller backfills missing member conversations from old state', () {
@@ -461,6 +632,7 @@ void main() {
       TeamOrchestrator(gateway),
     );
     addTearDown(controller.dispose);
+    controller.startTeamChat('team-default');
 
     final dispatch = controller.dispatch('请实现大型功能');
     await gateway.started.future;
@@ -488,6 +660,7 @@ void main() {
       TeamOrchestrator(FakeModelGateway()),
     );
     addTearDown(controller.dispose);
+    controller.startTeamChat('team-default');
     final messageCount = controller.currentConversation.messages.length;
 
     controller.pauseConversation();
@@ -519,10 +692,15 @@ void main() {
       ),
     );
 
-    expect(find.text('群聊'), findsOneWidget);
+    expect(find.text('群聊'), findsNothing);
     expect(find.text('私聊'), findsOneWidget);
-    expect(find.text('默认开发团队'), findsWidgets);
-    expect(find.textContaining('群聊 · 默认开发团队'), findsOneWidget);
+    expect(find.text('默认开发团队'), findsNothing);
+    expect(find.textContaining('群聊 · 默认开发团队'), findsNothing);
+    expect(find.textContaining('私聊 · 秘书'), findsOneWidget);
+    expect(find.textContaining('私聊 · 前端工程师'), findsNothing);
+    expect(find.byTooltip('模型'), findsOneWidget);
+    expect(find.byTooltip('角色'), findsOneWidget);
+    expect(find.byTooltip('成员'), findsOneWidget);
     expect(find.byTooltip('设置'), findsOneWidget);
     expect(find.byTooltip('补丁'), findsNothing);
     expect(find.text('模型配置'), findsNothing);
@@ -536,16 +714,18 @@ void main() {
     expect(find.text('群聊'), findsNothing);
     expect(find.text('私聊'), findsNothing);
     expect(find.textContaining('群聊 · 默认开发团队'), findsNothing);
+    expect(find.byTooltip('返回聊天'), findsNothing);
     expect(find.text('设置'), findsOneWidget);
-    expect(find.text('模型'), findsOneWidget);
-    expect(find.text('角色'), findsOneWidget);
-    expect(find.text('成员'), findsOneWidget);
-    expect(find.text('项目'), findsOneWidget);
+    expect(find.text('模型'), findsNothing);
+    expect(find.text('角色'), findsNothing);
+    expect(find.text('成员'), findsNothing);
+    expect(find.text('项目'), findsNothing);
     expect(find.text('命令'), findsOneWidget);
     expect(find.text('补丁'), findsNothing);
-    expect(find.text('模型配置'), findsOneWidget);
-    expect(find.text('角色配置'), findsOneWidget);
-    expect(find.text('团队成员'), findsOneWidget);
+    expect(find.text('模型配置'), findsNothing);
+    expect(find.text('角色配置'), findsNothing);
+    expect(find.text('团队成员'), findsNothing);
+    expect(find.text('项目工作区'), findsNothing);
     expect(find.text('任务轮次'), findsOneWidget);
     expect(find.text('补丁确认'), findsNothing);
   });
@@ -591,7 +771,7 @@ void main() {
       ),
     );
 
-    expect(find.text('群聊'), findsOneWidget);
+    expect(find.text('群聊'), findsNothing);
     expect(
       find.byWidgetPredicate(
         (widget) => widget.runtimeType.toString() == '_QuickAvatar',
@@ -613,7 +793,45 @@ void main() {
     expect(find.byTooltip('停止'), findsNothing);
   });
 
-  testWidgets('sidebar team button switches back to the team chat',
+  testWidgets('left sidebar uses a deep black background', (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    final sidebarBackground = tester.widget<ColoredBox>(
+      find
+          .ancestor(
+            of: find.byTooltip('消息'),
+            matching: find.byType(ColoredBox),
+          )
+          .first,
+    );
+
+    expect(sidebarBackground.color, const Color(0xFF050505));
+  });
+
+  testWidgets('sidebar team button opens team management', (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('团队'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('团队管理'), findsOneWidget);
+    expect(find.byTooltip('新增团队'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, '发起聊天'), findsOneWidget);
+    expect(find.textContaining('群聊 · 默认开发团队'), findsNothing);
+  });
+
+  testWidgets(
+      'secretary chat is default and member chat appears after starting it',
       (tester) async {
     await tester.pumpWidget(
       AiTeamApp(
@@ -622,17 +840,117 @@ void main() {
       ),
     );
 
-    await tester.tap(find.text('前端工程师').first);
+    expect(find.text('私聊'), findsOneWidget);
+    expect(find.textContaining('私聊 · 秘书'), findsOneWidget);
+    expect(find.textContaining('私聊 · 前端工程师'), findsNothing);
+
+    await tester.tap(find.byTooltip('成员'));
     await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '发起聊天').at(1));
+    await tester.pumpAndSettle();
+
+    expect(find.text('私聊'), findsOneWidget);
+    expect(find.textContaining('私聊 · 秘书'), findsNothing);
     expect(find.textContaining('私聊 · 前端工程师'), findsOneWidget);
+  });
+
+  testWidgets('team chat appears only after starting chat from team management',
+      (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    expect(find.text('群聊'), findsNothing);
 
     await tester.tap(find.byTooltip('团队'));
     await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '发起聊天'));
+    await tester.pumpAndSettle();
 
+    expect(find.text('群聊'), findsOneWidget);
     expect(find.textContaining('群聊 · 默认开发团队'), findsOneWidget);
   });
 
-  testWidgets('sidebar project button opens the project settings section',
+  testWidgets('team management creates a named team with selected members',
+      (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('团队'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('新增团队'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, '团队名称'), '移动端小队');
+    await tester.tap(find.widgetWithText(FilledButton, '保存'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('移动端小队'), findsOneWidget);
+    expect(find.textContaining('前端工程师、测试工程师'), findsWidgets);
+  });
+
+  testWidgets('sidebar model button opens an independent model page',
+      (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('模型'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('设置'), findsNothing);
+    expect(find.text('模型管理'), findsOneWidget);
+    expect(find.text('模型配置'), findsOneWidget);
+    expect(find.byTooltip('新增模型'), findsOneWidget);
+  });
+
+  testWidgets('sidebar role button opens an independent role page',
+      (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('角色'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('设置'), findsNothing);
+    expect(find.text('角色管理'), findsOneWidget);
+    expect(find.text('角色配置'), findsOneWidget);
+    expect(find.byTooltip('新增角色'), findsOneWidget);
+  });
+
+  testWidgets('sidebar member button opens an independent member page',
+      (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('成员'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('设置'), findsNothing);
+    expect(find.text('成员管理'), findsOneWidget);
+    expect(find.text('团队成员'), findsOneWidget);
+    expect(find.byTooltip('新增成员'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, '发起聊天'), findsWidgets);
+  });
+
+  testWidgets('sidebar project button opens an independent project page',
       (tester) async {
     await tester.pumpWidget(
       AiTeamApp(
@@ -644,12 +962,13 @@ void main() {
     await tester.tap(find.byTooltip('项目'));
     await tester.pumpAndSettle();
 
-    expect(find.text('设置'), findsOneWidget);
+    expect(find.text('设置'), findsNothing);
+    expect(find.byTooltip('返回聊天'), findsNothing);
+    expect(find.text('项目管理'), findsOneWidget);
     expect(find.text('项目工作区'), findsOneWidget);
-    expect(
-      tester.getTopLeft(find.text('项目工作区')).dy,
-      lessThan(320),
-    );
+    expect(find.byTooltip('添加工作区'), findsOneWidget);
+    expect(find.byTooltip('浏览文件'), findsOneWidget);
+    expect(find.byTooltip('创建补丁'), findsOneWidget);
   });
 
   testWidgets('submits a task to the secretary and renders member responses',
@@ -660,6 +979,11 @@ void main() {
         modelGateway: FakeModelGateway(),
       ),
     );
+
+    await tester.tap(find.byTooltip('团队'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '发起聊天'));
+    await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).last, '请实现设置页面');
     await tester.tap(find.byIcon(Icons.send_rounded));
@@ -680,6 +1004,10 @@ void main() {
         modelGateway: gateway,
       ),
     );
+    await tester.tap(find.byTooltip('团队'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '发起聊天'));
+    await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).last, '请实现长任务');
     await tester.tap(find.byTooltip('发送'));
@@ -695,6 +1023,32 @@ void main() {
     expect(gateway.cancellation!.isCancelled, isTrue);
     expect(find.byTooltip('发送'), findsOneWidget);
     expect(find.textContaining('任务已停止'), findsWidgets);
+  });
+
+  testWidgets('shows member avatar and typing state during model requests',
+      (tester) async {
+    final gateway = BlockingModelGateway();
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: gateway,
+      ),
+    );
+    await tester.tap(find.byTooltip('团队'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '发起聊天'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField).last, '请实现请求中状态');
+    await tester.tap(find.byTooltip('发送'));
+    await gateway.started.future.timeout(const Duration(seconds: 1));
+    await tester.pump();
+
+    expect(find.text('前'), findsOneWidget);
+    expect(find.textContaining('前端工程师 正在输入中'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('停止生成'));
+    await tester.pumpAndSettle();
   });
 }
 
@@ -716,5 +1070,42 @@ class BlockingModelGateway implements ModelGateway {
     await cancellation!.cancelled;
     cancellation.throwIfCancelled();
     return 'unreachable';
+  }
+}
+
+class RecordingModelGateway implements ModelGateway {
+  final List<String> modelIds = [];
+  final List<String> modelNames = [];
+
+  @override
+  Future<String> complete({
+    required ModelProfile model,
+    required String systemPrompt,
+    required List<ChatMessage> messages,
+    ModelRequestCancellation? cancellation,
+  }) async {
+    modelIds.add(model.id);
+    modelNames.add(model.modelName);
+    return '使用 ${model.modelName} 回复';
+  }
+}
+
+class ScriptedTitleGateway implements ModelGateway {
+  ScriptedTitleGateway({required this.title, this.fail = false});
+
+  final String title;
+  final bool fail;
+
+  @override
+  Future<String> complete({
+    required ModelProfile model,
+    required String systemPrompt,
+    required List<ChatMessage> messages,
+    ModelRequestCancellation? cancellation,
+  }) async {
+    if (fail) {
+      throw const ModelGatewayException('标题生成失败');
+    }
+    return title;
   }
 }

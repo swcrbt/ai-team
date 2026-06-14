@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:collection';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -68,7 +69,6 @@ class AiTeamHome extends StatefulWidget {
 class _AiTeamHomeState extends State<AiTeamHome> {
   late AppController controller;
   _MainView mainView = _MainView.chat;
-  String? focusedSettingsSection;
 
   @override
   void initState() {
@@ -106,28 +106,54 @@ class _AiTeamHomeState extends State<AiTeamHome> {
                         selectedView: mainView,
                         onChat: () => setState(() => mainView = _MainView.chat),
                         onTeam: () {
-                          controller.selectConversation(
-                            controller.teamConversation.id,
-                          );
-                          setState(() => mainView = _MainView.chat);
+                          setState(() => mainView = _MainView.teams);
                         },
-                        onProject: () => setState(() {
-                          mainView = _MainView.settings;
-                          focusedSettingsSection = '项目工作区';
-                        }),
-                        onSettings: () => setState(() {
-                          mainView = _MainView.settings;
-                          focusedSettingsSection = null;
-                        }),
+                        onModels: () =>
+                            setState(() => mainView = _MainView.models),
+                        onRoles: () =>
+                            setState(() => mainView = _MainView.roles),
+                        onMembers: () =>
+                            setState(() => mainView = _MainView.members),
+                        onProject: () =>
+                            setState(() => mainView = _MainView.project),
+                        onSettings: () =>
+                            setState(() => mainView = _MainView.settings),
                       ),
                     ),
-                    if (mainView == _MainView.settings)
+                    if (mainView == _MainView.teams)
+                      Expanded(
+                        child: _TeamManagementPage(
+                          controller: controller,
+                          onStartChat: () =>
+                              setState(() => mainView = _MainView.chat),
+                        ),
+                      )
+                    else if (mainView == _MainView.models)
+                      Expanded(
+                        child: _ModelManagementPage(controller: controller),
+                      )
+                    else if (mainView == _MainView.roles)
+                      Expanded(
+                        child: _RoleManagementPage(controller: controller),
+                      )
+                    else if (mainView == _MainView.members)
+                      Expanded(
+                        child: _MemberManagementPage(
+                          controller: controller,
+                          onStartChat: () =>
+                              setState(() => mainView = _MainView.chat),
+                        ),
+                      )
+                    else if (mainView == _MainView.project)
+                      Expanded(
+                        child: _ProjectPage(
+                          controller: controller,
+                        ),
+                      )
+                    else if (mainView == _MainView.settings)
                       Expanded(
                         child: _SettingsPage(
                           controller: controller,
-                          focusedSection: focusedSettingsSection,
-                          onBack: () =>
-                              setState(() => mainView = _MainView.chat),
                         ),
                       )
                     else ...[
@@ -138,10 +164,7 @@ class _AiTeamHomeState extends State<AiTeamHome> {
                           selectedView: mainView,
                           onSelectConversation: (conversationId) {
                             controller.selectConversation(conversationId);
-                            setState(() {
-                              mainView = _MainView.chat;
-                              focusedSettingsSection = null;
-                            });
+                            setState(() => mainView = _MainView.chat);
                           },
                         ),
                       ),
@@ -159,7 +182,7 @@ class _AiTeamHomeState extends State<AiTeamHome> {
   }
 }
 
-enum _MainView { chat, settings }
+enum _MainView { chat, teams, models, roles, members, project, settings }
 
 class AppController extends ChangeNotifier {
   AppController(
@@ -171,10 +194,21 @@ class AppController extends ChangeNotifier {
   })  : state = _ensureMemberConversations(initialState),
         exportStore = exportStore ?? JsonLocalStore.defaultStore(),
         selectedConversationId =
-            _initialConversationId(_ensureMemberConversations(initialState));
+            _initialConversationId(_ensureMemberConversations(initialState)) {
+    final conversation = state.conversations.firstWhere(
+      (item) => item.id == selectedConversationId,
+    );
+    if (conversation.memberId == null) {
+      activeTeamId = conversation.teamId;
+    } else {
+      activeMemberConversationIds.add(conversation.id);
+    }
+  }
 
   AppState state;
   String selectedConversationId;
+  String? activeTeamId;
+  final Set<String> activeMemberConversationIds = <String>{};
   final TeamOrchestrator orchestrator;
   final ValueChanged<AppState>? onStateChanged;
   final FileDialogService fileDialogs;
@@ -184,7 +218,17 @@ class AppController extends ChangeNotifier {
   ModelRequestCancellation? _activeCancellation;
   ConversationStatus? _requestedCancellationStatus;
 
-  Team get currentTeam => state.teams.first;
+  Team get currentTeam {
+    final activeId = activeTeamId;
+    if (activeId != null) {
+      return _requireTeam(activeId);
+    }
+    final conversation = state.conversations.firstWhere(
+      (item) => item.id == selectedConversationId,
+      orElse: () => state.conversations.first,
+    );
+    return _requireTeam(conversation.teamId);
+  }
 
   List<PatchProposal> get patchProposals => state.patchProposals;
 
@@ -201,6 +245,18 @@ class AppController extends ChangeNotifier {
       return a.createdAt.compareTo(b.createdAt);
     });
 
+  List<QueuedTask> get tasksForCurrentConversation => state.queuedTasks
+      .where((task) => task.conversationId == currentConversation.id)
+      .toList();
+
+  List<QueuedTask> get pendingTasksForCurrentConversation {
+    final tasks = tasksForCurrentConversation
+        .where((task) => task.status == QueuedTaskStatus.pending)
+        .toList();
+    tasks.sort(_queuedTaskSort);
+    return tasks;
+  }
+
   Conversation get currentConversation => state.conversations.firstWhere(
         (item) => item.id == selectedConversationId,
         orElse: () => state.conversations.firstWhere(
@@ -216,6 +272,13 @@ class AppController extends ChangeNotifier {
       .where((member) => currentTeam.memberIds.contains(member.id))
       .toList();
 
+  List<TeamMember> get activePrivateMembers => currentMembers
+      .where(
+        (member) => activeMemberConversationIds
+            .contains(conversationForMember(member.id).id),
+      )
+      .toList();
+
   Conversation conversationForMember(String memberId) {
     return state.conversations.firstWhere(
       (item) => item.teamId == currentTeam.id && item.memberId == memberId,
@@ -225,7 +288,202 @@ class AppController extends ChangeNotifier {
 
   void selectConversation(String conversationId) {
     selectedConversationId = conversationId;
+    final conversation = state.conversations.firstWhere(
+      (item) => item.id == conversationId,
+    );
+    if (conversation.memberId == null) {
+      activeTeamId = conversation.teamId;
+    } else {
+      activeMemberConversationIds.add(conversation.id);
+    }
     notifyListeners();
+  }
+
+  void startTeamChat(String teamId) {
+    final team = _requireTeam(teamId);
+    activeTeamId = team.id;
+    selectedConversationId = _teamConversationFor(team.id).id;
+    notifyListeners();
+  }
+
+  void startMemberChat(String memberId) {
+    _requireMember(memberId);
+    final conversation = conversationForMember(memberId);
+    activeMemberConversationIds.add(conversation.id);
+    selectedConversationId = conversation.id;
+    notifyListeners();
+  }
+
+  Future<void> enqueueCurrentConversationTask(
+    String text, {
+    int priority = 0,
+  }) async {
+    final trimmed = text.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+    final conversation = currentConversation;
+    final team = _requireTeam(conversation.teamId);
+    final secretary = state.members.firstWhere(
+      (member) => member.id == team.secretaryMemberId,
+    );
+    final secretaryRole = _requireRole(secretary.roleId);
+    final secretaryModel = _requireModel(secretary.modelId);
+    final now = DateTime.now();
+    final generating = ChatMessage(
+      id: 'msg-${now.microsecondsSinceEpoch}',
+      authorName: secretary.name,
+      memberId: secretary.id,
+      content: '正在生成任务',
+      createdAt: now,
+    );
+    _appendMessage(conversation.id, generating);
+    try {
+      final title = await orchestrator.gateway.complete(
+        model: secretaryModel,
+        systemPrompt: secretaryRole.renderSystemPrompt(
+          memberName: secretary.name,
+          teamName: team.name,
+        ),
+        messages: [
+          ChatMessage(
+            id: 'msg-title-source-${now.microsecondsSinceEpoch}',
+            authorName: '我',
+            content: '请为这条任务生成一句简短标题：$trimmed',
+            createdAt: now,
+            isUser: true,
+          ),
+        ],
+      );
+      final createdAt = DateTime.now();
+      final taskId = 'task-${createdAt.microsecondsSinceEpoch}';
+      final userMessage = ChatMessage(
+        id: 'msg-${createdAt.microsecondsSinceEpoch}',
+        authorName: '我',
+        content: trimmed,
+        createdAt: createdAt,
+        isUser: true,
+        taskIds: [taskId],
+      );
+      final latestConversation = _conversationById(conversation.id);
+      _commit(
+        state.copyWith(
+          queuedTasks: [
+            ...state.queuedTasks,
+            QueuedTask(
+              id: taskId,
+              conversationId: conversation.id,
+              title: title.trim(),
+              originalText: trimmed,
+              priority: priority,
+              status: QueuedTaskStatus.pending,
+              createdAt: createdAt,
+              updatedAt: createdAt,
+              messageIds: [userMessage.id],
+            ),
+          ],
+          conversations: state.conversations
+              .map(
+                (item) => item.id == conversation.id
+                    ? latestConversation.copyWith(
+                        messages: [
+                          ...latestConversation.messages
+                              .where((message) => message.id != generating.id),
+                          userMessage,
+                        ],
+                      )
+                    : item,
+              )
+              .toList(),
+        ),
+      );
+    } catch (exception) {
+      _replaceMessageContent(
+        generating.id,
+        '任务标题生成失败：$exception',
+      );
+    }
+  }
+
+  void updateTaskPriority(String taskId, int priority) {
+    _commit(
+      state.copyWith(
+        queuedTasks: state.queuedTasks
+            .map(
+              (task) => task.id == taskId
+                  ? task.copyWith(
+                      priority: priority,
+                      updatedAt: DateTime.now(),
+                    )
+                  : task,
+            )
+            .toList(),
+      ),
+    );
+  }
+
+  void appendTaskNote(String taskId, String note) {
+    final trimmed = note.trim();
+    if (trimmed.isEmpty) {
+      return;
+    }
+    final task = state.queuedTasks.firstWhere((item) => item.id == taskId);
+    final message = ChatMessage(
+      id: 'msg-${DateTime.now().microsecondsSinceEpoch}',
+      authorName: '系统',
+      content: '已为任务追加备注',
+      createdAt: DateTime.now(),
+      taskIds: [taskId],
+    );
+    _commit(
+      state.copyWith(
+        queuedTasks: state.queuedTasks
+            .map(
+              (item) => item.id == taskId
+                  ? item.copyWith(
+                      notes: [...item.notes, trimmed],
+                      messageIds: [...item.messageIds, message.id],
+                      updatedAt: DateTime.now(),
+                    )
+                  : item,
+            )
+            .toList(),
+        conversations: state.conversations
+            .map(
+              (conversation) => conversation.id == task.conversationId
+                  ? conversation.copyWith(
+                      messages: [...conversation.messages, message],
+                    )
+                  : conversation,
+            )
+            .toList(),
+      ),
+    );
+  }
+
+  void deleteTask(String taskId) {
+    final task = state.queuedTasks.firstWhere((item) => item.id == taskId);
+    _commit(
+      state.copyWith(
+        queuedTasks:
+            state.queuedTasks.where((item) => item.id != taskId).toList(),
+        conversations: state.conversations
+            .map(
+              (conversation) => conversation.id == task.conversationId
+                  ? conversation.copyWith(
+                      messages: conversation.messages
+                          .where(
+                            (message) =>
+                                !message.taskIds.contains(taskId) &&
+                                !task.messageIds.contains(message.id),
+                          )
+                          .toList(),
+                    )
+                  : conversation,
+            )
+            .toList(),
+      ),
+    );
   }
 
   bool _canDispatchCurrentConversation() {
@@ -262,7 +520,7 @@ class AppController extends ChangeNotifier {
         _commit(
           await orchestrator.dispatchTeamTask(
             state,
-            teamId: currentTeam.id,
+            teamId: conversation.teamId,
             userText: trimmed,
             cancellation: cancellation,
             onProgress: _commit,
@@ -334,6 +592,54 @@ class AppController extends ChangeNotifier {
       return;
     }
     _setConversationStatus(ConversationStatus.stopped);
+  }
+
+  Team addTeam({
+    required String name,
+    required List<String> memberIds,
+  }) {
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) {
+      throw ArgumentError('团队名称不能为空');
+    }
+    final secretary = state.members.firstWhere(
+      (member) => member.isSecretary,
+      orElse: () => throw StateError('缺少默认秘书成员'),
+    );
+    final normalizedMemberIds = <String>[
+      secretary.id,
+      ...memberIds.where((id) => id != secretary.id),
+    ];
+    for (final memberId in normalizedMemberIds) {
+      _requireMember(memberId);
+    }
+    final uniqueMemberIds = LinkedHashSet<String>.from(normalizedMemberIds);
+    final timestamp = DateTime.now().microsecondsSinceEpoch;
+    final team = Team(
+      id: 'team-$timestamp',
+      name: trimmedName,
+      memberIds: uniqueMemberIds.toList(),
+      secretaryMemberId: secretary.id,
+    );
+    _commit(
+      state.copyWith(
+        teams: [...state.teams, team],
+        conversations: [
+          ...state.conversations,
+          _createTeamConversation(team),
+        ],
+        auditLog: [
+          ...state.auditLog,
+          AuditEntry(
+            id: 'audit-$timestamp',
+            action: 'team_added',
+            detail: team.name,
+            createdAt: DateTime.now(),
+          ),
+        ],
+      ),
+    );
+    return team;
   }
 
   void addModel(ModelProfile model) {
@@ -833,6 +1139,57 @@ class AppController extends ChangeNotifier {
     );
   }
 
+  Conversation _conversationById(String conversationId) {
+    return state.conversations.firstWhere(
+      (conversation) => conversation.id == conversationId,
+      orElse: () => throw StateError('会话不存在: $conversationId'),
+    );
+  }
+
+  void _appendMessage(String conversationId, ChatMessage message) {
+    _commit(
+      state.copyWith(
+        conversations: state.conversations
+            .map(
+              (conversation) => conversation.id == conversationId
+                  ? conversation.copyWith(
+                      messages: [...conversation.messages, message],
+                    )
+                  : conversation,
+            )
+            .toList(),
+      ),
+    );
+  }
+
+  void _replaceMessageContent(String messageId, String content) {
+    _commit(
+      state.copyWith(
+        conversations: state.conversations
+            .map(
+              (conversation) => conversation.copyWith(
+                messages: conversation.messages
+                    .map(
+                      (message) => message.id == messageId
+                          ? ChatMessage(
+                              id: message.id,
+                              authorName: message.authorName,
+                              content: content,
+                              createdAt: message.createdAt,
+                              memberId: message.memberId,
+                              isUser: message.isUser,
+                              taskIds: message.taskIds,
+                            )
+                          : message,
+                    )
+                    .toList(),
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+
   void _cancelActiveDispatch(ConversationStatus status) {
     _requestedCancellationStatus = status;
     _activeCancellation?.cancel();
@@ -911,6 +1268,21 @@ class AppController extends ChangeNotifier {
     return state.models.firstWhere(
       (model) => model.id == modelId,
       orElse: () => throw StateError('模型不存在: $modelId'),
+    );
+  }
+
+  Team _requireTeam(String teamId) {
+    return state.teams.firstWhere(
+      (team) => team.id == teamId,
+      orElse: () => throw StateError('团队不存在: $teamId'),
+    );
+  }
+
+  Conversation _teamConversationFor(String teamId) {
+    return state.conversations.firstWhere(
+      (conversation) =>
+          conversation.teamId == teamId && conversation.memberId == null,
+      orElse: () => throw StateError('团队会话不存在: $teamId'),
     );
   }
 
@@ -1029,6 +1401,9 @@ class _AppSidebar extends StatelessWidget {
     required this.selectedView,
     required this.onChat,
     required this.onTeam,
+    required this.onModels,
+    required this.onRoles,
+    required this.onMembers,
     required this.onProject,
     required this.onSettings,
   });
@@ -1036,13 +1411,16 @@ class _AppSidebar extends StatelessWidget {
   final _MainView selectedView;
   final VoidCallback onChat;
   final VoidCallback onTeam;
+  final VoidCallback onModels;
+  final VoidCallback onRoles;
+  final VoidCallback onMembers;
   final VoidCallback onProject;
   final VoidCallback onSettings;
 
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
-      color: const Color(0xFF25324A),
+      color: const Color(0xFF050505),
       child: Column(
         children: [
           const SizedBox(height: 16),
@@ -1073,13 +1451,31 @@ class _AppSidebar extends StatelessWidget {
           _SidebarButton(
             icon: Icons.groups_rounded,
             label: '团队',
-            selected: false,
+            selected: selectedView == _MainView.teams,
             onPressed: onTeam,
+          ),
+          _SidebarButton(
+            icon: Icons.memory_rounded,
+            label: '模型',
+            selected: selectedView == _MainView.models,
+            onPressed: onModels,
+          ),
+          _SidebarButton(
+            icon: Icons.badge_rounded,
+            label: '角色',
+            selected: selectedView == _MainView.roles,
+            onPressed: onRoles,
+          ),
+          _SidebarButton(
+            icon: Icons.manage_accounts_rounded,
+            label: '成员',
+            selected: selectedView == _MainView.members,
+            onPressed: onMembers,
           ),
           _SidebarButton(
             icon: Icons.folder_copy_rounded,
             label: '项目',
-            selected: false,
+            selected: selectedView == _MainView.project,
             onPressed: onProject,
           ),
           const Spacer(),
@@ -1190,49 +1586,51 @@ class _ConversationList extends StatelessWidget {
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
-                _RailSection(
-                  title: '群聊',
-                  children: [
-                    _RailTile(
-                      icon: Icons.forum_rounded,
-                      title: controller.currentTeam.name,
-                      subtitle:
-                          _conversationPreview(controller.teamConversation),
-                      badge: '${controller.currentMembers.length}',
-                      selected: selectedView == _MainView.chat &&
-                          controller.selectedConversationId ==
-                              controller.teamConversation.id,
-                      onTap: () =>
-                          onSelectConversation(controller.teamConversation.id),
-                    ),
-                  ],
-                ),
-                _RailSection(
-                  title: '私聊',
-                  children: controller.currentMembers
-                      .map(
-                        (member) => _RailTile(
-                          icon: member.isSecretary
-                              ? Icons.assignment_ind_rounded
-                              : Icons.person_rounded,
-                          title: member.name,
-                          subtitle: _memberConversationPreview(
-                            controller,
-                            member,
+                if (controller.activeTeamId != null)
+                  _RailSection(
+                    title: '群聊',
+                    children: [
+                      _RailTile(
+                        icon: Icons.forum_rounded,
+                        title: controller.currentTeam.name,
+                        subtitle:
+                            _conversationPreview(controller.teamConversation),
+                        badge: '${controller.currentMembers.length}',
+                        selected: selectedView == _MainView.chat &&
+                            controller.selectedConversationId ==
+                                controller.teamConversation.id,
+                        onTap: () => onSelectConversation(
+                            controller.teamConversation.id),
+                      ),
+                    ],
+                  ),
+                if (controller.activePrivateMembers.isNotEmpty)
+                  _RailSection(
+                    title: '私聊',
+                    children: controller.activePrivateMembers
+                        .map(
+                          (member) => _RailTile(
+                            icon: member.isSecretary
+                                ? Icons.assignment_ind_rounded
+                                : Icons.person_rounded,
+                            title: member.name,
+                            subtitle: _memberConversationPreview(
+                              controller,
+                              member,
+                            ),
+                            badge: member.isSecretary ? 'BOT' : null,
+                            selected: selectedView == _MainView.chat &&
+                                controller.selectedConversationId ==
+                                    controller
+                                        .conversationForMember(member.id)
+                                        .id,
+                            onTap: () => onSelectConversation(
+                              controller.conversationForMember(member.id).id,
+                            ),
                           ),
-                          badge: member.isSecretary ? 'BOT' : null,
-                          selected: selectedView == _MainView.chat &&
-                              controller.selectedConversationId ==
-                                  controller
-                                      .conversationForMember(member.id)
-                                      .id,
-                          onTap: () => onSelectConversation(
-                            controller.conversationForMember(member.id).id,
-                          ),
-                        ),
-                      )
-                      .toList(),
-                ),
+                        )
+                        .toList(),
+                  ),
               ],
             ),
           ),
@@ -1383,6 +1781,7 @@ class _ChatPaneState extends State<_ChatPane> {
   @override
   Widget build(BuildContext context) {
     final conversation = widget.controller.currentConversation;
+    final typingMembers = _typingMembers(widget.controller, conversation);
     final pendingPatches = widget.controller.patchProposals
         .where((patch) => patch.status == PatchStatus.pending)
         .toList();
@@ -1444,13 +1843,19 @@ class _ChatPaneState extends State<_ChatPane> {
             color: const Color(0xFFFCFCFD),
             child: ListView.builder(
               padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
-              itemCount: conversation.messages.length + pendingPatches.length,
+              itemCount: conversation.messages.length +
+                  typingMembers.length +
+                  pendingPatches.length,
               itemBuilder: (context, index) {
                 if (index < conversation.messages.length) {
                   return _MessageBubble(message: conversation.messages[index]);
                 }
+                final typingIndex = index - conversation.messages.length;
+                if (typingIndex < typingMembers.length) {
+                  return _TypingIndicator(member: typingMembers[typingIndex]);
+                }
                 final patch =
-                    pendingPatches[index - conversation.messages.length];
+                    pendingPatches[typingIndex - typingMembers.length];
                 return _ChatPatchConfirmationCard(
                   patch: patch,
                   onApply: () => widget.controller.applyPatch(patch),
@@ -1534,6 +1939,49 @@ class _ChatPaneState extends State<_ChatPane> {
   }
 }
 
+class _TypingIndicator extends StatelessWidget {
+  const _TypingIndicator({required this.member});
+
+  final TeamMember member;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        CircleAvatar(
+          radius: 18,
+          backgroundColor: _avatarColor(member.name),
+          child: Text(
+            _avatarText(member.name),
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Container(
+          margin: const EdgeInsets.only(bottom: 18),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Text(
+            '${member.name} 正在输入中',
+            style: TextStyle(
+              color: Colors.grey.shade700,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({required this.message});
 
@@ -1606,16 +2054,242 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
-class _SettingsPage extends StatefulWidget {
-  const _SettingsPage({
+class _ManagementPage extends StatelessWidget {
+  const _ManagementPage({
+    required this.title,
+    required this.subtitle,
+    required this.child,
+  });
+
+  final String title;
+  final String subtitle;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          height: 72,
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              bottom: BorderSide(color: Color(0xFFE5E7EB)),
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text(subtitle),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: child,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TeamManagementPage extends StatelessWidget {
+  const _TeamManagementPage({
     required this.controller,
-    required this.focusedSection,
-    required this.onBack,
+    required this.onStartChat,
   });
 
   final AppController controller;
-  final String? focusedSection;
-  final VoidCallback onBack;
+  final VoidCallback onStartChat;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ManagementPage(
+      title: '团队管理',
+      subtitle: '创建团队、配置成员，并从团队发起群聊',
+      child: _Panel(
+        title: '团队列表',
+        icon: Icons.groups_rounded,
+        action: IconButton(
+          tooltip: '新增团队',
+          onPressed: () => _showTeamDialog(context, controller),
+          icon: const Icon(Icons.add_rounded),
+        ),
+        child: Column(
+          children: controller.state.teams
+              .map(
+                (team) => _TeamCard(
+                  controller: controller,
+                  team: team,
+                  onStartChat: () {
+                    controller.startTeamChat(team.id);
+                    onStartChat();
+                  },
+                ),
+              )
+              .toList(),
+        ),
+      ),
+    );
+  }
+}
+
+class _TeamCard extends StatelessWidget {
+  const _TeamCard({
+    required this.controller,
+    required this.team,
+    required this.onStartChat,
+  });
+
+  final AppController controller;
+  final Team team;
+  final VoidCallback onStartChat;
+
+  @override
+  Widget build(BuildContext context) {
+    final members = controller.state.members
+        .where((member) => team.memberIds.contains(member.id))
+        .toList();
+    return _KeyValueRow(
+      label: team.name,
+      value: members.map((member) => member.name).join('、'),
+      actions: [
+        FilledButton(
+          onPressed: onStartChat,
+          child: const Text('发起聊天'),
+        ),
+      ],
+    );
+  }
+}
+
+class _ModelManagementPage extends StatelessWidget {
+  const _ModelManagementPage({required this.controller});
+
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ManagementPage(
+      title: '模型管理',
+      subtitle: 'OpenAI 兼容模型、请求参数和密钥引用在这里维护',
+      child: _ModelConfigPanel(controller: controller),
+    );
+  }
+}
+
+class _RoleManagementPage extends StatelessWidget {
+  const _RoleManagementPage({required this.controller});
+
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ManagementPage(
+      title: '角色管理',
+      subtitle: '角色提示词、命令策略和项目读取权限在这里维护',
+      child: _RoleConfigPanel(controller: controller),
+    );
+  }
+}
+
+class _MemberManagementPage extends StatelessWidget {
+  const _MemberManagementPage({
+    required this.controller,
+    required this.onStartChat,
+  });
+
+  final AppController controller;
+  final VoidCallback onStartChat;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ManagementPage(
+      title: '成员管理',
+      subtitle: '团队成员、角色绑定和模型绑定在这里维护',
+      child: _MemberConfigPanel(
+        controller: controller,
+        onStartChat: onStartChat,
+      ),
+    );
+  }
+}
+
+class _ProjectPage extends StatelessWidget {
+  const _ProjectPage({
+    required this.controller,
+  });
+
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          height: 72,
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              bottom: BorderSide(color: Color(0xFFE5E7EB)),
+            ),
+          ),
+          child: const Row(
+            children: [
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '项目管理',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    Text('本地工作区、文件浏览和补丁预览集中在这里管理'),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: _WorkspacePanel(controller: controller),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SettingsPage extends StatefulWidget {
+  const _SettingsPage({
+    required this.controller,
+  });
+
+  final AppController controller;
 
   @override
   State<_SettingsPage> createState() => _SettingsPageState();
@@ -1624,10 +2298,6 @@ class _SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<_SettingsPage> {
   final scrollController = ScrollController();
   final sectionKeys = {
-    '模型配置': GlobalKey(),
-    '角色配置': GlobalKey(),
-    '团队成员': GlobalKey(),
-    '项目工作区': GlobalKey(),
     '命令请求': GlobalKey(),
     '导入导出': GlobalKey(),
     '审计日志': GlobalKey(),
@@ -1635,39 +2305,10 @@ class _SettingsPageState extends State<_SettingsPage> {
 
   AppController get controller => widget.controller;
 
-  VoidCallback get onBack => widget.onBack;
-
   @override
   void dispose() {
     scrollController.dispose();
     super.dispose();
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    scrollToFocusedSection();
-  }
-
-  @override
-  void didUpdateWidget(covariant _SettingsPage oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.focusedSection != oldWidget.focusedSection) {
-      scrollToFocusedSection();
-    }
-  }
-
-  void scrollToFocusedSection() {
-    final section = widget.focusedSection;
-    if (section == null) {
-      return;
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      scrollToSection(section);
-    });
   }
 
   void scrollToSection(String title) {
@@ -1696,15 +2337,9 @@ class _SettingsPageState extends State<_SettingsPage> {
               bottom: BorderSide(color: Color(0xFFE5E7EB)),
             ),
           ),
-          child: Row(
+          child: const Row(
             children: [
-              IconButton(
-                tooltip: '返回聊天',
-                onPressed: onBack,
-                icon: const Icon(Icons.arrow_back_rounded),
-              ),
-              const SizedBox(width: 8),
-              const Expanded(
+              Expanded(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -1716,7 +2351,7 @@ class _SettingsPageState extends State<_SettingsPage> {
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    Text('模型、角色、团队和本地项目配置保存在本机'),
+                    Text('命令、导入导出和审计配置保存在本机'),
                   ],
                 ),
               ),
@@ -1742,125 +2377,6 @@ class _SettingsPageState extends State<_SettingsPage> {
                   child: const Text('配置文件和密钥导出选项集中在这里管理。'),
                 ),
                 _Panel(
-                  key: sectionKeys['模型配置'],
-                  title: '模型配置',
-                  icon: Icons.memory_rounded,
-                  action: IconButton(
-                    tooltip: '新增模型',
-                    onPressed: () => _showModelDialog(context, controller),
-                    icon: const Icon(Icons.add_rounded),
-                  ),
-                  child: Column(
-                    children: controller.state.models
-                        .map(
-                          (model) => _KeyValueRow(
-                            label: model.name,
-                            value:
-                                '${model.modelName}\n${model.baseUrl}\n流式: ${model.streaming ? '开' : '关'} · 温度: ${model.temperature} · 最大 Token: ${model.maxTokens}',
-                            actions: [
-                              IconButton(
-                                tooltip: '编辑模型',
-                                onPressed: () => _showModelDialog(
-                                    context, controller,
-                                    model: model),
-                                icon: const Icon(Icons.edit_rounded),
-                              ),
-                              IconButton(
-                                tooltip: '删除模型',
-                                onPressed: () => _runConfigAction(
-                                  context,
-                                  () => controller.deleteModel(model.id),
-                                ),
-                                icon: const Icon(Icons.delete_outline_rounded),
-                              ),
-                            ],
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ),
-                _Panel(
-                  key: sectionKeys['角色配置'],
-                  title: '角色配置',
-                  icon: Icons.badge_rounded,
-                  action: IconButton(
-                    tooltip: '新增角色',
-                    onPressed: () => _showRoleDialog(context, controller),
-                    icon: const Icon(Icons.add_rounded),
-                  ),
-                  child: Column(
-                    children: controller.state.roles
-                        .map(
-                          (role) => _KeyValueRow(
-                            label: role.name,
-                            value:
-                                '${role.description}\n命令: ${role.commandPolicy.allowedCommands.join(', ')}',
-                            actions: [
-                              IconButton(
-                                tooltip: '编辑角色',
-                                onPressed: () => _showRoleDialog(
-                                    context, controller,
-                                    role: role),
-                                icon: const Icon(Icons.edit_rounded),
-                              ),
-                              IconButton(
-                                tooltip: '删除角色',
-                                onPressed: () => _runConfigAction(
-                                  context,
-                                  () => controller.deleteRole(role.id),
-                                ),
-                                icon: const Icon(Icons.delete_outline_rounded),
-                              ),
-                            ],
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ),
-                _Panel(
-                  key: sectionKeys['团队成员'],
-                  title: '团队成员',
-                  icon: Icons.groups_rounded,
-                  action: IconButton(
-                    tooltip: '新增成员',
-                    onPressed: () => _showMemberDialog(context, controller),
-                    icon: const Icon(Icons.add_rounded),
-                  ),
-                  child: Column(
-                    children: controller.currentMembers
-                        .map(
-                          (member) => _KeyValueRow(
-                            label: member.name,
-                            value:
-                                '${_roleName(controller.state, member.roleId)} · ${_modelName(controller.state, member.modelId)}',
-                            actions: [
-                              IconButton(
-                                tooltip: '编辑成员',
-                                onPressed: () => _showMemberDialog(
-                                  context,
-                                  controller,
-                                  member: member,
-                                ),
-                                icon: const Icon(Icons.edit_rounded),
-                              ),
-                              IconButton(
-                                tooltip: '删除成员',
-                                onPressed: member.isSecretary
-                                    ? null
-                                    : () => _runConfigAction(
-                                          context,
-                                          () => controller
-                                              .deleteMember(member.id),
-                                        ),
-                                icon: const Icon(Icons.delete_outline_rounded),
-                              ),
-                            ],
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ),
-                _Panel(
                   title: '任务轮次',
                   icon: Icons.account_tree_rounded,
                   child: Column(
@@ -1877,49 +2393,6 @@ class _SettingsPageState extends State<_SettingsPage> {
                             .map(
                               (assignment) =>
                                   _TaskAssignmentCard(assignment: assignment),
-                            )
-                            .toList(),
-                  ),
-                ),
-                _Panel(
-                  key: sectionKeys['项目工作区'],
-                  title: '项目工作区',
-                  icon: Icons.folder_open_rounded,
-                  action: Wrap(
-                    spacing: 2,
-                    children: [
-                      IconButton(
-                        tooltip: '创建补丁',
-                        onPressed: controller.state.workspaces.isEmpty
-                            ? null
-                            : () =>
-                                _showWorkspacePatchDialog(context, controller),
-                        icon: const Icon(Icons.difference_rounded),
-                      ),
-                      IconButton(
-                        tooltip: '浏览文件',
-                        onPressed: controller.state.workspaces.isEmpty
-                            ? null
-                            : () =>
-                                _showWorkspaceFilesDialog(context, controller),
-                        icon: const Icon(Icons.list_alt_rounded),
-                      ),
-                      IconButton(
-                        tooltip: '添加工作区',
-                        onPressed: controller.pickAndAddWorkspace,
-                        icon: const Icon(Icons.add_rounded),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    children: controller.state.workspaces.isEmpty
-                        ? [const Text('还没有选择本地项目目录')]
-                        : controller.state.workspaces
-                            .map(
-                              (workspace) => _KeyValueRow(
-                                label: workspace.name,
-                                value: workspace.path,
-                              ),
                             )
                             .toList(),
                   ),
@@ -1991,10 +2464,6 @@ class _SettingsCategoryBar extends StatelessWidget {
   final ValueChanged<String> onSelect;
 
   static const items = [
-    (Icons.memory_rounded, '模型', '模型配置'),
-    (Icons.badge_rounded, '角色', '角色配置'),
-    (Icons.groups_rounded, '成员', '团队成员'),
-    (Icons.folder_open_rounded, '项目', '项目工作区'),
     (Icons.terminal_rounded, '命令', '命令请求'),
     (Icons.ios_share_rounded, '导入导出', '导入导出'),
     (Icons.receipt_long_rounded, '审计', '审计日志'),
@@ -2028,6 +2497,210 @@ class _SettingsCategoryBar extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _ModelConfigPanel extends StatelessWidget {
+  const _ModelConfigPanel({required this.controller});
+
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      title: '模型配置',
+      icon: Icons.memory_rounded,
+      action: IconButton(
+        tooltip: '新增模型',
+        onPressed: () => _showModelDialog(context, controller),
+        icon: const Icon(Icons.add_rounded),
+      ),
+      child: Column(
+        children: controller.state.models
+            .map(
+              (model) => _KeyValueRow(
+                label: model.name,
+                value:
+                    '${model.modelName}\n${model.baseUrl}\n流式: ${model.streaming ? '开' : '关'} · 温度: ${model.temperature} · 最大 Token: ${model.maxTokens}',
+                actions: [
+                  IconButton(
+                    tooltip: '编辑模型',
+                    onPressed: () =>
+                        _showModelDialog(context, controller, model: model),
+                    icon: const Icon(Icons.edit_rounded),
+                  ),
+                  IconButton(
+                    tooltip: '删除模型',
+                    onPressed: () => _runConfigAction(
+                      context,
+                      () => controller.deleteModel(model.id),
+                    ),
+                    icon: const Icon(Icons.delete_outline_rounded),
+                  ),
+                ],
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+}
+
+class _RoleConfigPanel extends StatelessWidget {
+  const _RoleConfigPanel({required this.controller});
+
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      title: '角色配置',
+      icon: Icons.badge_rounded,
+      action: IconButton(
+        tooltip: '新增角色',
+        onPressed: () => _showRoleDialog(context, controller),
+        icon: const Icon(Icons.add_rounded),
+      ),
+      child: Column(
+        children: controller.state.roles
+            .map(
+              (role) => _KeyValueRow(
+                label: role.name,
+                value:
+                    '${role.description}\n命令: ${role.commandPolicy.allowedCommands.join(', ')}',
+                actions: [
+                  IconButton(
+                    tooltip: '编辑角色',
+                    onPressed: () =>
+                        _showRoleDialog(context, controller, role: role),
+                    icon: const Icon(Icons.edit_rounded),
+                  ),
+                  IconButton(
+                    tooltip: '删除角色',
+                    onPressed: () => _runConfigAction(
+                      context,
+                      () => controller.deleteRole(role.id),
+                    ),
+                    icon: const Icon(Icons.delete_outline_rounded),
+                  ),
+                ],
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+}
+
+class _MemberConfigPanel extends StatelessWidget {
+  const _MemberConfigPanel({
+    required this.controller,
+    required this.onStartChat,
+  });
+
+  final AppController controller;
+  final VoidCallback onStartChat;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      title: '团队成员',
+      icon: Icons.groups_rounded,
+      action: IconButton(
+        tooltip: '新增成员',
+        onPressed: () => _showMemberDialog(context, controller),
+        icon: const Icon(Icons.add_rounded),
+      ),
+      child: Column(
+        children: controller.currentMembers
+            .map(
+              (member) => _KeyValueRow(
+                label: member.name,
+                value:
+                    '${_roleName(controller.state, member.roleId)} · ${_modelName(controller.state, member.modelId)}',
+                actions: [
+                  FilledButton(
+                    onPressed: () {
+                      controller.startMemberChat(member.id);
+                      onStartChat();
+                    },
+                    child: const Text('发起聊天'),
+                  ),
+                  IconButton(
+                    tooltip: '编辑成员',
+                    onPressed: () => _showMemberDialog(
+                      context,
+                      controller,
+                      member: member,
+                    ),
+                    icon: const Icon(Icons.edit_rounded),
+                  ),
+                  IconButton(
+                    tooltip: '删除成员',
+                    onPressed: member.isSecretary
+                        ? null
+                        : () => _runConfigAction(
+                              context,
+                              () => controller.deleteMember(member.id),
+                            ),
+                    icon: const Icon(Icons.delete_outline_rounded),
+                  ),
+                ],
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+}
+
+class _WorkspacePanel extends StatelessWidget {
+  const _WorkspacePanel({required this.controller});
+
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      title: '项目工作区',
+      icon: Icons.folder_open_rounded,
+      action: Wrap(
+        spacing: 2,
+        children: [
+          IconButton(
+            tooltip: '创建补丁',
+            onPressed: controller.state.workspaces.isEmpty
+                ? null
+                : () => _showWorkspacePatchDialog(context, controller),
+            icon: const Icon(Icons.difference_rounded),
+          ),
+          IconButton(
+            tooltip: '浏览文件',
+            onPressed: controller.state.workspaces.isEmpty
+                ? null
+                : () => _showWorkspaceFilesDialog(context, controller),
+            icon: const Icon(Icons.list_alt_rounded),
+          ),
+          IconButton(
+            tooltip: '添加工作区',
+            onPressed: controller.pickAndAddWorkspace,
+            icon: const Icon(Icons.add_rounded),
+          ),
+        ],
+      ),
+      child: Column(
+        children: controller.state.workspaces.isEmpty
+            ? [const Text('还没有选择本地项目目录')]
+            : controller.state.workspaces
+                .map(
+                  (workspace) => _KeyValueRow(
+                    label: workspace.name,
+                    value: workspace.path,
+                  ),
+                )
+                .toList(),
       ),
     );
   }
@@ -2353,6 +3026,93 @@ class _CommandRequestCard extends StatelessWidget {
       ),
     );
   }
+}
+
+Future<void> _showTeamDialog(
+  BuildContext context,
+  AppController controller,
+) async {
+  final nameController = TextEditingController();
+  final selectedMemberIds = <String>{
+    for (final member in controller.state.members)
+      if (!member.isSecretary) member.id,
+  };
+  String? error;
+  await showDialog<void>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setDialogState) => AlertDialog(
+        title: const Text('新增团队'),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (error != null) _DialogError(error!),
+                _DialogField(
+                  controller: nameController,
+                  label: '团队名称',
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    '团队成员',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                ...controller.state.members
+                    .where((member) => !member.isSecretary)
+                    .map(
+                      (member) => CheckboxListTile(
+                        value: selectedMemberIds.contains(member.id),
+                        onChanged: (value) {
+                          setDialogState(() {
+                            if (value ?? false) {
+                              selectedMemberIds.add(member.id);
+                            } else {
+                              selectedMemberIds.remove(member.id);
+                            }
+                          });
+                        },
+                        title: Text(member.name),
+                        subtitle: Text(
+                          '${_roleName(controller.state, member.roleId)} · ${_modelName(controller.state, member.modelId)}',
+                        ),
+                        controlAffinity: ListTileControlAffinity.leading,
+                        dense: true,
+                      ),
+                    ),
+                const Text('默认秘书会自动加入每个团队。'),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () {
+              try {
+                controller.addTeam(
+                  name: nameController.text,
+                  memberIds: selectedMemberIds.toList(),
+                );
+                FocusScope.of(context).unfocus();
+                Navigator.of(context).pop();
+              } catch (exception) {
+                setDialogState(() => error = exception.toString());
+              }
+            },
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 Future<void> _showModelDialog(
@@ -3149,13 +3909,62 @@ String _memberConversationPreview(
   return _roleName(controller.state, member.roleId);
 }
 
+List<TeamMember> _typingMembers(
+  AppController controller,
+  Conversation conversation,
+) {
+  if (conversation.status != ConversationStatus.running) {
+    return const [];
+  }
+  final memberId = conversation.memberId;
+  if (memberId != null) {
+    return [
+      controller.state.members.firstWhere((member) => member.id == memberId),
+    ];
+  }
+  return controller.currentTaskAssignments
+      .where((assignment) => assignment.status == TaskAssignmentStatus.running)
+      .map(
+        (assignment) => controller.state.members.firstWhere(
+          (member) => member.id == assignment.memberId,
+        ),
+      )
+      .toList();
+}
+
+int _queuedTaskSort(QueuedTask a, QueuedTask b) {
+  final priority = b.priority.compareTo(a.priority);
+  if (priority != 0) {
+    return priority;
+  }
+  return a.createdAt.compareTo(b.createdAt);
+}
+
 String _initialConversationId(AppState state) {
   return state.conversations
       .firstWhere(
-        (conversation) => conversation.memberId == null,
+        (conversation) => conversation.memberId != null,
         orElse: () => state.conversations.first,
       )
       .id;
+}
+
+Conversation _createTeamConversation(Team team) {
+  return Conversation(
+    id: 'conv-${team.id}',
+    title: '团队会话',
+    teamId: team.id,
+    memberId: null,
+    messages: [
+      ChatMessage(
+        id: 'msg-welcome-${team.id}',
+        authorName: '秘书',
+        memberId: team.secretaryMemberId,
+        content: '把开发任务发到这里，我会分配给团队成员并汇总结果。',
+        createdAt: DateTime.now(),
+      ),
+    ],
+  );
 }
 
 Conversation _createMemberConversation(String teamId, TeamMember member) {
