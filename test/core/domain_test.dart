@@ -38,6 +38,21 @@ void main() {
             path: '/workspace/app',
           ),
         ],
+        taskAssignments: [
+          TaskAssignment(
+            id: 'task-1',
+            conversationId: 'conv-team-default',
+            round: 1,
+            memberId: 'member-frontend',
+            memberName: '前端工程师',
+            roleName: '前端工程师',
+            instruction: '实现登录页面',
+            status: TaskAssignmentStatus.completed,
+            createdAt: DateTime(2026, 1, 2),
+            summary: '已完成界面建议',
+            completedAt: DateTime(2026, 1, 2, 0, 1),
+          ),
+        ],
         commandRequests: [
           CommandRequest.pending(
             id: 'command-1',
@@ -63,6 +78,11 @@ void main() {
       final imported = ConfigExporter.importState(exported);
 
       expect(imported.workspaces.single.path, '/workspace/app');
+      expect(imported.taskAssignments.single.memberName, '前端工程师');
+      expect(
+        imported.taskAssignments.single.status,
+        TaskAssignmentStatus.completed,
+      );
       expect(imported.commandRequests.single.command, 'flutter test');
       expect(
           imported.commandRequests.single.status, CommandRequestStatus.pending);
@@ -75,6 +95,13 @@ void main() {
               (conversation) => conversation.memberId == 'member-frontend',
             ),
         isTrue,
+      );
+      expect(
+        AppState.fromJson(
+          ConfigExporter.exportState(AppState.seed(), includeSecrets: false)
+            ..remove('taskAssignments'),
+        ).taskAssignments,
+        isEmpty,
       );
     });
   });
@@ -245,6 +272,15 @@ void main() {
       expect(messages.map((message) => message.authorName), contains('秘书'));
       expect(messages.any((message) => message.authorName == '前端工程师'), isTrue);
       expect(messages.last.content, contains('汇总'));
+      expect(updated.taskAssignments, hasLength(2));
+      expect(
+        updated.taskAssignments.map((assignment) => assignment.status),
+        everyElement(TaskAssignmentStatus.completed),
+      );
+      expect(
+        updated.taskAssignments.map((assignment) => assignment.round),
+        everyElement(1),
+      );
     });
 
     test('does not exceed the team max round limit', () async {

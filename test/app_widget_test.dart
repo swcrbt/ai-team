@@ -471,6 +471,10 @@ void main() {
     expect(controller.isDispatching, isFalse);
     expect(controller.currentConversation.status, ConversationStatus.stopped);
     expect(
+      controller.currentTaskAssignments.map((assignment) => assignment.status),
+      contains(TaskAssignmentStatus.cancelled),
+    );
+    expect(
       controller.currentConversation.messages.map((message) => message.content),
       contains('任务已停止，本轮未完成的模型请求已取消。'),
     );
@@ -520,6 +524,7 @@ void main() {
     expect(find.text('模型配置'), findsOneWidget);
     expect(find.text('角色配置'), findsOneWidget);
     expect(find.text('团队成员'), findsOneWidget);
+    expect(find.text('任务轮次'), findsOneWidget);
     expect(find.text('补丁确认'), findsOneWidget);
   });
 
@@ -539,6 +544,7 @@ void main() {
     expect(find.textContaining('请实现设置页面'), findsWidgets);
     expect(find.textContaining('秘书'), findsWidgets);
     expect(find.textContaining('前端工程师'), findsWidgets);
+    expect(find.text('已完成'), findsWidgets);
     expect(find.textContaining('汇总'), findsWidgets);
   });
 }

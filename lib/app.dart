@@ -151,6 +151,19 @@ class AppController extends ChangeNotifier {
 
   List<PatchProposal> get patchProposals => state.patchProposals;
 
+  List<TaskAssignment> get currentTaskAssignments => state.taskAssignments
+      .where(
+        (assignment) => assignment.conversationId == currentConversation.id,
+      )
+      .toList()
+    ..sort((a, b) {
+      final roundComparison = b.round.compareTo(a.round);
+      if (roundComparison != 0) {
+        return roundComparison;
+      }
+      return a.createdAt.compareTo(b.createdAt);
+    });
+
   Conversation get currentConversation => state.conversations.firstWhere(
         (item) => item.id == selectedConversationId,
         orElse: () => state.conversations.firstWhere(
@@ -813,6 +826,10 @@ class AppController extends ChangeNotifier {
         conversations: state.conversations
             .map((item) => item.id == updated.id ? updated : item)
             .toList(),
+        taskAssignments: _cancelOpenAssignments(
+          state.taskAssignments,
+          updated.id,
+        ),
         auditLog: [
           ...state.auditLog,
           AuditEntry(
@@ -824,6 +841,24 @@ class AppController extends ChangeNotifier {
         ],
       ),
     );
+  }
+
+  List<TaskAssignment> _cancelOpenAssignments(
+    List<TaskAssignment> assignments,
+    String conversationId,
+  ) {
+    return assignments
+        .map(
+          (assignment) => assignment.conversationId == conversationId &&
+                  (assignment.status == TaskAssignmentStatus.pending ||
+                      assignment.status == TaskAssignmentStatus.running)
+              ? assignment.copyWith(
+                  status: TaskAssignmentStatus.cancelled,
+                  completedAt: DateTime.now(),
+                )
+              : assignment,
+        )
+        .toList();
   }
 
   void _commit(AppState nextState) {
@@ -1432,6 +1467,27 @@ class _InspectorPane extends StatelessWidget {
             ),
           ),
           _Panel(
+            title: '任务轮次',
+            icon: Icons.account_tree_rounded,
+            child: Column(
+              children: controller.currentTaskAssignments.isEmpty
+                  ? [
+                      _KeyValueRow(
+                        label: '当前轮次',
+                        value:
+                            '第 ${controller.currentConversation.currentRound} 轮',
+                      ),
+                      const Text('暂无成员任务'),
+                    ]
+                  : controller.currentTaskAssignments
+                      .map(
+                        (assignment) =>
+                            _TaskAssignmentCard(assignment: assignment),
+                      )
+                      .toList(),
+            ),
+          ),
+          _Panel(
             title: '项目工作区',
             icon: Icons.folder_open_rounded,
             action: Wrap(
@@ -1636,6 +1692,71 @@ class _KeyValueRow extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(value, style: TextStyle(color: Colors.grey.shade700)),
+        ],
+      ),
+    );
+  }
+}
+
+class _TaskAssignmentCard extends StatelessWidget {
+  const _TaskAssignmentCard({required this.assignment});
+
+  final TaskAssignment assignment;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '第 ${assignment.round} 轮 · ${assignment.memberName}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+              Text(
+                _taskStatusText(assignment.status),
+                style: TextStyle(
+                  color: _taskStatusColor(assignment.status),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            assignment.roleName,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: Colors.grey.shade700),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            assignment.instruction,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (assignment.summary != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              assignment.summary!,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: Colors.grey.shade700),
+            ),
+          ],
         ],
       ),
     );
@@ -2584,5 +2705,25 @@ String _statusText(ConversationStatus status) {
     ConversationStatus.paused => '已暂停',
     ConversationStatus.stopped => '已停止',
     ConversationStatus.failed => '失败',
+  };
+}
+
+String _taskStatusText(TaskAssignmentStatus status) {
+  return switch (status) {
+    TaskAssignmentStatus.pending => '待执行',
+    TaskAssignmentStatus.running => '执行中',
+    TaskAssignmentStatus.completed => '已完成',
+    TaskAssignmentStatus.failed => '失败',
+    TaskAssignmentStatus.cancelled => '已取消',
+  };
+}
+
+Color _taskStatusColor(TaskAssignmentStatus status) {
+  return switch (status) {
+    TaskAssignmentStatus.pending => const Color(0xFF6B7280),
+    TaskAssignmentStatus.running => const Color(0xFF2563EB),
+    TaskAssignmentStatus.completed => const Color(0xFF047857),
+    TaskAssignmentStatus.failed => const Color(0xFFBE123C),
+    TaskAssignmentStatus.cancelled => const Color(0xFF92400E),
   };
 }

@@ -6,6 +6,86 @@ enum CommandRequestStatus { pending, approved, denied, executed, failed }
 
 enum PatchStatus { pending, applied, rejected }
 
+enum TaskAssignmentStatus { pending, running, completed, failed, cancelled }
+
+class TaskAssignment {
+  const TaskAssignment({
+    required this.id,
+    required this.conversationId,
+    required this.round,
+    required this.memberId,
+    required this.memberName,
+    required this.roleName,
+    required this.instruction,
+    required this.status,
+    required this.createdAt,
+    this.summary,
+    this.completedAt,
+  });
+
+  final String id;
+  final String conversationId;
+  final int round;
+  final String memberId;
+  final String memberName;
+  final String roleName;
+  final String instruction;
+  final TaskAssignmentStatus status;
+  final DateTime createdAt;
+  final String? summary;
+  final DateTime? completedAt;
+
+  TaskAssignment copyWith({
+    TaskAssignmentStatus? status,
+    String? summary,
+    DateTime? completedAt,
+  }) {
+    return TaskAssignment(
+      id: id,
+      conversationId: conversationId,
+      round: round,
+      memberId: memberId,
+      memberName: memberName,
+      roleName: roleName,
+      instruction: instruction,
+      status: status ?? this.status,
+      createdAt: createdAt,
+      summary: summary ?? this.summary,
+      completedAt: completedAt ?? this.completedAt,
+    );
+  }
+
+  Map<String, Object?> toJson() => {
+        'id': id,
+        'conversationId': conversationId,
+        'round': round,
+        'memberId': memberId,
+        'memberName': memberName,
+        'roleName': roleName,
+        'instruction': instruction,
+        'status': status.name,
+        'createdAt': createdAt.toIso8601String(),
+        'summary': summary,
+        'completedAt': completedAt?.toIso8601String(),
+      };
+
+  factory TaskAssignment.fromJson(Map<String, Object?> json) => TaskAssignment(
+        id: json['id'] as String,
+        conversationId: json['conversationId'] as String,
+        round: (json['round'] as num).toInt(),
+        memberId: json['memberId'] as String,
+        memberName: json['memberName'] as String,
+        roleName: json['roleName'] as String,
+        instruction: json['instruction'] as String,
+        status: TaskAssignmentStatus.values.byName(json['status'] as String),
+        createdAt: DateTime.parse(json['createdAt'] as String),
+        summary: json['summary'] as String?,
+        completedAt: json['completedAt'] == null
+            ? null
+            : DateTime.parse(json['completedAt'] as String),
+      );
+}
+
 class PatchProposal {
   const PatchProposal({
     required this.id,
@@ -654,6 +734,7 @@ class AppState {
     required this.teams,
     required this.conversations,
     required this.workspaces,
+    required this.taskAssignments,
     required this.commandRequests,
     required this.patchProposals,
     required this.auditLog,
@@ -665,6 +746,7 @@ class AppState {
   final List<Team> teams;
   final List<Conversation> conversations;
   final List<ProjectWorkspace> workspaces;
+  final List<TaskAssignment> taskAssignments;
   final List<CommandRequest> commandRequests;
   final List<PatchProposal> patchProposals;
   final List<AuditEntry> auditLog;
@@ -676,6 +758,7 @@ class AppState {
     List<Team>? teams,
     List<Conversation>? conversations,
     List<ProjectWorkspace>? workspaces,
+    List<TaskAssignment>? taskAssignments,
     List<CommandRequest>? commandRequests,
     List<PatchProposal>? patchProposals,
     List<AuditEntry>? auditLog,
@@ -687,6 +770,7 @@ class AppState {
       teams: teams ?? this.teams,
       conversations: conversations ?? this.conversations,
       workspaces: workspaces ?? this.workspaces,
+      taskAssignments: taskAssignments ?? this.taskAssignments,
       commandRequests: commandRequests ?? this.commandRequests,
       patchProposals: patchProposals ?? this.patchProposals,
       auditLog: auditLog ?? this.auditLog,
@@ -704,6 +788,8 @@ class AppState {
             conversations.map((conversation) => conversation.toJson()).toList(),
         'workspaces':
             workspaces.map((workspace) => workspace.toJson()).toList(),
+        'taskAssignments':
+            taskAssignments.map((assignment) => assignment.toJson()).toList(),
         'commandRequests':
             commandRequests.map((request) => request.toJson()).toList(),
         'patchProposals':
@@ -730,6 +816,10 @@ class AppState {
         workspaces: (json['workspaces'] as List)
             .map((item) =>
                 ProjectWorkspace.fromJson(item as Map<String, Object?>))
+            .toList(),
+        taskAssignments: ((json['taskAssignments'] as List?) ?? const [])
+            .map(
+                (item) => TaskAssignment.fromJson(item as Map<String, Object?>))
             .toList(),
         commandRequests: ((json['commandRequests'] as List?) ?? const [])
             .map(
@@ -867,6 +957,7 @@ class AppState {
       teams: teams,
       conversations: conversations,
       workspaces: const [],
+      taskAssignments: const [],
       commandRequests: const [],
       patchProposals: const [],
       auditLog: const [],

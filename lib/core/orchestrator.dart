@@ -41,8 +41,27 @@ class TeamOrchestrator {
         createdAt: now.add(const Duration(milliseconds: 1)),
       ),
     ];
+    final round = conversation.currentRound + 1;
+    final assignments = [
+      for (var index = 0; index < workerMembers.length; index++)
+        TaskAssignment(
+          id: _id('task-$round-$index'),
+          conversationId: conversation.id,
+          round: round,
+          memberId: workerMembers[index].id,
+          memberName: workerMembers[index].name,
+          roleName: state.roles
+              .firstWhere((role) => role.id == workerMembers[index].roleId)
+              .name,
+          instruction: userText,
+          status: TaskAssignmentStatus.pending,
+          createdAt: now.add(Duration(milliseconds: 2 + index)),
+        ),
+    ];
     var workingState = _replaceConversation(
-      state,
+      state.copyWith(
+        taskAssignments: [...state.taskAssignments, ...assignments],
+      ),
       conversation.copyWith(
         messages: messages,
         status: ConversationStatus.running,
@@ -50,12 +69,18 @@ class TeamOrchestrator {
     );
     onProgress?.call(workingState);
 
-    final round = conversation.currentRound + 1;
-    for (final member in workerMembers) {
+    for (var index = 0; index < workerMembers.length; index++) {
+      final member = workerMembers[index];
+      final assignment = assignments[index];
       cancellation?.throwIfCancelled();
       final role = state.roles.firstWhere((item) => item.id == member.roleId);
       final model =
           state.models.firstWhere((item) => item.id == member.modelId);
+      workingState = _replaceTaskAssignment(
+        workingState,
+        assignment.copyWith(status: TaskAssignmentStatus.running),
+      );
+      onProgress?.call(workingState);
       final content = await gateway.complete(
         model: model,
         systemPrompt: role.renderSystemPrompt(
@@ -73,6 +98,14 @@ class TeamOrchestrator {
         content: content,
         createdAt: DateTime.now(),
       ));
+      workingState = _replaceTaskAssignment(
+        workingState,
+        assignment.copyWith(
+          status: TaskAssignmentStatus.completed,
+          summary: _summarize(content),
+          completedAt: DateTime.now(),
+        ),
+      );
       workingState = _replaceConversation(
         workingState,
         conversation.copyWith(
@@ -196,6 +229,22 @@ AppState _replaceConversation(AppState state, Conversation conversation) {
         .map((item) => item.id == conversation.id ? conversation : item)
         .toList(),
   );
+}
+
+AppState _replaceTaskAssignment(AppState state, TaskAssignment assignment) {
+  return state.copyWith(
+    taskAssignments: state.taskAssignments
+        .map((item) => item.id == assignment.id ? assignment : item)
+        .toList(),
+  );
+}
+
+String _summarize(String content) {
+  final normalized = content.trim().replaceAll(RegExp(r'\s+'), ' ');
+  if (normalized.length <= 120) {
+    return normalized;
+  }
+  return '${normalized.substring(0, 120)}...';
 }
 
 class FakeModelGateway implements ModelGateway {
