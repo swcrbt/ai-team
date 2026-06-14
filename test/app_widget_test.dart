@@ -975,6 +975,43 @@ void main() {
     expect(find.textContaining('优先级 20'), findsOneWidget);
   });
 
+  testWidgets('chat shows collapsed queue bar with count and running title',
+      (tester) async {
+    final state = AppState.seed().copyWith(
+      queuedTasks: [
+        QueuedTask(
+          id: 'task-1',
+          conversationId: 'conv-team-default',
+          title: '登录任务',
+          originalText: '实现登录',
+          priority: 0,
+          status: QueuedTaskStatus.running,
+          createdAt: DateTime(2026, 6, 14),
+          updatedAt: DateTime(2026, 6, 14),
+        ),
+        QueuedTask(
+          id: 'task-2',
+          conversationId: 'conv-team-default',
+          title: '测试任务',
+          originalText: '补测试',
+          priority: 0,
+          status: QueuedTaskStatus.pending,
+          createdAt: DateTime(2026, 6, 14, 1),
+          updatedAt: DateTime(2026, 6, 14, 1),
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: state,
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    expect(find.textContaining('队列 2'), findsOneWidget);
+    expect(find.textContaining('登录任务'), findsOneWidget);
+  });
+
   testWidgets('sidebar model button opens an independent model page',
       (tester) async {
     await tester.pumpWidget(

@@ -1975,6 +1975,7 @@ class _ChatPaneState extends State<_ChatPane> {
               style: const TextStyle(color: Color(0xFFBE123C)),
             ),
           ),
+        _TaskQueueBar(controller: widget.controller),
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 10, 24, 18),
           child: DecoratedBox(
@@ -2972,6 +2973,173 @@ class _TaskAssignmentCard extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _TaskQueueBar extends StatelessWidget {
+  const _TaskQueueBar({required this.controller});
+
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final tasks = controller.tasksForCurrentConversation;
+    if (tasks.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final running = _firstTaskWithStatus(tasks, QueuedTaskStatus.running);
+    final title = running == null
+        ? '队列 ${tasks.length}'
+        : '队列 ${tasks.length} · ${running.title}';
+    return Material(
+      color: const Color(0xFFF8FAFC),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 24),
+        initiallyExpanded: false,
+        title: Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+            child: Column(
+              children: tasks
+                  .map(
+                    (task) => _TaskQueueTile(
+                      controller: controller,
+                      task: task,
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TaskQueueTile extends StatefulWidget {
+  const _TaskQueueTile({
+    required this.controller,
+    required this.task,
+  });
+
+  final AppController controller;
+  final QueuedTask task;
+
+  @override
+  State<_TaskQueueTile> createState() => _TaskQueueTileState();
+}
+
+class _TaskQueueTileState extends State<_TaskQueueTile> {
+  final noteController = TextEditingController();
+  late final priorityController = TextEditingController(
+    text: widget.task.priority.toString(),
+  );
+
+  @override
+  void dispose() {
+    noteController.dispose();
+    priorityController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final task = widget.task;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(6),
+        side: const BorderSide(color: Color(0xFFE5E7EB)),
+      ),
+      child: ExpansionTile(
+        title: Text(task.title),
+        subtitle: Text(
+          '${_queuedTaskStatusText(task.status)} · 优先级 ${task.priority} · 备注 ${task.notes.length}',
+        ),
+        trailing: Wrap(
+          spacing: 4,
+          children: [
+            if (task.status == QueuedTaskStatus.running)
+              IconButton(
+                tooltip: '暂停任务',
+                onPressed: () => widget.controller.pauseTask(task.id),
+                icon: const Icon(Icons.pause_rounded),
+              ),
+            if (task.status == QueuedTaskStatus.paused)
+              IconButton(
+                tooltip: '继续任务',
+                onPressed: () => widget.controller.resumeTask(task.id),
+                icon: const Icon(Icons.play_arrow_rounded),
+              ),
+            IconButton(
+              tooltip: '删除任务',
+              onPressed: () => widget.controller.deleteTask(task.id),
+              icon: const Icon(Icons.delete_outline_rounded),
+            ),
+          ],
+        ),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(task.originalText),
+                const SizedBox(height: 8),
+                if (task.notes.isNotEmpty) Text('备注：${task.notes.join('；')}'),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 120,
+                      child: TextField(
+                        controller: priorityController,
+                        decoration: const InputDecoration(labelText: '优先级'),
+                        keyboardType: TextInputType.number,
+                        onSubmitted: (value) {
+                          final priority = int.tryParse(value.trim());
+                          if (priority != null) {
+                            widget.controller.updateTaskPriority(
+                              task.id,
+                              priority,
+                            );
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: TextField(
+                        controller: noteController,
+                        decoration: const InputDecoration(labelText: '追加备注'),
+                        onSubmitted: (_) => _appendNote(),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: '追加备注',
+                      onPressed: _appendNote,
+                      icon: const Icon(Icons.add_comment_rounded),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _appendNote() {
+    widget.controller.appendTaskNote(widget.task.id, noteController.text);
+    noteController.clear();
   }
 }
 
@@ -4089,13 +4257,38 @@ QueuedTask? _firstQueuedTaskOrNull(List<QueuedTask> tasks) {
   return tasks.first;
 }
 
+QueuedTask? _firstTaskWithStatus(
+  List<QueuedTask> tasks,
+  QueuedTaskStatus status,
+) {
+  for (final task in tasks) {
+    if (task.status == status) {
+      return task;
+    }
+  }
+  return null;
+}
+
 String _initialConversationId(AppState state) {
+  if (state.queuedTasks.isNotEmpty) {
+    return state.queuedTasks.first.conversationId;
+  }
   return state.conversations
       .firstWhere(
         (conversation) => conversation.memberId != null,
         orElse: () => state.conversations.first,
       )
       .id;
+}
+
+String _queuedTaskStatusText(QueuedTaskStatus status) {
+  return switch (status) {
+    QueuedTaskStatus.pending => '待执行',
+    QueuedTaskStatus.running => '执行中',
+    QueuedTaskStatus.paused => '已暂停',
+    QueuedTaskStatus.completed => '已完成',
+    QueuedTaskStatus.failed => '失败',
+  };
 }
 
 Conversation _createTeamConversation(Team team) {
