@@ -230,6 +230,27 @@ void main() {
     expect(await target.readAsString(), isNot(contains('"apiKey"')));
   });
 
+  test('controller keeps current state when configuration import fails',
+      () async {
+    final temp = await Directory.systemTemp.createTemp('ai_team_import_bad_');
+    addTearDown(() async => temp.delete(recursive: true));
+    final source = File('${temp.path}/bad.json');
+    await source.writeAsString('{bad json');
+    final original = AppState.seed();
+    final controller = AppController(
+      original,
+      TeamOrchestrator(FakeModelGateway()),
+      fileDialogs: FakeFileDialogService(openPath: source.path),
+    );
+    addTearDown(controller.dispose);
+
+    final imported = await controller.importConfiguration();
+
+    expect(imported, isFalse);
+    expect(controller.state.models.length, original.models.length);
+    expect(controller.error, contains('导入配置失败'));
+  });
+
   test(
       'controller creates command confirmation requests and audits denied commands',
       () {

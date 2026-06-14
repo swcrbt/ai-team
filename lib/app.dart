@@ -503,10 +503,17 @@ class AppController extends ChangeNotifier {
     if (path == null || path.trim().isEmpty) {
       return false;
     }
-    final decoded =
-        jsonDecode(await File(path).readAsString()) as Map<String, Object?>;
-    _commit(ConfigExporter.importState(decoded));
-    return true;
+    try {
+      final decoded =
+          jsonDecode(await File(path).readAsString()) as Map<String, Object?>;
+      _commit(ConfigExporter.importState(decoded));
+      error = null;
+      return true;
+    } catch (exception) {
+      error = '导入配置失败：$exception';
+      notifyListeners();
+      return false;
+    }
   }
 
   Future<String> readWorkspaceFile({
