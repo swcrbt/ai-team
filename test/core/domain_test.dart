@@ -266,6 +266,18 @@ void main() {
 
       expect(store.file.path, '/Users/example/.ai_team/state.json');
     });
+
+    test('uses application support for desktop app state', () {
+      final store = JsonLocalStore.applicationSupportStore(
+        Directory('/Users/example/Library/Application Support/ai_team'),
+        secretStore: MemorySecretStore(),
+      );
+
+      expect(
+        store.file.path,
+        '/Users/example/Library/Application Support/ai_team/state.json',
+      );
+    });
   });
 
   group('role command policy', () {
@@ -359,6 +371,31 @@ void main() {
           .firstWhere((conversation) => conversation.id == 'conv-team-default');
       expect(conversation.currentRound, 1);
       expect(conversation.status, ConversationStatus.paused);
+    });
+
+    test('rejects member chat before gateway call when model api key is empty',
+        () async {
+      final state = AppState.seed().copyWith(
+        models: [
+          AppState.seed().models.first.copyWith(apiKey: ''),
+        ],
+      );
+      final orchestrator = TeamOrchestrator(FakeModelGateway());
+
+      await expectLater(
+        orchestrator.dispatchMemberChat(
+          state,
+          conversationId: 'conv-member-secretary',
+          userText: '验证模型配置',
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (error) => error.message,
+            'message',
+            contains('API Key'),
+          ),
+        ),
+      );
     });
   });
 

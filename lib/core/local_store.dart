@@ -44,6 +44,16 @@ class JsonLocalStore {
   JsonLocalStore(this.file, {SecretStore? secretStore})
       : secretStore = secretStore ?? FlutterSecretStore();
 
+  factory JsonLocalStore.applicationSupportStore(
+    Directory applicationSupportDirectory, {
+    SecretStore? secretStore,
+  }) {
+    return JsonLocalStore(
+      File('${applicationSupportDirectory.path}/state.json'),
+      secretStore: secretStore,
+    );
+  }
+
   factory JsonLocalStore.defaultStore({
     Map<String, String>? environment,
   }) {

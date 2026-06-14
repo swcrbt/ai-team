@@ -76,6 +76,7 @@ class TeamOrchestrator {
       final role = state.roles.firstWhere((item) => item.id == member.roleId);
       final model =
           state.models.firstWhere((item) => item.id == member.modelId);
+      _ensureModelReady(member: member, model: model);
       workingState = _replaceTaskAssignment(
         workingState,
         assignment.copyWith(status: TaskAssignmentStatus.running),
@@ -167,6 +168,7 @@ class TeamOrchestrator {
         state.teams.firstWhere((item) => item.id == conversation.teamId);
     final role = state.roles.firstWhere((item) => item.id == member.roleId);
     final model = state.models.firstWhere((item) => item.id == member.modelId);
+    _ensureModelReady(member: member, model: model);
     final now = DateTime.now();
     final messages = [
       ...conversation.messages,
@@ -220,6 +222,16 @@ class TeamOrchestrator {
         ),
       ],
     );
+  }
+}
+
+void _ensureModelReady({
+  required TeamMember member,
+  required ModelProfile model,
+}) {
+  if (model.apiKey.trim().isEmpty) {
+    throw StateError(
+        '成员 ${member.name} 的模型 ${model.name} 缺少 API Key，请在模型配置中重新保存。');
   }
 }
 
