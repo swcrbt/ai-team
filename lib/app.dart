@@ -1436,13 +1436,6 @@ class _ChatPaneState extends State<_ChatPane> {
                   ],
                 ),
               ),
-              _StatusButton(
-                icon: Icons.pause_rounded,
-                label: '暂停',
-                onPressed: widget.controller.isDispatching
-                    ? widget.controller.pauseConversation
-                    : null,
-              ),
             ],
           ),
         ),
@@ -1538,29 +1531,6 @@ class _ChatPaneState extends State<_ChatPane> {
     final text = textController.text;
     textController.clear();
     await widget.controller.dispatch(text);
-  }
-}
-
-class _StatusButton extends StatelessWidget {
-  const _StatusButton({
-    required this.icon,
-    required this.label,
-    required this.onPressed,
-  });
-
-  final IconData icon;
-  final String label;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: label,
-      child: IconButton(
-        onPressed: onPressed,
-        icon: Icon(icon),
-      ),
-    );
   }
 }
 

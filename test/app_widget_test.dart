@@ -608,6 +608,7 @@ void main() {
       ),
     );
 
+    expect(find.byTooltip('暂停'), findsNothing);
     expect(find.byTooltip('继续'), findsNothing);
     expect(find.byTooltip('停止'), findsNothing);
   });
