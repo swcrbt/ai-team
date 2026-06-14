@@ -897,6 +897,10 @@ class AppController extends ChangeNotifier {
     if (role.outputFormatPrompt.trim().isEmpty) {
       throw ArgumentError('角色输出格式提示词不能为空');
     }
+    if (role.commandPolicy.allowedCommands
+        .every((command) => command.trim().isEmpty)) {
+      throw ArgumentError('至少需要一个允许命令');
+    }
   }
 
   void _validateMember(TeamMember member) {
@@ -1877,8 +1881,21 @@ Future<void> _showRoleDialog(
   final outputFormat = TextEditingController(
     text: role?.outputFormatPrompt ?? '输出结论、证据和下一步。',
   );
+  final allowedCommands = TextEditingController(
+    text: (role?.commandPolicy.allowedCommands ??
+            const ['flutter test', 'dart analyze'])
+        .join('\n'),
+  );
+  final blockedCommands = TextEditingController(
+    text: (role?.commandPolicy.blockedCommands ?? const ['rm', 'sudo'])
+        .join('\n'),
+  );
+  final allowedDirectories = TextEditingController(
+    text: (role?.commandPolicy.allowedDirectories ?? const []).join('\n'),
+  );
   var canReadProject = role?.canReadProject ?? true;
   var canProposePatch = role?.canProposePatch ?? true;
+  var requiresConfirmation = role?.commandPolicy.requiresConfirmation ?? true;
   String? validationError;
   await showDialog<void>(
     context: context,
@@ -1886,32 +1903,79 @@ Future<void> _showRoleDialog(
       builder: (context, setDialogState) => AlertDialog(
         title: Text(role == null ? '新增角色配置' : '编辑角色配置'),
         content: SizedBox(
-          width: 420,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (validationError != null) _DialogError(validationError!),
-              _DialogField(controller: name, label: '角色名称'),
-              _DialogField(controller: description, label: '角色描述'),
-              _DialogField(controller: identity, label: '身份提示词'),
-              _DialogField(controller: goal, label: '目标提示词'),
-              _DialogField(controller: constraint, label: '约束提示词'),
-              _DialogField(controller: outputFormat, label: '输出格式提示词'),
-              CheckboxListTile(
-                value: canReadProject,
-                onChanged: (value) =>
-                    setDialogState(() => canReadProject = value!),
-                title: const Text('允许读取项目'),
-                contentPadding: EdgeInsets.zero,
-              ),
-              CheckboxListTile(
-                value: canProposePatch,
-                onChanged: (value) =>
-                    setDialogState(() => canProposePatch = value!),
-                title: const Text('允许生成补丁'),
-                contentPadding: EdgeInsets.zero,
-              ),
-            ],
+          width: 460,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (validationError != null) _DialogError(validationError!),
+                _DialogField(controller: name, label: '角色名称'),
+                _DialogField(controller: description, label: '角色描述'),
+                _DialogField(
+                  controller: identity,
+                  label: '身份提示词',
+                  minLines: 2,
+                  maxLines: 4,
+                ),
+                _DialogField(
+                  controller: goal,
+                  label: '目标提示词',
+                  minLines: 2,
+                  maxLines: 4,
+                ),
+                _DialogField(
+                  controller: constraint,
+                  label: '约束提示词',
+                  minLines: 2,
+                  maxLines: 4,
+                ),
+                _DialogField(
+                  controller: outputFormat,
+                  label: '输出格式提示词',
+                  minLines: 2,
+                  maxLines: 4,
+                ),
+                _DialogField(
+                  controller: allowedCommands,
+                  label: '允许命令（一行一个）',
+                  minLines: 2,
+                  maxLines: 4,
+                ),
+                _DialogField(
+                  controller: blockedCommands,
+                  label: '禁止命令（一行一个）',
+                  minLines: 2,
+                  maxLines: 4,
+                ),
+                _DialogField(
+                  controller: allowedDirectories,
+                  label: '允许目录（一行一个，留空不限）',
+                  minLines: 2,
+                  maxLines: 4,
+                ),
+                CheckboxListTile(
+                  value: requiresConfirmation,
+                  onChanged: (value) =>
+                      setDialogState(() => requiresConfirmation = value!),
+                  title: const Text('命令需要确认'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                CheckboxListTile(
+                  value: canReadProject,
+                  onChanged: (value) =>
+                      setDialogState(() => canReadProject = value!),
+                  title: const Text('允许读取项目'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                CheckboxListTile(
+                  value: canProposePatch,
+                  onChanged: (value) =>
+                      setDialogState(() => canProposePatch = value!),
+                  title: const Text('允许生成补丁'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ],
+            ),
           ),
         ),
         actions: [
@@ -1931,11 +1995,12 @@ Future<void> _showRoleDialog(
                         goalPrompt: goal.text.trim(),
                         constraintPrompt: constraint.text.trim(),
                         outputFormatPrompt: outputFormat.text.trim(),
-                        commandPolicy: const CommandPolicy(
-                          allowedCommands: ['flutter test', 'dart analyze'],
-                          blockedCommands: ['rm', 'sudo'],
-                          allowedDirectories: [],
-                          requiresConfirmation: true,
+                        commandPolicy: CommandPolicy(
+                          allowedCommands: _splitLines(allowedCommands.text),
+                          blockedCommands: _splitLines(blockedCommands.text),
+                          allowedDirectories:
+                              _splitLines(allowedDirectories.text),
+                          requiresConfirmation: requiresConfirmation,
                         ),
                         canReadProject: canReadProject,
                         canProposePatch: canProposePatch,
@@ -1947,6 +2012,13 @@ Future<void> _showRoleDialog(
                         goalPrompt: goal.text.trim(),
                         constraintPrompt: constraint.text.trim(),
                         outputFormatPrompt: outputFormat.text.trim(),
+                        commandPolicy: CommandPolicy(
+                          allowedCommands: _splitLines(allowedCommands.text),
+                          blockedCommands: _splitLines(blockedCommands.text),
+                          allowedDirectories:
+                              _splitLines(allowedDirectories.text),
+                          requiresConfirmation: requiresConfirmation,
+                        ),
                         canReadProject: canReadProject,
                         canProposePatch: canProposePatch,
                       );
@@ -2396,11 +2468,15 @@ class _DialogField extends StatelessWidget {
     required this.controller,
     required this.label,
     this.obscure = false,
+    this.minLines = 1,
+    this.maxLines = 1,
   });
 
   final TextEditingController controller;
   final String label;
   final bool obscure;
+  final int minLines;
+  final int maxLines;
 
   @override
   Widget build(BuildContext context) {
@@ -2409,11 +2485,19 @@ class _DialogField extends StatelessWidget {
       child: TextField(
         controller: controller,
         obscureText: obscure,
+        minLines: obscure ? 1 : minLines,
+        maxLines: obscure ? 1 : maxLines,
         decoration: InputDecoration(labelText: label),
       ),
     );
   }
 }
+
+List<String> _splitLines(String text) => text
+    .split(RegExp(r'[\r\n,]+'))
+    .map((item) => item.trim())
+    .where((item) => item.isNotEmpty)
+    .toList();
 
 String _roleName(AppState state, String roleId) =>
     state.roles.firstWhere((role) => role.id == roleId).name;

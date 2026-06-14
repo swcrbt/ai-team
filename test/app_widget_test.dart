@@ -171,6 +171,64 @@ void main() {
       ),
       throwsArgumentError,
     );
+    expect(
+      () => controller.addRole(
+        const RoleTemplate(
+          id: 'role-no-command',
+          name: 'No command',
+          description: 'Bad role',
+          identityPrompt: '你是一个角色。',
+          goalPrompt: '完成任务。',
+          constraintPrompt: '遵守限制。',
+          outputFormatPrompt: '输出结果。',
+          commandPolicy: CommandPolicy(
+            allowedCommands: [],
+            blockedCommands: ['rm'],
+            allowedDirectories: [],
+            requiresConfirmation: true,
+          ),
+        ),
+      ),
+      throwsArgumentError,
+    );
+  });
+
+  test('controller applies updated role command policy', () {
+    final controller = AppController(
+      AppState.seed(),
+      TeamOrchestrator(FakeModelGateway()),
+    );
+    addTearDown(controller.dispose);
+    final role =
+        controller.state.roles.firstWhere((item) => item.id == 'role-frontend');
+
+    controller.updateRole(
+      role.copyWith(
+        commandPolicy: const CommandPolicy(
+          allowedCommands: ['dart test'],
+          blockedCommands: ['flutter test'],
+          allowedDirectories: ['/workspace/app'],
+          requiresConfirmation: false,
+        ),
+      ),
+    );
+    final updated =
+        controller.state.roles.firstWhere((item) => item.id == 'role-frontend');
+
+    expect(
+      updated.commandPolicy.evaluate(
+        'dart test',
+        workingDirectory: '/workspace/app',
+      ),
+      CommandDecision.allowed,
+    );
+    expect(
+      updated.commandPolicy.evaluate(
+        'flutter test',
+        workingDirectory: '/workspace/app',
+      ),
+      CommandDecision.denied,
+    );
   });
 
   test('controller dispatches messages to a selected member conversation',
