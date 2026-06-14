@@ -68,6 +68,7 @@ class AiTeamHome extends StatefulWidget {
 class _AiTeamHomeState extends State<AiTeamHome> {
   late AppController controller;
   _MainView mainView = _MainView.chat;
+  String? focusedSettingsSection;
 
   @override
   void initState() {
@@ -102,8 +103,24 @@ class _AiTeamHomeState extends State<AiTeamHome> {
                       child: _AppSidebar(
                         selectedView: mainView,
                         onChat: () => setState(() => mainView = _MainView.chat),
-                        onSettings: () =>
-                            setState(() => mainView = _MainView.settings),
+                        onTeam: () {
+                          controller.selectConversation(
+                            controller.teamConversation.id,
+                          );
+                          setState(() => mainView = _MainView.chat);
+                        },
+                        onProject: () => setState(() {
+                          mainView = _MainView.settings;
+                          focusedSettingsSection = '项目工作区';
+                        }),
+                        onPatch: () => setState(() {
+                          mainView = _MainView.settings;
+                          focusedSettingsSection = '补丁确认';
+                        }),
+                        onSettings: () => setState(() {
+                          mainView = _MainView.settings;
+                          focusedSettingsSection = null;
+                        }),
                       ),
                     ),
                     SizedBox(
@@ -113,7 +130,10 @@ class _AiTeamHomeState extends State<AiTeamHome> {
                         selectedView: mainView,
                         onSelectConversation: (conversationId) {
                           controller.selectConversation(conversationId);
-                          setState(() => mainView = _MainView.chat);
+                          setState(() {
+                            mainView = _MainView.chat;
+                            focusedSettingsSection = null;
+                          });
                         },
                       ),
                     ),
@@ -122,6 +142,7 @@ class _AiTeamHomeState extends State<AiTeamHome> {
                       child: mainView == _MainView.settings
                           ? _SettingsPage(
                               controller: controller,
+                              focusedSection: focusedSettingsSection,
                               onBack: () =>
                                   setState(() => mainView = _MainView.chat),
                             )
@@ -1007,11 +1028,17 @@ class _AppSidebar extends StatelessWidget {
   const _AppSidebar({
     required this.selectedView,
     required this.onChat,
+    required this.onTeam,
+    required this.onProject,
+    required this.onPatch,
     required this.onSettings,
   });
 
   final _MainView selectedView;
   final VoidCallback onChat;
+  final VoidCallback onTeam;
+  final VoidCallback onProject;
+  final VoidCallback onPatch;
   final VoidCallback onSettings;
 
   @override
@@ -1049,19 +1076,19 @@ class _AppSidebar extends StatelessWidget {
             icon: Icons.groups_rounded,
             label: '团队',
             selected: false,
-            onPressed: onChat,
+            onPressed: onTeam,
           ),
           _SidebarButton(
             icon: Icons.folder_copy_rounded,
             label: '项目',
             selected: false,
-            onPressed: onSettings,
+            onPressed: onProject,
           ),
           _SidebarButton(
             icon: Icons.difference_rounded,
             label: '补丁',
             selected: false,
-            onPressed: onSettings,
+            onPressed: onPatch,
           ),
           const Spacer(),
           _SidebarButton(
@@ -1662,10 +1689,12 @@ class _MessageBubble extends StatelessWidget {
 class _SettingsPage extends StatefulWidget {
   const _SettingsPage({
     required this.controller,
+    required this.focusedSection,
     required this.onBack,
   });
 
   final AppController controller;
+  final String? focusedSection;
   final VoidCallback onBack;
 
   @override
@@ -1693,6 +1722,33 @@ class _SettingsPageState extends State<_SettingsPage> {
   void dispose() {
     scrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    scrollToFocusedSection();
+  }
+
+  @override
+  void didUpdateWidget(covariant _SettingsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.focusedSection != oldWidget.focusedSection) {
+      scrollToFocusedSection();
+    }
+  }
+
+  void scrollToFocusedSection() {
+    final section = widget.focusedSection;
+    if (section == null) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      scrollToSection(section);
+    });
   }
 
   void scrollToSection(String title) {

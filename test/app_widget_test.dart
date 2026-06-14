@@ -554,6 +554,45 @@ void main() {
     expect(find.text('补丁确认'), findsOneWidget);
   });
 
+  testWidgets('sidebar team button switches back to the team chat',
+      (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    await tester.tap(find.text('前端工程师').first);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('私聊 · 前端工程师'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('团队'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('群聊 · 默认开发团队'), findsOneWidget);
+  });
+
+  testWidgets('sidebar project button opens the project settings section',
+      (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('项目'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('设置'), findsOneWidget);
+    expect(find.text('项目工作区'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('项目工作区')).dy,
+      lessThan(320),
+    );
+  });
+
   testWidgets('submits a task to the secretary and renders member responses',
       (tester) async {
     await tester.pumpWidget(
