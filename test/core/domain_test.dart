@@ -4,13 +4,15 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ai_team/core/domain.dart';
 import 'package:ai_team/core/local_store.dart';
+import 'package:ai_team/core/model_gateway.dart';
 import 'package:ai_team/core/orchestrator.dart';
 import 'package:ai_team/core/patching.dart';
 import 'package:ai_team/core/secret_store.dart';
 
 void main() {
   group('queued collaboration domain', () {
-    test('team mode and member priority persist with backward-compatible defaults',
+    test(
+        'team mode and member priority persist with backward-compatible defaults',
         () {
       final oldTeam = Team.fromJson({
         'id': 'team-old',
@@ -212,7 +214,8 @@ void main() {
       expect(await stateFile.readAsString(), contains('"models"'));
     });
 
-    test('persists api keys in local state when secret storage fails', () async {
+    test('persists api keys in local state when secret storage fails',
+        () async {
       final temp =
           await Directory.systemTemp.createTemp('ai_team_secret_fail_');
       addTearDown(() async => temp.delete(recursive: true));
@@ -462,6 +465,112 @@ void main() {
         ),
       );
     });
+
+    test(
+        'serial team mode runs assignments in secretary order with incremental summaries',
+        () async {
+      final gateway = ScriptedRecordingGateway([
+        '前端工程师: 实现界面\n测试工程师: 编写测试',
+        '前端结果',
+        '阶段汇总：前端完成',
+        '测试结果',
+        '阶段汇总：测试完成',
+        '最终汇总：全部完成',
+      ]);
+
+      final updated = await TeamOrchestrator(gateway).dispatchTeamTask(
+        AppState.seed(),
+        teamId: 'team-default',
+        userText: '实现登录',
+      );
+
+      expect(
+        gateway.calls.map((call) => call.systemPrompt).join('\n'),
+        contains('秘书'),
+      );
+      expect(
+        updated.conversations
+            .firstWhere(
+              (conversation) => conversation.id == 'conv-team-default',
+            )
+            .messages
+            .map((message) => message.content),
+        contains('最终汇总：全部完成'),
+      );
+    });
+
+    test(
+        'parallel team mode does not pass same-round sibling outputs to workers',
+        () async {
+      final seed = AppState.seed().copyWith(
+        teams: [
+          AppState.seed().teams.first.copyWith(
+                collaborationMode: TeamCollaborationMode.parallel,
+              ),
+        ],
+      );
+      final gateway = ScriptedRecordingGateway([
+        '前端工程师: 实现界面\n测试工程师: 编写测试',
+        '前端结果',
+        '测试结果',
+        '最终汇总：全部完成',
+      ]);
+
+      await TeamOrchestrator(gateway).dispatchTeamTask(
+        seed,
+        teamId: 'team-default',
+        userText: '实现登录',
+      );
+
+      expect(
+        gateway.calls[2].messages.map((message) => message.content).join('\n'),
+        isNot(contains('前端结果')),
+      );
+    });
+
+    test(
+        'member failure retries once then reassigns to same-role priority member',
+        () async {
+      final state = AppState.seed().copyWith(
+        members: [
+          ...AppState.seed().members,
+          const TeamMember(
+            id: 'member-frontend-backup',
+            name: '前端工程师 B',
+            roleId: 'role-frontend',
+            modelId: 'model-main',
+            executionPriority: 10,
+          ),
+        ],
+        teams: [
+          AppState.seed().teams.first.copyWith(memberIds: [
+            'member-secretary',
+            'member-frontend',
+            'member-frontend-backup',
+            'member-tester',
+          ]),
+        ],
+      );
+      final gateway = FailsThenSucceedsRecordingGateway();
+
+      final updated = await TeamOrchestrator(gateway).dispatchTeamTask(
+        state,
+        teamId: 'team-default',
+        userText: '实现登录',
+      );
+
+      expect(gateway.memberNames, contains('前端工程师 B'));
+      expect(
+        updated.conversations
+            .firstWhere(
+              (conversation) => conversation.id == 'conv-team-default',
+            )
+            .messages
+            .map((message) => message.content)
+            .join('\n'),
+        contains('转派'),
+      );
+    });
   });
 
   group('patch proposals', () {
@@ -505,5 +614,66 @@ class ThrowingSecretStore implements SecretStore {
   @override
   Future<void> delete(String key) async {
     throw StateError('secret storage unavailable');
+  }
+}
+
+class ModelCall {
+  const ModelCall({
+    required this.systemPrompt,
+    required this.messages,
+  });
+
+  final String systemPrompt;
+  final List<ChatMessage> messages;
+}
+
+class ScriptedRecordingGateway implements ModelGateway {
+  ScriptedRecordingGateway(this.responses);
+
+  final List<String> responses;
+  final List<ModelCall> calls = [];
+  var _index = 0;
+
+  @override
+  Future<String> complete({
+    required ModelProfile model,
+    required String systemPrompt,
+    required List<ChatMessage> messages,
+    ModelRequestCancellation? cancellation,
+  }) async {
+    calls.add(ModelCall(
+      systemPrompt: systemPrompt,
+      messages: [...messages],
+    ));
+    cancellation?.throwIfCancelled();
+    return responses[_index++];
+  }
+}
+
+class FailsThenSucceedsRecordingGateway implements ModelGateway {
+  final List<String> memberNames = [];
+  var _frontendAttempts = 0;
+
+  @override
+  Future<String> complete({
+    required ModelProfile model,
+    required String systemPrompt,
+    required List<ChatMessage> messages,
+    ModelRequestCancellation? cancellation,
+  }) async {
+    cancellation?.throwIfCancelled();
+    final memberName =
+        RegExp(r'成员名称: ([^\n]+)').firstMatch(systemPrompt)?.group(1);
+    if (memberName != null) {
+      memberNames.add(memberName);
+    }
+    if (systemPrompt.contains('秘书')) {
+      return '前端工程师: 实现界面';
+    }
+    if (memberName == '前端工程师') {
+      _frontendAttempts += 1;
+      throw const ModelGatewayException('前端失败');
+    }
+    return '$memberName 完成';
   }
 }
