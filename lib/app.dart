@@ -2102,8 +2102,8 @@ class _RailTile extends StatelessWidget {
         },
         child: Material(
           color: backgroundColor,
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
           ),
           child: ListTile(
             dense: true,

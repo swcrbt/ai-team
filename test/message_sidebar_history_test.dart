@@ -49,7 +49,7 @@ void main() {
     );
     expect(selectedRow.color, const Color(0xFF2F80ED));
     final selectedRowShape = selectedRow.shape! as RoundedRectangleBorder;
-    expect(selectedRowShape.borderRadius, BorderRadius.zero);
+    expect(selectedRowShape.borderRadius, BorderRadius.circular(8));
     final selectedRowPadding = tester.widget<Padding>(
       find
           .descendant(
