@@ -962,6 +962,30 @@ void main() {
       find.widgetWithText(SelectableText, messageContent),
       findsOneWidget,
     );
+    final messageBubble = tester
+        .widgetList<Container>(
+          find.ancestor(
+            of: find.widgetWithText(SelectableText, messageContent),
+            matching: find.byType(Container),
+          ),
+        )
+        .firstWhere(
+          (container) =>
+              container.decoration is BoxDecoration &&
+              (container.decoration! as BoxDecoration).border != null,
+        );
+    final messageBubbleDecoration = messageBubble.decoration! as BoxDecoration;
+    expect(messageBubbleDecoration.borderRadius, BorderRadius.zero);
+    final messageRegion = tester.widget<MouseRegion>(
+      find
+          .ancestor(
+            of: find.widgetWithText(SelectableText, messageContent),
+            matching: find.byType(MouseRegion),
+          )
+          .first,
+    );
+    final messagePadding = messageRegion.child! as Padding;
+    expect(messagePadding.padding, EdgeInsets.zero);
     expect(find.byTooltip('复制消息'), findsNothing);
     expect(find.text('09:05'), findsNothing);
 
