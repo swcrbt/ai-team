@@ -41,6 +41,18 @@ void main() {
       ),
     );
     expect(selectedRow.color, const Color(0xFF2F80ED));
+    final selectedRowShape = selectedRow.shape! as RoundedRectangleBorder;
+    expect(selectedRowShape.borderRadius, BorderRadius.zero);
+    final selectedRowPadding = tester.widget<Padding>(
+      find
+          .descendant(
+            of: find
+                .byKey(const ValueKey('conversation-row-conv-team-default')),
+            matching: find.byType(Padding),
+          )
+          .first,
+    );
+    expect(selectedRowPadding.padding, EdgeInsets.zero);
 
     await tester.tap(
       find.byKey(const ValueKey('conversation-row-conv-team-default')),
@@ -143,6 +155,80 @@ void main() {
     expect(find.text('移动端小队'), findsOneWidget);
   });
 
+  testWidgets('message sidebar does not invent member chats after restart',
+      (tester) async {
+    final seed = AppState.seed();
+    const persistedTeam = Team(
+      id: 'team-aa',
+      name: 'aa',
+      memberIds: ['member-secretary', 'member-frontend', 'member-tester'],
+      secretaryMemberId: 'member-secretary',
+    );
+    final persistedState = seed.copyWith(
+      teams: [...seed.teams, persistedTeam],
+      conversations: [
+        ...seed.conversations,
+        Conversation(
+          id: 'conv-team-aa',
+          title: '团队会话',
+          teamId: persistedTeam.id,
+          messages: [
+            ChatMessage(
+              id: 'msg-aa',
+              authorName: '秘书',
+              memberId: 'member-secretary',
+              content: '请重新分工。',
+              createdAt: DateTime(2026, 6, 15),
+            ),
+          ],
+        ),
+        for (final member in seed.members)
+          Conversation(
+            id: 'conv-team-aa-${member.id}',
+            title: member.name,
+            teamId: persistedTeam.id,
+            memberId: member.id,
+            messages: [
+              ChatMessage(
+                id: 'msg-welcome-team-aa-${member.id}',
+                authorName: member.name,
+                memberId: member.id,
+                content: '这里是和${member.name}的独立会话。',
+                createdAt: DateTime(2026, 6, 15),
+              ),
+            ],
+          ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: persistedState,
+        modelGateway: _NoopModelGateway(),
+      ),
+    );
+
+    expect(find.text('aa'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('conversation-row-conv-team-aa')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(
+          const ValueKey('conversation-row-conv-team-aa-member-secretary')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(
+          const ValueKey('conversation-row-conv-team-aa-member-frontend')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('conversation-row-conv-team-aa-member-tester')),
+      findsNothing,
+    );
+  });
+
   testWidgets('message sidebar can close a chat without deleting history',
       (tester) async {
     final seed = AppState.seed();
@@ -202,6 +288,8 @@ void main() {
         modelId: 'model-main',
       ),
     );
+    controller.startMemberChat('member-aa-engineer');
+    await controller.dispatch('和AA工程师同步');
 
     await tester.pumpWidget(
       AiTeamApp(

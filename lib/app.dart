@@ -208,10 +208,9 @@ class AppController extends ChangeNotifier {
     this.onStateChanged,
     this.fileDialogs = const SystemFileDialogService(),
     JsonLocalStore? exportStore,
-  })  : state = _ensureMemberConversations(initialState),
+  })  : state = initialState,
         exportStore = exportStore ?? JsonLocalStore.defaultStore(),
-        selectedConversationId =
-            _initialConversationId(_ensureMemberConversations(initialState)) {
+        selectedConversationId = _initialConversationId(initialState) {
     final conversation = state.conversations.firstWhere(
       (item) => item.id == selectedConversationId,
     );
@@ -225,6 +224,7 @@ class AppController extends ChangeNotifier {
   String selectedConversationId;
   String? activeTeamId;
   final Set<String> hiddenConversationIds = <String>{};
+  final Set<String> openedConversationIds = <String>{};
   final List<String> conversationOrderIds = <String>[];
   final Set<String> pinnedConversationIds = <String>{};
   final List<String> pinnedConversationOrderIds = <String>[];
@@ -304,19 +304,36 @@ class AppController extends ChangeNotifier {
     };
     final visibleIds = [
       ...pinnedConversationOrderIds.where(
-        (id) =>
-            pinnedConversationIds.contains(id) &&
-            !hiddenConversationIds.contains(id) &&
-            conversationsById.containsKey(id),
+        (id) {
+          final conversation = conversationsById[id];
+          return pinnedConversationIds.contains(id) &&
+              conversation != null &&
+              _shouldShowConversation(conversation);
+        },
       ),
       ...conversationOrderIds.where(
-        (id) =>
-            !pinnedConversationIds.contains(id) &&
-            !hiddenConversationIds.contains(id) &&
-            conversationsById.containsKey(id),
+        (id) {
+          final conversation = conversationsById[id];
+          return !pinnedConversationIds.contains(id) &&
+              conversation != null &&
+              _shouldShowConversation(conversation);
+        },
       ),
     ];
     return visibleIds.map((id) => conversationsById[id]!).toList();
+  }
+
+  bool _shouldShowConversation(Conversation conversation) {
+    if (hiddenConversationIds.contains(conversation.id)) {
+      return false;
+    }
+    if (conversation.id == selectedConversationId) {
+      return true;
+    }
+    if (openedConversationIds.contains(conversation.id)) {
+      return true;
+    }
+    return !_isGeneratedWelcomeOnlyMemberConversation(conversation);
   }
 
   List<TeamMember> get currentMembers => state.members
@@ -350,9 +367,27 @@ class AppController extends ChangeNotifier {
   }
 
   void startMemberChat(String memberId) {
-    _requireMember(memberId);
-    final conversation = conversationForMember(memberId);
+    final member = _requireMember(memberId);
+    Conversation? conversation;
+    for (final item in state.conversations) {
+      if (item.teamId == currentTeam.id && item.memberId == memberId) {
+        conversation = item;
+        break;
+      }
+    }
+    if (conversation == null) {
+      conversation = _createMemberConversation(currentTeam.id, member);
+      _commit(
+        state.copyWith(
+          conversations: [
+            ...state.conversations,
+            conversation,
+          ],
+        ),
+      );
+    }
     selectedConversationId = conversation.id;
+    openedConversationIds.add(conversation.id);
     hiddenConversationIds.remove(conversation.id);
     activeTeamId = conversation.teamId;
     _moveConversationToFront(conversation.id);
@@ -775,8 +810,6 @@ class AppController extends ChangeNotifier {
         conversations: [
           ...state.conversations,
           _createTeamConversation(team),
-          for (final memberId in team.memberIds)
-            _createMemberConversation(team.id, _requireMember(memberId)),
         ],
         auditLog: [
           ...state.auditLog,
@@ -814,27 +847,13 @@ class AppController extends ChangeNotifier {
       }
       return updatedMemberIds.contains(conversation.memberId);
     }).toList();
-    final retainedMemberConversationIds = retainedConversations
-        .where((conversation) =>
-            conversation.teamId == teamId && conversation.memberId != null)
-        .map((conversation) => conversation.memberId)
-        .toSet();
-    final addedMemberConversations = updatedTeam.memberIds
-        .where((memberId) => !retainedMemberConversationIds.contains(memberId))
-        .map((memberId) => _createMemberConversation(
-              teamId,
-              _requireMember(memberId),
-            ));
 
     _commit(
       state.copyWith(
         teams: state.teams
             .map((team) => team.id == teamId ? updatedTeam : team)
             .toList(),
-        conversations: [
-          ...retainedConversations,
-          ...addedMemberConversations,
-        ],
+        conversations: retainedConversations,
         auditLog: [
           ...state.auditLog,
           AuditEntry(
@@ -1003,10 +1022,6 @@ class AppController extends ChangeNotifier {
     _commit(
       state.copyWith(
         members: [...state.members, member],
-        conversations: [
-          ...state.conversations,
-          _createMemberConversation(currentTeam.id, member),
-        ],
         teams: state.teams
             .map((team) => team.id == updatedTeam.id ? updatedTeam : team)
             .toList(),
@@ -1584,7 +1599,7 @@ class AppController extends ChangeNotifier {
   }
 
   void _commit(AppState nextState) {
-    state = _ensureMemberConversations(nextState);
+    state = nextState;
     _syncConversationOrder();
     if (!state.conversations.any((item) => item.id == selectedConversationId)) {
       selectedConversationId = _initialConversationId(state);
@@ -1973,7 +1988,7 @@ class _ConversationList extends StatelessWidget {
           ),
           Expanded(
             child: ListView.separated(
-              padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+              padding: EdgeInsets.zero,
               itemCount: controller.visibleConversations.length,
               separatorBuilder: (context, index) => const Divider(
                 height: 1,
@@ -2079,15 +2094,15 @@ class _RailTile extends StatelessWidget {
             ? const Color(0xFFE9EDF3)
             : Colors.transparent;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
+      padding: EdgeInsets.zero,
       child: GestureDetector(
         onSecondaryTapDown: (details) {
           onContextMenu?.call(details.globalPosition);
         },
         child: Material(
           color: backgroundColor,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.zero,
           ),
           child: ListTile(
             dense: true,
@@ -4970,24 +4985,18 @@ Conversation _createMemberConversation(String teamId, TeamMember member) {
   );
 }
 
-AppState _ensureMemberConversations(AppState state) {
-  final conversations = [...state.conversations];
-  var changed = false;
-  for (final team in state.teams) {
-    for (final memberId in team.memberIds) {
-      final hasConversation = conversations.any(
-        (conversation) =>
-            conversation.teamId == team.id && conversation.memberId == memberId,
-      );
-      if (hasConversation) {
-        continue;
-      }
-      final member = state.members.firstWhere((item) => item.id == memberId);
-      conversations.add(_createMemberConversation(team.id, member));
-      changed = true;
-    }
+bool _isGeneratedWelcomeOnlyMemberConversation(Conversation conversation) {
+  final memberId = conversation.memberId;
+  if (memberId == null || conversation.teamId == 'team-default') {
+    return false;
   }
-  return changed ? state.copyWith(conversations: conversations) : state;
+  if (conversation.id != 'conv-${conversation.teamId}-$memberId' ||
+      conversation.messages.length != 1) {
+    return false;
+  }
+  final message = conversation.messages.single;
+  return message.id == 'msg-welcome-${conversation.teamId}-$memberId' &&
+      message.memberId == memberId;
 }
 
 String _relativeWorkspacePath(String rootPath, String entityPath) {

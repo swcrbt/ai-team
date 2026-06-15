@@ -131,7 +131,7 @@ void main() {
             conversation.teamId == team.id &&
             conversation.memberId == 'member-tester',
       ),
-      isTrue,
+      isFalse,
     );
     expect(
       controller.state.conversations.any(
@@ -143,6 +143,15 @@ void main() {
     );
 
     controller.startTeamChat(team.id);
+    controller.startMemberChat('member-tester');
+    expect(
+      controller.state.conversations.any(
+        (conversation) =>
+            conversation.teamId == team.id &&
+            conversation.memberId == 'member-tester',
+      ),
+      isTrue,
+    );
     controller.deleteTeam(team.id);
 
     expect(controller.state.teams.map((item) => item.id),
@@ -554,7 +563,7 @@ void main() {
     expect(controller.currentConversation.teamId, team.id);
   });
 
-  test('controller backfills missing member conversations from old state', () {
+  test('controller creates missing member conversation when starting chat', () {
     final oldState = AppState.seed().copyWith(
       conversations: [
         AppState.seed().conversations.firstWhere(
@@ -568,8 +577,15 @@ void main() {
     );
     addTearDown(controller.dispose);
 
+    expect(
+      controller.state.conversations
+          .where((conversation) => conversation.memberId != null),
+      isEmpty,
+    );
+    controller.startMemberChat('member-frontend');
+
     expect(controller.conversationForMember('member-frontend').title, '前端工程师');
-    expect(controller.conversationForMember('member-tester').title, '测试工程师');
+    expect(controller.currentConversation.memberId, 'member-frontend');
   });
 
   test('controller registers workspace and creates patch proposal from file',
