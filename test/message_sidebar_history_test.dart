@@ -34,6 +34,13 @@ void main() {
     await tester.tap(find.text('默认开发团队'));
     await tester.pumpAndSettle();
 
+    final conversationList = tester.widget<ListView>(
+      find.byKey(const ValueKey('conversation-list')),
+    );
+    expect(
+      conversationList.padding,
+      const EdgeInsets.symmetric(horizontal: 12),
+    );
     final selectedRow = tester.widget<Material>(
       find.descendant(
         of: find.byKey(const ValueKey('conversation-row-conv-team-default')),

@@ -1988,7 +1988,8 @@ class _ConversationList extends StatelessWidget {
           ),
           Expanded(
             child: ListView.separated(
-              padding: EdgeInsets.zero,
+              key: const ValueKey('conversation-list'),
+              padding: const EdgeInsets.symmetric(horizontal: 12),
               itemCount: controller.visibleConversations.length,
               separatorBuilder: (context, index) => const Divider(
                 height: 1,
