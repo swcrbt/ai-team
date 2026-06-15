@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'dart:collection';
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'core/domain.dart';
 import 'core/file_dialogs.dart';
@@ -215,15 +217,17 @@ class AppController extends ChangeNotifier {
     );
     if (conversation.memberId == null) {
       activeTeamId = conversation.teamId;
-    } else {
-      activeMemberConversationIds.add(conversation.id);
     }
+    _syncConversationOrder();
   }
 
   AppState state;
   String selectedConversationId;
   String? activeTeamId;
-  final Set<String> activeMemberConversationIds = <String>{};
+  final Set<String> hiddenConversationIds = <String>{};
+  final List<String> conversationOrderIds = <String>[];
+  final Set<String> pinnedConversationIds = <String>{};
+  final List<String> pinnedConversationOrderIds = <String>[];
   final TeamOrchestrator orchestrator;
   final ValueChanged<AppState>? onStateChanged;
   final FileDialogService fileDialogs;
@@ -292,15 +296,31 @@ class AppController extends ChangeNotifier {
         (item) => item.teamId == currentTeam.id && item.memberId == null,
       );
 
+  List<Conversation> get visibleConversations {
+    _syncConversationOrder();
+    final conversationsById = {
+      for (final conversation in state.conversations)
+        conversation.id: conversation,
+    };
+    final visibleIds = [
+      ...pinnedConversationOrderIds.where(
+        (id) =>
+            pinnedConversationIds.contains(id) &&
+            !hiddenConversationIds.contains(id) &&
+            conversationsById.containsKey(id),
+      ),
+      ...conversationOrderIds.where(
+        (id) =>
+            !pinnedConversationIds.contains(id) &&
+            !hiddenConversationIds.contains(id) &&
+            conversationsById.containsKey(id),
+      ),
+    ];
+    return visibleIds.map((id) => conversationsById[id]!).toList();
+  }
+
   List<TeamMember> get currentMembers => state.members
       .where((member) => currentTeam.memberIds.contains(member.id))
-      .toList();
-
-  List<TeamMember> get activePrivateMembers => currentMembers
-      .where(
-        (member) => activeMemberConversationIds
-            .contains(conversationForMember(member.id).id),
-      )
       .toList();
 
   Conversation conversationForMember(String memberId) {
@@ -312,14 +332,11 @@ class AppController extends ChangeNotifier {
 
   void selectConversation(String conversationId) {
     selectedConversationId = conversationId;
+    hiddenConversationIds.remove(conversationId);
     final conversation = state.conversations.firstWhere(
       (item) => item.id == conversationId,
     );
-    if (conversation.memberId == null) {
-      activeTeamId = conversation.teamId;
-    } else {
-      activeMemberConversationIds.add(conversation.id);
-    }
+    activeTeamId = conversation.teamId;
     notifyListeners();
   }
 
@@ -327,14 +344,64 @@ class AppController extends ChangeNotifier {
     final team = _requireTeam(teamId);
     activeTeamId = team.id;
     selectedConversationId = _teamConversationFor(team.id).id;
+    hiddenConversationIds.remove(selectedConversationId);
+    _moveConversationToFront(selectedConversationId);
     notifyListeners();
   }
 
   void startMemberChat(String memberId) {
     _requireMember(memberId);
     final conversation = conversationForMember(memberId);
-    activeMemberConversationIds.add(conversation.id);
     selectedConversationId = conversation.id;
+    hiddenConversationIds.remove(conversation.id);
+    activeTeamId = conversation.teamId;
+    _moveConversationToFront(conversation.id);
+    notifyListeners();
+  }
+
+  bool isConversationPinned(String conversationId) {
+    return pinnedConversationIds.contains(conversationId);
+  }
+
+  void togglePinnedConversation(String conversationId) {
+    if (!state.conversations
+        .any((conversation) => conversation.id == conversationId)) {
+      return;
+    }
+    if (pinnedConversationIds.remove(conversationId)) {
+      pinnedConversationOrderIds.remove(conversationId);
+    } else {
+      pinnedConversationIds.add(conversationId);
+      pinnedConversationOrderIds.remove(conversationId);
+      pinnedConversationOrderIds.insert(0, conversationId);
+    }
+    notifyListeners();
+  }
+
+  void closeConversation(String conversationId) {
+    if (!state.conversations
+        .any((conversation) => conversation.id == conversationId)) {
+      return;
+    }
+    final visibleConversationIds = state.conversations
+        .where(
+            (conversation) => !hiddenConversationIds.contains(conversation.id))
+        .map((conversation) => conversation.id)
+        .toList();
+    if (visibleConversationIds.length <= 1 &&
+        visibleConversationIds.contains(conversationId)) {
+      return;
+    }
+    hiddenConversationIds.add(conversationId);
+    if (selectedConversationId == conversationId ||
+        hiddenConversationIds.contains(selectedConversationId)) {
+      final nextConversation = state.conversations.firstWhere(
+        (conversation) => !hiddenConversationIds.contains(conversation.id),
+        orElse: () => state.conversations.first,
+      );
+      selectedConversationId = nextConversation.id;
+      activeTeamId = nextConversation.teamId;
+    }
     notifyListeners();
   }
 
@@ -686,27 +753,19 @@ class AppController extends ChangeNotifier {
     required List<String> memberIds,
     TeamCollaborationMode collaborationMode = TeamCollaborationMode.serial,
   }) {
-    final trimmedName = name.trim();
-    if (trimmedName.isEmpty) {
-      throw ArgumentError('团队名称不能为空');
-    }
     final secretary = state.members.firstWhere(
       (member) => member.isSecretary,
       orElse: () => throw StateError('缺少默认秘书成员'),
     );
-    final normalizedMemberIds = <String>[
-      secretary.id,
-      ...memberIds.where((id) => id != secretary.id),
-    ];
-    for (final memberId in normalizedMemberIds) {
-      _requireMember(memberId);
-    }
-    final uniqueMemberIds = LinkedHashSet<String>.from(normalizedMemberIds);
+    final normalizedMemberIds = _normalizeTeamMemberIds(
+      secretaryMemberId: secretary.id,
+      memberIds: memberIds,
+    );
     final timestamp = DateTime.now().microsecondsSinceEpoch;
     final team = Team(
       id: 'team-$timestamp',
-      name: trimmedName,
-      memberIds: uniqueMemberIds.toList(),
+      name: _validateTeamName(name),
+      memberIds: normalizedMemberIds,
       secretaryMemberId: secretary.id,
       collaborationMode: collaborationMode,
     );
@@ -716,6 +775,8 @@ class AppController extends ChangeNotifier {
         conversations: [
           ...state.conversations,
           _createTeamConversation(team),
+          for (final memberId in team.memberIds)
+            _createMemberConversation(team.id, _requireMember(memberId)),
         ],
         auditLog: [
           ...state.auditLog,
@@ -729,6 +790,115 @@ class AppController extends ChangeNotifier {
       ),
     );
     return team;
+  }
+
+  void updateTeam({
+    required String teamId,
+    required String name,
+    required List<String> memberIds,
+    required TeamCollaborationMode collaborationMode,
+  }) {
+    final existing = _requireTeam(teamId);
+    final updatedTeam = existing.copyWith(
+      name: _validateTeamName(name),
+      memberIds: _normalizeTeamMemberIds(
+        secretaryMemberId: existing.secretaryMemberId,
+        memberIds: memberIds,
+      ),
+      collaborationMode: collaborationMode,
+    );
+    final updatedMemberIds = updatedTeam.memberIds.toSet();
+    final retainedConversations = state.conversations.where((conversation) {
+      if (conversation.teamId != teamId || conversation.memberId == null) {
+        return true;
+      }
+      return updatedMemberIds.contains(conversation.memberId);
+    }).toList();
+    final retainedMemberConversationIds = retainedConversations
+        .where((conversation) =>
+            conversation.teamId == teamId && conversation.memberId != null)
+        .map((conversation) => conversation.memberId)
+        .toSet();
+    final addedMemberConversations = updatedTeam.memberIds
+        .where((memberId) => !retainedMemberConversationIds.contains(memberId))
+        .map((memberId) => _createMemberConversation(
+              teamId,
+              _requireMember(memberId),
+            ));
+
+    _commit(
+      state.copyWith(
+        teams: state.teams
+            .map((team) => team.id == teamId ? updatedTeam : team)
+            .toList(),
+        conversations: [
+          ...retainedConversations,
+          ...addedMemberConversations,
+        ],
+        auditLog: [
+          ...state.auditLog,
+          AuditEntry(
+            id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
+            action: 'team_updated',
+            detail: updatedTeam.name,
+            createdAt: DateTime.now(),
+          ),
+        ],
+      ),
+    );
+    final validConversationIds =
+        state.conversations.map((conversation) => conversation.id).toSet();
+    if (!validConversationIds.contains(selectedConversationId)) {
+      selectedConversationId = _teamConversationFor(teamId).id;
+      activeTeamId = teamId;
+      notifyListeners();
+    }
+  }
+
+  void deleteTeam(String teamId) {
+    final team = _requireTeam(teamId);
+    if (state.teams.length <= 1) {
+      throw StateError('至少保留一个团队');
+    }
+    final removedConversationIds = state.conversations
+        .where((conversation) => conversation.teamId == teamId)
+        .map((conversation) => conversation.id)
+        .toSet();
+    final remainingTeams =
+        state.teams.where((item) => item.id != teamId).toList();
+    final fallbackTeam = remainingTeams.first;
+
+    _commit(
+      state.copyWith(
+        teams: remainingTeams,
+        conversations: state.conversations
+            .where((conversation) => conversation.teamId != teamId)
+            .toList(),
+        queuedTasks: state.queuedTasks
+            .where(
+                (task) => !removedConversationIds.contains(task.conversationId))
+            .toList(),
+        taskAssignments: state.taskAssignments
+            .where((assignment) =>
+                !removedConversationIds.contains(assignment.conversationId))
+            .toList(),
+        auditLog: [
+          ...state.auditLog,
+          AuditEntry(
+            id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
+            action: 'team_deleted',
+            detail: team.name,
+            createdAt: DateTime.now(),
+          ),
+        ],
+      ),
+    );
+    if (activeTeamId == teamId ||
+        removedConversationIds.contains(selectedConversationId)) {
+      activeTeamId = fallbackTeam.id;
+      selectedConversationId = _teamConversationFor(fallbackTeam.id).id;
+      notifyListeners();
+    }
   }
 
   void addModel(ModelProfile model) {
@@ -1415,11 +1585,42 @@ class AppController extends ChangeNotifier {
 
   void _commit(AppState nextState) {
     state = _ensureMemberConversations(nextState);
+    _syncConversationOrder();
     if (!state.conversations.any((item) => item.id == selectedConversationId)) {
       selectedConversationId = _initialConversationId(state);
     }
     onStateChanged?.call(state);
     notifyListeners();
+  }
+
+  void _syncConversationOrder() {
+    final existingIds =
+        state.conversations.map((conversation) => conversation.id).toList();
+    final existingIdSet = existingIds.toSet();
+    conversationOrderIds.removeWhere((id) => !existingIdSet.contains(id));
+    pinnedConversationIds.removeWhere((id) => !existingIdSet.contains(id));
+    pinnedConversationOrderIds.removeWhere(
+      (id) =>
+          !existingIdSet.contains(id) || !pinnedConversationIds.contains(id),
+    );
+    for (final id in existingIds) {
+      if (!conversationOrderIds.contains(id)) {
+        conversationOrderIds.add(id);
+      }
+    }
+  }
+
+  void _moveConversationToFront(String conversationId) {
+    _syncConversationOrder();
+    if (!conversationOrderIds.contains(conversationId)) {
+      return;
+    }
+    conversationOrderIds.remove(conversationId);
+    conversationOrderIds.insert(0, conversationId);
+    if (pinnedConversationIds.contains(conversationId)) {
+      pinnedConversationOrderIds.remove(conversationId);
+      pinnedConversationOrderIds.insert(0, conversationId);
+    }
   }
 
   ModelProfile _requireModel(String modelId) {
@@ -1456,6 +1657,28 @@ class AppController extends ChangeNotifier {
       (member) => member.id == memberId,
       orElse: () => throw StateError('成员不存在: $memberId'),
     );
+  }
+
+  String _validateTeamName(String name) {
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) {
+      throw ArgumentError('团队名称不能为空');
+    }
+    return trimmedName;
+  }
+
+  List<String> _normalizeTeamMemberIds({
+    required String secretaryMemberId,
+    required List<String> memberIds,
+  }) {
+    final normalizedMemberIds = <String>[
+      secretaryMemberId,
+      ...memberIds.where((id) => id != secretaryMemberId),
+    ];
+    for (final memberId in normalizedMemberIds) {
+      _requireMember(memberId);
+    }
+    return LinkedHashSet<String>.from(normalizedMemberIds).toList();
   }
 
   void _validateModel(ModelProfile model) {
@@ -1749,55 +1972,34 @@ class _ConversationList extends StatelessWidget {
             ),
           ),
           Expanded(
-            child: ListView(
-              padding: EdgeInsets.zero,
-              children: [
-                if (controller.activeTeamId != null)
-                  _RailSection(
-                    title: '群聊',
-                    children: [
-                      _RailTile(
-                        icon: Icons.forum_rounded,
-                        title: controller.currentTeam.name,
-                        subtitle:
-                            _conversationPreview(controller.teamConversation),
-                        badge: '${controller.currentMembers.length}',
-                        selected: selectedView == _MainView.chat &&
-                            controller.selectedConversationId ==
-                                controller.teamConversation.id,
-                        onTap: () => onSelectConversation(
-                            controller.teamConversation.id),
-                      ),
-                    ],
+            child: ListView.separated(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+              itemCount: controller.visibleConversations.length,
+              separatorBuilder: (context, index) => const Divider(
+                height: 1,
+                indent: 72,
+                color: Color(0xFFE5E7EB),
+              ),
+              itemBuilder: (context, index) {
+                final conversation = controller.visibleConversations[index];
+                return _RailTile(
+                  key: ValueKey('conversation-row-${conversation.id}'),
+                  icon: _conversationListIcon(controller, conversation),
+                  title: _conversationListTitle(controller, conversation),
+                  subtitle: _conversationListSubtitle(controller, conversation),
+                  badge: _conversationListBadge(controller, conversation),
+                  selected: selectedView == _MainView.chat &&
+                      controller.selectedConversationId == conversation.id,
+                  pinned: controller.isConversationPinned(conversation.id),
+                  onTap: () => onSelectConversation(conversation.id),
+                  onContextMenu: (position) => _showConversationContextMenu(
+                    context,
+                    position,
+                    controller,
+                    conversation.id,
                   ),
-                if (controller.activePrivateMembers.isNotEmpty)
-                  _RailSection(
-                    title: '私聊',
-                    children: controller.activePrivateMembers
-                        .map(
-                          (member) => _RailTile(
-                            icon: member.isSecretary
-                                ? Icons.assignment_ind_rounded
-                                : Icons.person_rounded,
-                            title: member.name,
-                            subtitle: _memberConversationPreview(
-                              controller,
-                              member,
-                            ),
-                            badge: member.isSecretary ? 'BOT' : null,
-                            selected: selectedView == _MainView.chat &&
-                                controller.selectedConversationId ==
-                                    controller
-                                        .conversationForMember(member.id)
-                                        .id,
-                            onTap: () => onSelectConversation(
-                              controller.conversationForMember(member.id).id,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
-              ],
+                );
+              },
             ),
           ),
         ],
@@ -1806,34 +2008,36 @@ class _ConversationList extends StatelessWidget {
   }
 }
 
-class _RailSection extends StatelessWidget {
-  const _RailSection({required this.title, required this.children});
-
-  final String title;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 8, bottom: 6),
-            child: Text(
-              title,
-              style: TextStyle(
-                color: Colors.grey.shade600,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          ...children,
-        ],
+Future<void> _showConversationContextMenu(
+  BuildContext context,
+  Offset position,
+  AppController controller,
+  String conversationId,
+) async {
+  final isPinned = controller.isConversationPinned(conversationId);
+  final action = await showMenu<String>(
+    context: context,
+    position: RelativeRect.fromLTRB(
+      position.dx,
+      position.dy,
+      position.dx,
+      position.dy,
+    ),
+    items: [
+      PopupMenuItem(
+        value: 'pin',
+        child: Text(isPinned ? '取消置顶' : '置顶'),
       ),
-    );
+      const PopupMenuItem(
+        value: 'delete',
+        child: Text('删除'),
+      ),
+    ],
+  );
+  if (action == 'pin') {
+    controller.togglePinnedConversation(conversationId);
+  } else if (action == 'delete') {
+    controller.closeConversation(conversationId);
   }
 }
 
@@ -1844,7 +2048,10 @@ class _RailTile extends StatelessWidget {
     required this.subtitle,
     this.badge,
     this.selected = false,
+    this.pinned = false,
     this.onTap,
+    this.onContextMenu,
+    super.key,
   });
 
   final IconData icon;
@@ -1852,38 +2059,45 @@ class _RailTile extends StatelessWidget {
   final String subtitle;
   final String? badge;
   final bool selected;
+  final bool pinned;
   final VoidCallback? onTap;
+  final ValueChanged<Offset>? onContextMenu;
 
   @override
   Widget build(BuildContext context) {
+    final titleColor = selected ? Colors.white : const Color(0xFF111827);
+    final subtitleColor = selected
+        ? Colors.white.withValues(alpha: 0.82)
+        : const Color(0xFF4B5563);
+    final iconColor = selected ? Colors.white : const Color(0xFF2563EB);
+    final avatarColor = selected
+        ? Colors.white.withValues(alpha: 0.18)
+        : const Color(0xFFEFF6FF);
+    final backgroundColor = selected
+        ? const Color(0xFF2F80ED)
+        : pinned
+            ? const Color(0xFFE9EDF3)
+            : Colors.transparent;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Material(
-        color: selected ? Colors.white : Colors.transparent,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(0),
-          side: selected
-              ? const BorderSide(color: Color(0xFFE5E7EB))
-              : BorderSide.none,
-        ),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            border: selected
-                ? const Border(
-                    left: BorderSide(color: Color(0xFF2563EB), width: 3),
-                  )
-                : null,
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: GestureDetector(
+        onSecondaryTapDown: (details) {
+          onContextMenu?.call(details.globalPosition);
+        },
+        child: Material(
+          color: backgroundColor,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
           ),
           child: ListTile(
             dense: true,
             minLeadingWidth: 38,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
             onTap: onTap,
             leading: CircleAvatar(
               radius: 20,
-              backgroundColor:
-                  selected ? const Color(0xFFDCFCE7) : const Color(0xFFEFF6FF),
-              child: Icon(icon, size: 18, color: const Color(0xFF2563EB)),
+              backgroundColor: avatarColor,
+              child: Icon(icon, size: 18, color: iconColor),
             ),
             title: Row(
               children: [
@@ -1892,7 +2106,10 @@ class _RailTile extends StatelessWidget {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                      color: titleColor,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
                 if (badge != null)
@@ -1918,6 +2135,7 @@ class _RailTile extends StatelessWidget {
               subtitle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: subtitleColor),
             ),
           ),
         ),
@@ -1937,10 +2155,15 @@ class _ChatPane extends StatefulWidget {
 
 class _ChatPaneState extends State<_ChatPane> {
   final textController = TextEditingController();
+  final messageScrollController = ScrollController();
+  String? lastConversationId;
+  int lastMessageListItemCount = -1;
+  String? lastMessageId;
 
   @override
   void dispose() {
     textController.dispose();
+    messageScrollController.dispose();
     super.dispose();
   }
 
@@ -1951,6 +2174,20 @@ class _ChatPaneState extends State<_ChatPane> {
     final pendingPatches = widget.controller.patchProposals
         .where((patch) => patch.status == PatchStatus.pending)
         .toList();
+    final messageListItemCount = conversation.messages.length +
+        typingMembers.length +
+        pendingPatches.length;
+    final currentLastMessageId =
+        conversation.messages.isEmpty ? null : conversation.messages.last.id;
+    final shouldScrollToBottom = conversation.id != lastConversationId ||
+        messageListItemCount != lastMessageListItemCount ||
+        currentLastMessageId != lastMessageId;
+    lastConversationId = conversation.id;
+    lastMessageListItemCount = messageListItemCount;
+    lastMessageId = currentLastMessageId;
+    if (shouldScrollToBottom) {
+      _scrollMessagesToBottom();
+    }
     return Column(
       children: [
         Container(
@@ -2008,10 +2245,10 @@ class _ChatPaneState extends State<_ChatPane> {
           child: ColoredBox(
             color: const Color(0xFFFCFCFD),
             child: ListView.builder(
+              key: const ValueKey('chat-message-list'),
+              controller: messageScrollController,
               padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
-              itemCount: conversation.messages.length +
-                  typingMembers.length +
-                  pendingPatches.length,
+              itemCount: messageListItemCount,
               itemBuilder: (context, index) {
                 if (index < conversation.messages.length) {
                   return _MessageBubble(message: conversation.messages[index]);
@@ -2053,20 +2290,23 @@ class _ChatPaneState extends State<_ChatPane> {
             child: Row(
               children: [
                 Expanded(
-                  child: TextField(
-                    controller: textController,
-                    minLines: 1,
-                    maxLines: 4,
-                    decoration: InputDecoration(
-                      hintText: _inputHint(widget.controller, conversation),
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 13,
+                  child: Focus(
+                    onKeyEvent: _handleInputKeyEvent,
+                    child: TextField(
+                      controller: textController,
+                      minLines: 1,
+                      maxLines: 4,
+                      decoration: InputDecoration(
+                        hintText: _inputHint(widget.controller, conversation),
+                        border: InputBorder.none,
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 13,
+                        ),
                       ),
+                      onSubmitted: (_) => _submit(),
                     ),
-                    onSubmitted: (_) => _submit(),
                   ),
                 ),
                 const IconButton(
@@ -2103,6 +2343,62 @@ class _ChatPaneState extends State<_ChatPane> {
     final text = textController.text;
     textController.clear();
     await widget.controller.dispatch(text);
+  }
+
+  KeyEventResult _handleInputKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent) {
+      return KeyEventResult.ignored;
+    }
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.escape) {
+      if (widget.controller.isDispatching) {
+        widget.controller.stopConversation();
+        return KeyEventResult.handled;
+      }
+      return KeyEventResult.ignored;
+    }
+    if (key != LogicalKeyboardKey.enter &&
+        key != LogicalKeyboardKey.numpadEnter) {
+      return KeyEventResult.ignored;
+    }
+    if (HardwareKeyboard.instance.isShiftPressed) {
+      _insertLineBreak();
+    } else if (!widget.controller.isDispatching) {
+      unawaited(_submit());
+    }
+    return KeyEventResult.handled;
+  }
+
+  void _insertLineBreak() {
+    final value = textController.value;
+    final selection = value.selection;
+    final text = value.text;
+    if (!selection.isValid) {
+      textController.text = '$text\n';
+      textController.selection = TextSelection.collapsed(
+        offset: textController.text.length,
+      );
+      return;
+    }
+    final nextText = text.replaceRange(selection.start, selection.end, '\n');
+    textController.value = value.copyWith(
+      text: nextText,
+      selection: TextSelection.collapsed(offset: selection.start + 1),
+      composing: TextRange.empty,
+    );
+  }
+
+  void _scrollMessagesToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !messageScrollController.hasClients) {
+        return;
+      }
+      messageScrollController.animateTo(
+        messageScrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOutCubic,
+      );
+    });
   }
 }
 
@@ -2149,17 +2445,24 @@ class _TypingIndicator extends StatelessWidget {
   }
 }
 
-class _MessageBubble extends StatelessWidget {
+class _MessageBubble extends StatefulWidget {
   const _MessageBubble({required this.message});
 
   final ChatMessage message;
 
   @override
+  State<_MessageBubble> createState() => _MessageBubbleState();
+}
+
+class _MessageBubbleState extends State<_MessageBubble> {
+  bool hovered = false;
+
+  @override
   Widget build(BuildContext context) {
+    final message = widget.message;
     final alignRight = message.isUser;
     final bubble = Container(
       constraints: const BoxConstraints(maxWidth: 680),
-      margin: const EdgeInsets.only(bottom: 18),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: alignRight ? const Color(0xFFE8F1FF) : Colors.white,
@@ -2178,45 +2481,99 @@ class _MessageBubble extends StatelessWidget {
             ),
             const SizedBox(height: 8),
           ],
-          Text(message.content),
+          SelectableText(message.content),
         ],
       ),
     );
-    return Row(
-      mainAxisAlignment:
-          alignRight ? MainAxisAlignment.end : MainAxisAlignment.start,
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final actionSlot = SizedBox(
+      height: 32,
+      child: hovered
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _messageTimeText(message.createdAt),
+                  style: TextStyle(
+                    color: Colors.grey.shade500,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: '复制消息',
+                  visualDensity: VisualDensity.compact,
+                  style: IconButton.styleFrom(
+                    fixedSize: const Size.square(28),
+                    minimumSize: const Size.square(28),
+                    padding: EdgeInsets.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: message.content));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('已复制消息')),
+                    );
+                  },
+                  icon: const Icon(Icons.copy_rounded, size: 16),
+                ),
+              ],
+            )
+          : const SizedBox.shrink(),
+    );
+    final messageColumn = Column(
+      crossAxisAlignment:
+          alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
-        if (!alignRight) ...[
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: _avatarColor(message.authorName),
-            child: Text(
-              _avatarText(message.authorName),
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-        ],
-        Flexible(child: bubble),
-        if (alignRight) ...[
-          const SizedBox(width: 10),
-          const CircleAvatar(
-            radius: 18,
-            backgroundColor: Color(0xFF2563EB),
-            child: Text(
-              '我',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
+        bubble,
+        const SizedBox(height: 4),
+        Align(
+          alignment: alignRight ? Alignment.centerRight : Alignment.centerLeft,
+          child: actionSlot,
+        ),
       ],
+    );
+    return MouseRegion(
+      onEnter: (_) => setState(() => hovered = true),
+      onExit: (_) => setState(() => hovered = false),
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Row(
+          mainAxisAlignment:
+              alignRight ? MainAxisAlignment.end : MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (!alignRight) ...[
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: _avatarColor(message.authorName),
+                child: Text(
+                  _avatarText(message.authorName),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+            ],
+            Flexible(child: messageColumn),
+            if (alignRight) ...[
+              const SizedBox(width: 10),
+              const CircleAvatar(
+                radius: 18,
+                backgroundColor: Color(0xFF2563EB),
+                child: Text(
+                  '我',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -2342,6 +2699,25 @@ class _TeamCard extends StatelessWidget {
         FilledButton(
           onPressed: onStartChat,
           child: const Text('发起聊天'),
+        ),
+        IconButton(
+          tooltip: '编辑团队',
+          onPressed: () => _showTeamDialog(
+            context,
+            controller,
+            team: team,
+          ),
+          icon: const Icon(Icons.edit_rounded),
+        ),
+        IconButton(
+          tooltip: '删除团队',
+          onPressed: controller.state.teams.length <= 1
+              ? null
+              : () => _runConfigAction(
+                    context,
+                    () => controller.deleteTeam(team.id),
+                  ),
+          icon: const Icon(Icons.delete_outline_rounded),
         ),
       ],
     );
@@ -3480,20 +3856,29 @@ class _CommandRequestCard extends StatelessWidget {
 
 Future<void> _showTeamDialog(
   BuildContext context,
-  AppController controller,
-) async {
-  final nameController = TextEditingController();
-  var collaborationMode = TeamCollaborationMode.serial;
-  final selectedMemberIds = <String>{
-    for (final member in controller.state.members)
-      if (!member.isSecretary) member.id,
-  };
+  AppController controller, {
+  Team? team,
+}) async {
+  final nameController = TextEditingController(text: team?.name ?? '');
+  var collaborationMode =
+      team?.collaborationMode ?? TeamCollaborationMode.serial;
+  final selectedMemberIds = team == null
+      ? {
+          for (final member in controller.state.members)
+            if (!member.isSecretary) member.id,
+        }
+      : team.memberIds.where((memberId) {
+          final member = controller.state.members.firstWhere(
+            (item) => item.id == memberId,
+          );
+          return !member.isSecretary;
+        }).toSet();
   String? error;
   await showDialog<void>(
     context: context,
     builder: (context) => StatefulBuilder(
       builder: (context, setDialogState) => AlertDialog(
-        title: const Text('新增团队'),
+        title: Text(team == null ? '新增团队' : '编辑团队'),
         content: SizedBox(
           width: 520,
           child: SingleChildScrollView(
@@ -3578,11 +3963,20 @@ Future<void> _showTeamDialog(
           FilledButton(
             onPressed: () {
               try {
-                controller.addTeam(
-                  name: nameController.text,
-                  memberIds: selectedMemberIds.toList(),
-                  collaborationMode: collaborationMode,
-                );
+                if (team == null) {
+                  controller.addTeam(
+                    name: nameController.text,
+                    memberIds: selectedMemberIds.toList(),
+                    collaborationMode: collaborationMode,
+                  );
+                } else {
+                  controller.updateTeam(
+                    teamId: team.id,
+                    name: nameController.text,
+                    memberIds: selectedMemberIds.toList(),
+                    collaborationMode: collaborationMode,
+                  );
+                }
                 FocusScope.of(context).unfocus();
                 Navigator.of(context).pop();
               } catch (exception) {
@@ -4345,6 +4739,12 @@ String _conversationTitle(AppController controller, Conversation conversation) {
   return '私聊 · ${conversation.title}';
 }
 
+String _messageTimeText(DateTime value) {
+  final hour = value.hour.toString().padLeft(2, '0');
+  final minute = value.minute.toString().padLeft(2, '0');
+  return '$hour:$minute';
+}
+
 String _conversationMeta(AppController controller, Conversation conversation) {
   final status = _statusText(conversation.status);
   if (conversation.memberId == null) {
@@ -4389,11 +4789,68 @@ String _conversationPreview(Conversation conversation) {
   return '${message.authorName}: ${message.content}'.replaceAll('\n', ' ');
 }
 
-String _memberConversationPreview(
+IconData _conversationListIcon(
   AppController controller,
+  Conversation conversation,
+) {
+  if (conversation.memberId == null) {
+    return Icons.forum_rounded;
+  }
+  final member = controller.state.members.firstWhere(
+    (item) => item.id == conversation.memberId,
+  );
+  return member.isSecretary
+      ? Icons.assignment_ind_rounded
+      : Icons.person_rounded;
+}
+
+String _conversationListTitle(
+  AppController controller,
+  Conversation conversation,
+) {
+  if (conversation.memberId == null) {
+    return controller.state.teams
+        .firstWhere((team) => team.id == conversation.teamId)
+        .name;
+  }
+  return conversation.title;
+}
+
+String _conversationListSubtitle(
+  AppController controller,
+  Conversation conversation,
+) {
+  if (conversation.memberId == null) {
+    return _conversationPreview(conversation);
+  }
+  final member = controller.state.members.firstWhere(
+    (item) => item.id == conversation.memberId,
+  );
+  return _privateConversationPreview(controller, conversation, member);
+}
+
+String? _conversationListBadge(
+  AppController controller,
+  Conversation conversation,
+) {
+  if (conversation.memberId == null) {
+    return controller.state.teams
+        .firstWhere((team) => team.id == conversation.teamId)
+        .memberIds
+        .length
+        .toString();
+  }
+  final member = controller.state.members.firstWhere(
+    (item) => item.id == conversation.memberId,
+  );
+  return member.isSecretary ? 'BOT' : null;
+}
+
+String _privateConversationPreview(
+  AppController controller,
+  Conversation conversation,
   TeamMember member,
 ) {
-  final conversation = controller.conversationForMember(member.id);
   if (conversation.messages.length > 1) {
     return _conversationPreview(conversation);
   }

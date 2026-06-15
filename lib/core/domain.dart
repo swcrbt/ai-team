@@ -566,13 +566,14 @@ class Team {
   final TeamCollaborationMode collaborationMode;
 
   Team copyWith({
+    String? name,
     List<String>? memberIds,
     int? maxRounds,
     TeamCollaborationMode? collaborationMode,
   }) =>
       Team(
         id: id,
-        name: name,
+        name: name ?? this.name,
         memberIds: memberIds ?? this.memberIds,
         secretaryMemberId: secretaryMemberId,
         maxRounds: maxRounds ?? this.maxRounds,
