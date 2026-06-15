@@ -2501,53 +2501,58 @@ class _MessageBubbleState extends State<_MessageBubble> {
         ],
       ),
     );
-    final actionSlot = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          _messageTimeText(message.createdAt),
-          style: TextStyle(
-            color: Colors.grey.shade500,
-            fontSize: 12,
-          ),
-        ),
-        const SizedBox(width: 4),
-        IconButton(
-          tooltip: '复制消息',
-          visualDensity: VisualDensity.compact,
-          style: IconButton.styleFrom(
-            fixedSize: const Size.square(28),
-            minimumSize: const Size.square(28),
-            padding: EdgeInsets.zero,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
-          onPressed: () {
-            Clipboard.setData(ClipboardData(text: message.content));
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('已复制消息')),
-            );
-          },
-          icon: const Icon(Icons.copy_rounded, size: 16),
-        ),
-      ],
+    final actionSlot = SizedBox(
+      height: 32,
+      child: hovered
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _messageTimeText(message.createdAt),
+                  style: TextStyle(
+                    color: Colors.grey.shade500,
+                    fontSize: 12,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                IconButton(
+                  tooltip: '复制消息',
+                  visualDensity: VisualDensity.compact,
+                  style: IconButton.styleFrom(
+                    fixedSize: const Size.square(28),
+                    minimumSize: const Size.square(28),
+                    padding: EdgeInsets.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: message.content));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('已复制消息')),
+                    );
+                  },
+                  icon: const Icon(Icons.copy_rounded, size: 16),
+                ),
+              ],
+            )
+          : const SizedBox.shrink(),
     );
-    final messageColumn = Stack(
-      clipBehavior: Clip.none,
+    final messageColumn = Column(
+      crossAxisAlignment:
+          alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
         bubble,
-        if (hovered)
-          Positioned(
-            top: 4,
-            right: 4,
-            child: actionSlot,
-          ),
+        const SizedBox(height: 4),
+        Align(
+          alignment: alignRight ? Alignment.centerRight : Alignment.centerLeft,
+          child: actionSlot,
+        ),
       ],
     );
     return MouseRegion(
       onEnter: (_) => setState(() => hovered = true),
       onExit: (_) => setState(() => hovered = false),
       child: Padding(
-        padding: EdgeInsets.zero,
+        padding: const EdgeInsets.only(bottom: 10),
         child: Row(
           mainAxisAlignment:
               alignRight ? MainAxisAlignment.end : MainAxisAlignment.start,

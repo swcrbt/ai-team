@@ -1001,7 +1001,7 @@ void main() {
           .first,
     );
     final messagePadding = messageRegion.child! as Padding;
-    expect(messagePadding.padding, EdgeInsets.zero);
+    expect(messagePadding.padding, const EdgeInsets.only(bottom: 10));
     expect(find.byTooltip('复制消息'), findsNothing);
     expect(find.text('09:05'), findsNothing);
 
