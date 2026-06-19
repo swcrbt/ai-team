@@ -140,6 +140,35 @@ Future<ModelCompletion> completeModelWithMetadata(
   );
 }
 
+Map<String, Object?> buildOpenAiCompatibleRequestBody({
+  required ModelProfile model,
+  required String systemPrompt,
+  required List<ChatMessage> messages,
+}) {
+  final reasoningEffort = model.reasoningEffort == null
+      ? null
+      : _normalizeOptionalText(model.reasoningEffort!);
+  final requestBody = <String, Object?>{
+    'model': model.modelName,
+    'stream': model.streaming,
+    'temperature': model.temperature,
+    'messages': [
+      {'role': 'system', 'content': systemPrompt},
+      ...messages.map((message) => {
+            'role': message.isUser ? 'user' : 'assistant',
+            'content': '${message.authorName}: ${message.content}',
+          }),
+    ],
+  };
+  if (reasoningEffort == null) {
+    requestBody['max_tokens'] = model.maxTokens;
+  } else {
+    requestBody['reasoning_effort'] = reasoningEffort;
+    requestBody['max_completion_tokens'] = model.maxTokens;
+  }
+  return requestBody;
+}
+
 class OpenAiCompatibleGateway implements MetadataModelGateway {
   OpenAiCompatibleGateway({
     HttpClient? httpClient,
@@ -225,27 +254,11 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
     request.headers.contentType = ContentType.json;
     request.headers
         .set(HttpHeaders.authorizationHeader, 'Bearer ${model.apiKey}');
-    final reasoningEffort = model.reasoningEffort == null
-        ? null
-        : _normalizeOptionalText(model.reasoningEffort!);
-    final requestBody = <String, Object?>{
-      'model': model.modelName,
-      'stream': model.streaming,
-      'temperature': model.temperature,
-      'messages': [
-        {'role': 'system', 'content': systemPrompt},
-        ...messages.map((message) => {
-              'role': message.isUser ? 'user' : 'assistant',
-              'content': '${message.authorName}: ${message.content}',
-            }),
-      ],
-    };
-    if (reasoningEffort == null) {
-      requestBody['max_tokens'] = model.maxTokens;
-    } else {
-      requestBody['reasoning_effort'] = reasoningEffort;
-      requestBody['max_completion_tokens'] = model.maxTokens;
-    }
+    final requestBody = buildOpenAiCompatibleRequestBody(
+      model: model,
+      systemPrompt: systemPrompt,
+      messages: messages,
+    );
     request.write(jsonEncode(requestBody));
     cancellation?.throwIfCancelled();
     final response = await _awaitResponse(request, cancellation);

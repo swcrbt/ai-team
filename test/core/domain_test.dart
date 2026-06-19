@@ -582,6 +582,39 @@ void main() {
       );
     });
 
+    test('member chat audits request body before gateway failures', () async {
+      final progressStates = <AppState>[];
+
+      await expectLater(
+        TeamOrchestrator(AlwaysFailingGateway()).dispatchMemberChat(
+          AppState.seed(),
+          conversationId: 'conv-member-secretary',
+          userText: '失败也要记录请求',
+          onProgress: progressStates.add,
+        ),
+        throwsA(isA<ModelGatewayException>()),
+      );
+
+      final requestAuditState = progressStates.lastWhere(
+        (state) => state.auditLog
+            .any((entry) => entry.action == 'model_request_diagnostic'),
+      );
+      final requestLog = requestAuditState.auditLog.lastWhere(
+        (entry) => entry.action == 'model_request_diagnostic',
+      );
+
+      expect(requestLog.detail, contains('member=member-secretary'));
+      expect(requestLog.detail, isNot(contains('失败也要记录请求')));
+      expect(requestLog.metadata!['requestBody'], isA<Map>());
+      expect(jsonEncode(requestLog.metadata), contains('失败也要记录请求'));
+      expect(jsonEncode(requestLog.metadata), isNot(contains('test-secret')));
+      expect(jsonEncode(requestLog.metadata), isNot(contains('apiKey')));
+      expect(
+        jsonEncode(requestLog.metadata),
+        isNot(contains('Authorization')),
+      );
+    });
+
     test('member chat persists real thinking content from metadata gateway',
         () async {
       final gateway = ScriptedMetadataGateway(
@@ -619,8 +652,36 @@ void main() {
           .messages;
       expect(messages.last.content, '正式成员回复');
       expect(messages.last.thinkingContent, '真实成员 reasoning');
+      final requestLog = updated.auditLog.firstWhere(
+        (entry) => entry.action == 'model_request_diagnostic',
+      );
       final diagnosticLog = updated.auditLog.lastWhere(
         (entry) => entry.action == 'model_response_diagnostic',
+      );
+      expect(updated.auditLog.indexOf(requestLog),
+          lessThan(updated.auditLog.indexOf(diagnosticLog)));
+      expect(requestLog.detail, contains('member=member-secretary'));
+      expect(requestLog.detail, contains('model=model-main'));
+      expect(requestLog.detail, contains('streaming=true'));
+      expect(requestLog.detail, isNot(contains('解释实现方案')));
+      expect(requestLog.metadata!['requestBody'], isA<Map>());
+      final requestBody =
+          requestLog.metadata!['requestBody'] as Map<String, Object?>;
+      expect(
+        requestBody,
+        containsPair('model', 'gpt-4.1'),
+      );
+      final requestMessages = requestBody['messages'] as List;
+      expect(
+        requestMessages.map((item) => (item as Map)['content']),
+        isNot(contains('秘书: ')),
+      );
+      expect(jsonEncode(requestLog.metadata), contains('解释实现方案'));
+      expect(jsonEncode(requestLog.metadata), isNot(contains('test-secret')));
+      expect(jsonEncode(requestLog.metadata), isNot(contains('apiKey')));
+      expect(
+        jsonEncode(requestLog.metadata),
+        isNot(contains('Authorization')),
       );
       expect(diagnosticLog.detail, contains('member=member-secretary'));
       expect(diagnosticLog.detail, contains('model=model-main'));
@@ -908,6 +969,19 @@ class FailsThenSucceedsRecordingGateway implements ModelGateway {
       throw const ModelGatewayException('前端失败');
     }
     return '$memberName 完成';
+  }
+}
+
+class AlwaysFailingGateway implements ModelGateway {
+  @override
+  Future<String> complete({
+    required ModelProfile model,
+    required String systemPrompt,
+    required List<ChatMessage> messages,
+    ModelRequestCancellation? cancellation,
+  }) async {
+    cancellation?.throwIfCancelled();
+    throw const ModelGatewayException('forced failure');
   }
 }
 

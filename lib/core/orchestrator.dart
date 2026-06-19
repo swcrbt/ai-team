@@ -491,6 +491,7 @@ class TeamOrchestrator {
     var nextState = workingState;
     var lastProgressAt = DateTime.fromMillisecondsSinceEpoch(0);
     ChatMessage? current;
+    final outboundMessages = [...requestMessages];
 
     void publish(ChatMessage message, {bool force = false}) {
       _replaceMessageInList(messages, message);
@@ -524,11 +525,24 @@ class TeamOrchestrator {
     }
 
     try {
+      final requestBody = buildOpenAiCompatibleRequestBody(
+        model: model,
+        systemPrompt: systemPrompt,
+        messages: outboundMessages,
+      );
+      nextState = _appendModelRequestDiagnostic(
+        nextState,
+        conversationId: conversation.id,
+        memberId: memberId,
+        model: model,
+        requestBody: requestBody,
+      );
+      onProgress?.call(nextState);
       final completion = await completeModelWithMetadata(
         gateway,
         model: model,
         systemPrompt: systemPrompt,
-        messages: requestMessages,
+        messages: outboundMessages,
         cancellation: cancellation,
         onDelta: model.streaming
             ? (delta) {
@@ -749,6 +763,42 @@ class TeamOrchestrator {
       ],
     );
   }
+}
+
+AppState _appendModelRequestDiagnostic(
+  AppState state, {
+  required String conversationId,
+  required String? memberId,
+  required ModelProfile model,
+  required Map<String, Object?> requestBody,
+}) {
+  final detail = [
+    'conversation=$conversationId',
+    if (memberId != null) 'member=$memberId',
+    'model=${model.id}',
+    'modelName=${model.name}',
+    'streaming=${model.streaming}',
+  ].join(' ');
+  final metadata = <String, Object?>{
+    'conversation': conversationId,
+    if (memberId != null) 'member': memberId,
+    'model': model.id,
+    'modelName': model.name,
+    'streaming': model.streaming,
+    'requestBody': requestBody,
+  };
+  return state.copyWith(
+    auditLog: [
+      ...state.auditLog,
+      AuditEntry(
+        id: _id('audit'),
+        action: 'model_request_diagnostic',
+        detail: detail,
+        metadata: metadata,
+        createdAt: DateTime.now(),
+      ),
+    ],
+  );
 }
 
 AppState _appendModelResponseDiagnostic(
