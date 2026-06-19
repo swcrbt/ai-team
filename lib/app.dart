@@ -2242,6 +2242,7 @@ enum _MessageUserScrollDirection { idle, history, bottom }
 class _ChatPaneState extends State<_ChatPane> {
   static const _autoScrollBottomThreshold = 96.0;
   static const _messageBottomReachedTolerance = 1.0;
+  static const _messageBottomSettleFrameCount = 3;
 
   final textController = TextEditingController();
   final messageScrollController = ScrollController();
@@ -2258,6 +2259,7 @@ class _ChatPaneState extends State<_ChatPane> {
   bool messageScrollFrameScheduled = false;
   String? pendingMessageScrollConversationId;
   int? pendingMessageScrollVersion;
+  int pendingMessageScrollSettleFrames = 0;
   int messageAutoScrollVersion = 0;
   bool isProgrammaticMessageScroll = false;
 
@@ -2726,12 +2728,21 @@ class _ChatPaneState extends State<_ChatPane> {
   void _scrollCurrentConversationToBottom() {
     final conversationId = widget.controller.currentConversation.id;
     _setMessageAutoFollow(conversationId, true);
-    _scheduleMessageScrollToBottom(conversationId);
+    _scheduleMessageScrollToBottom(
+      conversationId,
+      settleFrames: _messageBottomSettleFrameCount,
+    );
   }
 
-  void _scheduleMessageScrollToBottom(String conversationId) {
+  void _scheduleMessageScrollToBottom(
+    String conversationId, {
+    int settleFrames = 0,
+  }) {
     pendingMessageScrollConversationId = conversationId;
     pendingMessageScrollVersion = messageAutoScrollVersion;
+    if (settleFrames > pendingMessageScrollSettleFrames) {
+      pendingMessageScrollSettleFrames = settleFrames;
+    }
     if (messageScrollFrameScheduled) {
       return;
     }
@@ -2740,8 +2751,10 @@ class _ChatPaneState extends State<_ChatPane> {
       messageScrollFrameScheduled = false;
       final scheduledConversationId = pendingMessageScrollConversationId;
       final scheduledVersion = pendingMessageScrollVersion;
+      final settleFrames = pendingMessageScrollSettleFrames;
       pendingMessageScrollConversationId = null;
       pendingMessageScrollVersion = null;
+      pendingMessageScrollSettleFrames = 0;
       if (!mounted ||
           !messageScrollController.hasClients ||
           scheduledConversationId == null ||
@@ -2752,12 +2765,19 @@ class _ChatPaneState extends State<_ChatPane> {
       }
       final target = messageScrollController.position.maxScrollExtent;
       _jumpMessageScrollTo(target, scheduledConversationId);
+      if (settleFrames > 0 && _autoFollowMessages(scheduledConversationId)) {
+        _scheduleMessageScrollToBottom(
+          scheduledConversationId,
+          settleFrames: settleFrames - 1,
+        );
+      }
     });
   }
 
   void _cancelPendingMessageAutoScroll() {
     pendingMessageScrollConversationId = null;
     pendingMessageScrollVersion = null;
+    pendingMessageScrollSettleFrames = 0;
     messageAutoScrollVersion++;
   }
 

@@ -1856,6 +1856,56 @@ void main() {
     expect(controller.offset, controller.position.maxScrollExtent);
   });
 
+  testWidgets('chat back to bottom needs one click while stream keeps growing',
+      (tester) async {
+    final gateway = ScriptedStreamingWidgetGateway(
+      deltas: [
+        for (var index = 0; index < 12; index++)
+          ModelStreamDelta(contentDelta: '点击后继续增长 $index ${'内容 ' * 80}\n'),
+      ],
+      deltaDelay: const Duration(milliseconds: 20),
+    );
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: _stateWithLongSecretaryChat(),
+        modelGateway: gateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byKey(const ValueKey('chat-message-list'));
+    final controller = tester.widget<ListView>(list).controller!;
+    await tester.drag(list, const Offset(0, -10000));
+    await tester.pumpAndSettle();
+    expect(controller.offset, controller.position.maxScrollExtent);
+
+    await tester.enterText(find.byType(TextField).last, '请继续流式输出');
+    await tester.tap(find.byTooltip('发送'));
+    await _pumpStreamingFrames(tester, count: 2);
+
+    await tester.sendEventToBinding(
+      PointerScrollEvent(
+        position: tester.getCenter(list),
+        scrollDelta: const Offset(0, -20),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('回到底部'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('回到底部'));
+    await tester.pump();
+    expect(controller.offset, controller.position.maxScrollExtent);
+    expect(find.byTooltip('回到底部'), findsNothing);
+
+    await _pumpStreamingFrames(tester, count: 12);
+    await gateway.completed.future.timeout(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('点击后继续增长 11'), findsWidgets);
+    expect(controller.offset, controller.position.maxScrollExtent);
+    expect(find.byTooltip('回到底部'), findsNothing);
+  });
+
   testWidgets('chat resumes auto follow after scrolling back near bottom',
       (tester) async {
     await tester.pumpWidget(
