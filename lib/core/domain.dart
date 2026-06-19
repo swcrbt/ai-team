@@ -340,6 +340,7 @@ class ModelProfile {
     this.streaming = true,
     this.temperature = 0.4,
     this.maxTokens = 1600,
+    this.reasoningEffort,
   });
 
   final String id;
@@ -350,6 +351,7 @@ class ModelProfile {
   final bool streaming;
   final double temperature;
   final int maxTokens;
+  final String? reasoningEffort;
 
   ModelProfile copyWith({
     String? id,
@@ -360,6 +362,7 @@ class ModelProfile {
     bool? streaming,
     double? temperature,
     int? maxTokens,
+    String? reasoningEffort,
   }) {
     return ModelProfile(
       id: id ?? this.id,
@@ -370,6 +373,7 @@ class ModelProfile {
       streaming: streaming ?? this.streaming,
       temperature: temperature ?? this.temperature,
       maxTokens: maxTokens ?? this.maxTokens,
+      reasoningEffort: reasoningEffort ?? this.reasoningEffort,
     );
   }
 
@@ -382,6 +386,7 @@ class ModelProfile {
       'streaming': streaming,
       'temperature': temperature,
       'maxTokens': maxTokens,
+      if (reasoningEffort != null) 'reasoningEffort': reasoningEffort,
     };
     if (includeSecrets) {
       json['apiKey'] = apiKey;
@@ -398,7 +403,15 @@ class ModelProfile {
         streaming: (json['streaming'] as bool?) ?? true,
         temperature: ((json['temperature'] as num?) ?? 0.4).toDouble(),
         maxTokens: (json['maxTokens'] as num?)?.toInt() ?? 1600,
+        reasoningEffort: _optionalJsonString(json['reasoningEffort']),
       );
+}
+
+String? _optionalJsonString(Object? value) {
+  if (value is! String || value.trim().isEmpty) {
+    return null;
+  }
+  return value;
 }
 
 class RoleTemplate {

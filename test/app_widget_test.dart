@@ -2236,6 +2236,15 @@ void main() {
           metadata: const {
             'rawResponse':
                 '{"choices":[{"message":{"content":"原始模型返回","reasoning_content":"原始思考字段"}}]}',
+            'requestBody': {
+              'model': 'reasoning-model',
+              'reasoning_effort': 'high',
+              'max_completion_tokens': 1600,
+              'messages': [
+                {'role': 'system', 'content': '系统提示词'},
+                {'role': 'user', 'content': '用户消息'},
+              ],
+            },
             'streaming': false,
             'model': 'model-main',
           },
@@ -2279,10 +2288,43 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('审计详情'), findsOneWidget);
+    expect(find.text('请求参数'), findsOneWidget);
+    expect(find.textContaining('reasoning_effort'), findsOneWidget);
+    expect(find.textContaining('系统提示词'), findsOneWidget);
+    expect(find.textContaining('用户消息'), findsOneWidget);
     expect(find.text('原始返回内容'), findsOneWidget);
     expect(find.textContaining('原始模型返回'), findsOneWidget);
     expect(find.textContaining('原始思考字段'), findsOneWidget);
     expect(find.text('model: model-main'), findsOneWidget);
+  });
+
+  testWidgets('model dialog saves selected reasoning effort', (tester) async {
+    AppState? persisted;
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: FakeModelGateway(),
+        onStateChanged: (state) => persisted = state,
+      ),
+    );
+
+    await tester.tap(find.byTooltip('模型'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('编辑模型').first);
+    await tester.pumpAndSettle();
+
+    expect(find.text('深度思考'), findsOneWidget);
+
+    await tester.tap(find.text('关闭').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('high').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    expect(persisted, isNotNull);
+    expect(persisted!.models.first.reasoningEffort, 'high');
+    expect(find.textContaining('深度思考: high'), findsOneWidget);
   });
 
   testWidgets('sidebar model button opens an independent model page',

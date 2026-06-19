@@ -16,6 +16,25 @@ import 'core/patching.dart';
 
 typedef StateChanged = FutureOr<void> Function(AppState state);
 
+const _reasoningEffortOffValue = '';
+const _reasoningEffortValues = [
+  'none',
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh'
+];
+const _reasoningEffortLabels = <String, String>{
+  _reasoningEffortOffValue: '关闭',
+  'none': 'none',
+  'minimal': 'minimal',
+  'low': 'low',
+  'medium': 'medium',
+  'high': 'high',
+  'xhigh': 'xhigh',
+};
+
 class AiTeamApp extends StatelessWidget {
   const AiTeamApp({
     super.key,
@@ -1746,6 +1765,12 @@ class AppController extends ChangeNotifier {
     }
     if (model.maxTokens <= 0) {
       throw ArgumentError('最大 Token 必须大于 0');
+    }
+    final reasoningEffort = model.reasoningEffort?.trim();
+    if (reasoningEffort != null &&
+        reasoningEffort.isNotEmpty &&
+        !_reasoningEffortValues.contains(reasoningEffort)) {
+      throw ArgumentError('深度思考档位无效');
     }
   }
 
@@ -3559,8 +3584,9 @@ class _AuditLogRow extends StatelessWidget {
 void _showAuditLogDetails(BuildContext context, AuditEntry entry) {
   final metadata = entry.metadata ?? const <String, Object?>{};
   final rawResponse = metadata['rawResponse'] as String?;
+  final requestBody = metadata['requestBody'];
   final structuredEntries = metadata.entries
-      .where((item) => item.key != 'rawResponse')
+      .where((item) => item.key != 'rawResponse' && item.key != 'requestBody')
       .toList(growable: false);
   showDialog<void>(
     context: context,
@@ -3601,6 +3627,22 @@ void _showAuditLogDetails(BuildContext context, AuditEntry entry) {
                           ),
                         )
                         .toList(),
+                  ),
+                ),
+              if (requestBody != null)
+                _AuditDetailSection(
+                  title: '请求参数',
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF9FAFB),
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: SelectableText(
+                      const JsonEncoder.withIndent('  ').convert(requestBody),
+                    ),
                   ),
                 ),
               if (rawResponse != null)
@@ -3664,6 +3706,13 @@ String _auditMetadataValueText(Object? value) {
     return value.join(',');
   }
   return value.toString();
+}
+
+String _reasoningEffortLabel(String? value) {
+  if (value == null || value.trim().isEmpty) {
+    return _reasoningEffortLabels[_reasoningEffortOffValue]!;
+  }
+  return _reasoningEffortLabels[value] ?? value;
 }
 
 class _SettingsPage extends StatefulWidget {
@@ -3886,7 +3935,7 @@ class _ModelConfigPanel extends StatelessWidget {
               (model) => _KeyValueRow(
                 label: model.name,
                 value:
-                    '${model.modelName}\n${model.baseUrl}\n流式: ${model.streaming ? '开' : '关'} · 温度: ${model.temperature} · 最大 Token: ${model.maxTokens}',
+                    '${model.modelName}\n${model.baseUrl}\n流式: ${model.streaming ? '开' : '关'} · 温度: ${model.temperature} · 最大 Token: ${model.maxTokens} · 深度思考: ${_reasoningEffortLabel(model.reasoningEffort)}',
                 actions: [
                   IconButton(
                     tooltip: '编辑模型',
@@ -4713,6 +4762,7 @@ Future<void> _showModelDialog(
     text: (model?.maxTokens ?? 1600).toString(),
   );
   var streaming = model?.streaming ?? true;
+  var reasoningEffort = model?.reasoningEffort ?? _reasoningEffortOffValue;
   String? validationError;
   await showDialog<void>(
     context: context,
@@ -4721,23 +4771,49 @@ Future<void> _showModelDialog(
         title: Text(model == null ? '新增模型配置' : '编辑模型配置'),
         content: SizedBox(
           width: 420,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (validationError != null) _DialogError(validationError!),
-              _DialogField(controller: name, label: '名称'),
-              _DialogField(controller: baseUrl, label: 'Base URL'),
-              _DialogField(controller: modelName, label: '模型名称'),
-              _DialogField(controller: apiKey, label: 'API Key', obscure: true),
-              SwitchListTile(
-                value: streaming,
-                onChanged: (value) => setDialogState(() => streaming = value),
-                title: const Text('流式输出'),
-                contentPadding: EdgeInsets.zero,
-              ),
-              _DialogField(controller: temperature, label: '温度 0-2'),
-              _DialogField(controller: maxTokens, label: '最大 Token'),
-            ],
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (validationError != null) _DialogError(validationError!),
+                _DialogField(controller: name, label: '名称'),
+                _DialogField(controller: baseUrl, label: 'Base URL'),
+                _DialogField(controller: modelName, label: '模型名称'),
+                _DialogField(
+                  controller: apiKey,
+                  label: 'API Key',
+                  obscure: true,
+                ),
+                SwitchListTile(
+                  value: streaming,
+                  onChanged: (value) => setDialogState(() => streaming = value),
+                  title: const Text('流式输出'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                DropdownButtonFormField<String>(
+                  initialValue: reasoningEffort,
+                  decoration: const InputDecoration(labelText: '深度思考'),
+                  items: [
+                    for (final value in [
+                      _reasoningEffortOffValue,
+                      ..._reasoningEffortValues,
+                    ])
+                      DropdownMenuItem(
+                        value: value,
+                        child: Text(_reasoningEffortLabels[value] ?? value),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) {
+                      return;
+                    }
+                    setDialogState(() => reasoningEffort = value);
+                  },
+                ),
+                _DialogField(controller: temperature, label: '温度 0-2'),
+                _DialogField(controller: maxTokens, label: '最大 Token'),
+              ],
+            ),
           ),
         ),
         actions: [
@@ -4765,6 +4841,9 @@ Future<void> _showModelDialog(
                   streaming: streaming,
                   temperature: parsedTemperature,
                   maxTokens: parsedMaxTokens,
+                  reasoningEffort: reasoningEffort == _reasoningEffortOffValue
+                      ? null
+                      : reasoningEffort,
                 );
                 if (model == null) {
                   controller.addModel(next);

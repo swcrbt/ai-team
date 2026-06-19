@@ -787,6 +787,7 @@ AppState _appendModelResponseDiagnostic(
     'thinkingFieldKeys': diagnostics.thinkingFieldKeys,
     'contentDeltas': diagnostics.contentDeltaCount,
     'thinkingDeltas': diagnostics.thinkingDeltaCount,
+    if (diagnostics.requestBody != null) 'requestBody': diagnostics.requestBody,
     if (diagnostics.rawResponse != null) 'rawResponse': diagnostics.rawResponse,
   };
   return state.copyWith(

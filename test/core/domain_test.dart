@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -114,6 +115,30 @@ void main() {
       );
       expect(restored.metadata!['streaming'], isFalse);
       expect(restored.metadata!['model'], 'model-main');
+    });
+
+    test('model profiles persist optional reasoning effort', () {
+      const profile = ModelProfile(
+        id: 'model-reasoning',
+        name: 'Reasoning Model',
+        baseUrl: 'https://api.openai.com/v1',
+        modelName: 'gpt-reasoning',
+        apiKey: 'secret',
+        reasoningEffort: 'high',
+      );
+
+      final restored = ModelProfile.fromJson(profile.toJson());
+      final legacy = ModelProfile.fromJson({
+        'id': 'model-legacy',
+        'name': 'Legacy',
+        'baseUrl': 'https://api.openai.com/v1',
+        'modelName': 'legacy-model',
+        'apiKey': 'secret',
+      });
+
+      expect(restored.reasoningEffort, 'high');
+      expect(restored.toJson()['reasoningEffort'], 'high');
+      expect(legacy.reasoningEffort, isNull);
     });
   });
 
@@ -570,6 +595,13 @@ void main() {
             thinkingFieldKeys: ['reasoning_content'],
             rawResponse:
                 '{"choices":[{"message":{"content":"正式成员回复","reasoning_content":"真实成员 reasoning"}}]}',
+            requestBody: {
+              'model': 'team-model',
+              'messages': [
+                {'role': 'system', 'content': 'system prompt'},
+                {'role': 'user', 'content': '解释实现方案'},
+              ],
+            },
           ),
         ),
       );
@@ -602,6 +634,18 @@ void main() {
       expect(
         diagnosticLog.metadata!['rawResponse'],
         contains('真实成员 reasoning'),
+      );
+      expect(diagnosticLog.metadata!['requestBody'], isA<Map>());
+      expect(
+        diagnosticLog.metadata!['requestBody'],
+        containsPair('model', 'team-model'),
+      );
+      expect(
+          jsonEncode(diagnosticLog.metadata), isNot(contains('test-secret')));
+      expect(jsonEncode(diagnosticLog.metadata), isNot(contains('apiKey')));
+      expect(
+        jsonEncode(diagnosticLog.metadata),
+        isNot(contains('Authorization')),
       );
       expect(diagnosticLog.metadata!['streaming'], isFalse);
       expect(diagnosticLog.metadata!['model'], 'model-main');

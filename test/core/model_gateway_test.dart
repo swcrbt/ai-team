@@ -148,6 +148,78 @@ void main() {
     );
   });
 
+  test(
+      'records request body diagnostics while preserving max_tokens by default',
+      () async {
+    late Map<String, Object?> sentBody;
+    unawaited(serve(server, (request) async {
+      requests.add(request);
+      sentBody =
+          jsonDecode(await utf8.decodeStream(request)) as Map<String, Object?>;
+      request.response
+        ..headers.contentType = ContentType.json
+        ..write(jsonEncode({
+          'choices': [
+            {
+              'message': {'content': 'default response'}
+            }
+          ]
+        }));
+      await request.response.close();
+    }));
+    final gateway = OpenAiCompatibleGateway();
+
+    final completion = await gateway.completeWithMetadata(
+      model: model().copyWith(streaming: false, maxTokens: 321),
+      systemPrompt: 'system prompt',
+      messages: const [],
+    );
+
+    expect(sentBody['max_tokens'], 321);
+    expect(sentBody, isNot(contains('reasoning_effort')));
+    expect(sentBody, isNot(contains('max_completion_tokens')));
+    expect(completion.diagnostics!.requestBody, sentBody);
+    expect(completion.diagnostics!.toJson()['requestBody'], sentBody);
+    expect(jsonEncode(completion.diagnostics!.requestBody),
+        isNot(contains('test-secret')));
+  });
+
+  test('sends chat reasoning effort with max_completion_tokens when enabled',
+      () async {
+    late Map<String, Object?> sentBody;
+    unawaited(serve(server, (request) async {
+      requests.add(request);
+      sentBody =
+          jsonDecode(await utf8.decodeStream(request)) as Map<String, Object?>;
+      request.response
+        ..headers.contentType = ContentType.json
+        ..write(jsonEncode({
+          'choices': [
+            {
+              'message': {'content': 'reasoned response'}
+            }
+          ]
+        }));
+      await request.response.close();
+    }));
+    final gateway = OpenAiCompatibleGateway();
+
+    final completion = await gateway.completeWithMetadata(
+      model: model().copyWith(
+        streaming: false,
+        maxTokens: 654,
+        reasoningEffort: 'high',
+      ),
+      systemPrompt: 'system prompt',
+      messages: const [],
+    );
+
+    expect(sentBody['reasoning_effort'], 'high');
+    expect(sentBody['max_completion_tokens'], 654);
+    expect(sentBody, isNot(contains('max_tokens')));
+    expect(completion.diagnostics!.requestBody, sentBody);
+  });
+
   test('retries transient server failures before succeeding', () async {
     var attempt = 0;
     unawaited(serve(server, (request) async {
@@ -217,10 +289,12 @@ void main() {
     const rawReasoning2 =
         'data: {"choices":[{"delta":{"reasoning_content":"step"}}]}';
     const rawContent = 'data: {"choices":[{"delta":{"content":"answer"}}]}';
+    late Map<String, Object?> sentBody;
     unawaited(serve(server, (request) async {
       requests.add(request);
-      final body = jsonDecode(await utf8.decodeStream(request)) as Map;
-      expect(body['stream'], isTrue);
+      sentBody =
+          jsonDecode(await utf8.decodeStream(request)) as Map<String, Object?>;
+      expect(sentBody['stream'], isTrue);
       request.response.headers.contentType =
           ContentType('text', 'event-stream', charset: 'utf-8');
       request.response
@@ -248,6 +322,7 @@ void main() {
     expect(completion.diagnostics!.rawResponse, contains(rawReasoning2));
     expect(completion.diagnostics!.rawResponse, contains(rawContent));
     expect(completion.diagnostics!.rawResponse, contains('data: [DONE]'));
+    expect(completion.diagnostics!.requestBody, sentBody);
     expect(requests, hasLength(1));
   });
 

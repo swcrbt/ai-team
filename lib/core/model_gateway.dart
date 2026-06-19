@@ -60,6 +60,7 @@ class ModelResponseDiagnostics {
     this.contentDeltaCount = 0,
     this.thinkingDeltaCount = 0,
     this.rawResponse,
+    this.requestBody,
   });
 
   final bool streaming;
@@ -69,6 +70,7 @@ class ModelResponseDiagnostics {
   final int contentDeltaCount;
   final int thinkingDeltaCount;
   final String? rawResponse;
+  final Map<String, Object?>? requestBody;
 
   bool get sawThinkingField => thinkingFieldKeys.isNotEmpty;
 
@@ -80,6 +82,7 @@ class ModelResponseDiagnostics {
         'contentDeltaCount': contentDeltaCount,
         'thinkingDeltaCount': thinkingDeltaCount,
         'rawResponse': rawResponse,
+        'requestBody': requestBody,
       };
 }
 
@@ -222,11 +225,13 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
     request.headers.contentType = ContentType.json;
     request.headers
         .set(HttpHeaders.authorizationHeader, 'Bearer ${model.apiKey}');
-    request.write(jsonEncode({
+    final reasoningEffort = model.reasoningEffort == null
+        ? null
+        : _normalizeOptionalText(model.reasoningEffort!);
+    final requestBody = <String, Object?>{
       'model': model.modelName,
       'stream': model.streaming,
       'temperature': model.temperature,
-      'max_tokens': model.maxTokens,
       'messages': [
         {'role': 'system', 'content': systemPrompt},
         ...messages.map((message) => {
@@ -234,7 +239,14 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
               'content': '${message.authorName}: ${message.content}',
             }),
       ],
-    }));
+    };
+    if (reasoningEffort == null) {
+      requestBody['max_tokens'] = model.maxTokens;
+    } else {
+      requestBody['reasoning_effort'] = reasoningEffort;
+      requestBody['max_completion_tokens'] = model.maxTokens;
+    }
+    request.write(jsonEncode(requestBody));
     cancellation?.throwIfCancelled();
     final response = await _awaitResponse(request, cancellation);
     cancellation?.throwIfCancelled();
@@ -248,6 +260,7 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
     if (model.streaming) {
       return _parseStreamingContent(
         response,
+        requestBody: requestBody,
         cancellation: cancellation,
         onDelta: onDelta,
       );
@@ -273,12 +286,14 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
         thinkingContentLength: thinkingContent?.length ?? 0,
         thinkingFieldKeys: thinkingFieldKeys.toList(growable: false),
         rawResponse: body,
+        requestBody: requestBody,
       ),
     );
   }
 
   Future<ModelCompletion> _parseStreamingContent(
     HttpClientResponse response, {
+    required Map<String, Object?> requestBody,
     ModelRequestCancellation? cancellation,
     ModelStreamDeltaHandler? onDelta,
   }) async {
@@ -348,6 +363,7 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
         contentDeltaCount: contentDeltaCount,
         thinkingDeltaCount: thinkingDeltaCount,
         rawResponse: rawBuffer.toString(),
+        requestBody: requestBody,
       ),
     );
   }
