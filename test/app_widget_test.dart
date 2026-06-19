@@ -843,6 +843,7 @@ void main() {
     expect(find.byTooltip('模型'), findsOneWidget);
     expect(find.byTooltip('角色'), findsOneWidget);
     expect(find.byTooltip('成员'), findsOneWidget);
+    expect(find.byTooltip('审计'), findsOneWidget);
     expect(find.byTooltip('设置'), findsOneWidget);
     expect(find.byTooltip('补丁'), findsNothing);
     expect(find.text('模型配置'), findsNothing);
@@ -863,6 +864,8 @@ void main() {
     expect(find.text('成员'), findsNothing);
     expect(find.text('项目'), findsNothing);
     expect(find.text('命令'), findsOneWidget);
+    expect(find.text('审计'), findsNothing);
+    expect(find.text('审计日志'), findsNothing);
     expect(find.text('补丁'), findsNothing);
     expect(find.text('模型配置'), findsNothing);
     expect(find.text('角色配置'), findsNothing);
@@ -1360,6 +1363,49 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('登录任务'), findsOneWidget);
     expect(find.text('文档任务'), findsNothing);
+  });
+
+  testWidgets('sidebar audit button opens an independent audit page',
+      (tester) async {
+    final state = AppState.seed().copyWith(
+      auditLog: [
+        AuditEntry(
+          id: 'audit-old',
+          action: 'old_action',
+          detail: '较早操作',
+          createdAt: DateTime(2026, 6, 14, 8, 5, 6),
+        ),
+        AuditEntry(
+          id: 'audit-new',
+          action: 'new_action',
+          detail: '较新操作',
+          createdAt: DateTime(2026, 6, 15, 9, 6, 7),
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: state,
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('审计'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('设置'), findsNothing);
+    expect(find.text('审计日志'), findsOneWidget);
+    expect(find.text('操作记录'), findsOneWidget);
+    expect(find.text('new_action'), findsOneWidget);
+    expect(find.text('较新操作'), findsOneWidget);
+    expect(find.text('创建时间：2026-06-15 09:06:07'), findsOneWidget);
+    expect(find.text('old_action'), findsOneWidget);
+    expect(find.text('较早操作'), findsOneWidget);
+    expect(find.text('创建时间：2026-06-14 08:05:06'), findsOneWidget);
+
+    final newActionTop = tester.getTopLeft(find.text('new_action')).dy;
+    final oldActionTop = tester.getTopLeft(find.text('old_action')).dy;
+    expect(newActionTop, lessThan(oldActionTop));
   });
 
   testWidgets('sidebar model button opens an independent model page',

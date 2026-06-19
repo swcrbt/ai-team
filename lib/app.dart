@@ -118,6 +118,8 @@ class _AiTeamHomeState extends State<AiTeamHome> {
                             setState(() => mainView = _MainView.members),
                         onHistory: () =>
                             setState(() => mainView = _MainView.history),
+                        onAudit: () =>
+                            setState(() => mainView = _MainView.audit),
                         onProject: () =>
                             setState(() => mainView = _MainView.project),
                         onSettings: () =>
@@ -151,6 +153,10 @@ class _AiTeamHomeState extends State<AiTeamHome> {
                     else if (mainView == _MainView.history)
                       Expanded(
                         child: _HistoryPage(controller: controller),
+                      )
+                    else if (mainView == _MainView.audit)
+                      Expanded(
+                        child: _AuditLogPage(controller: controller),
                       )
                     else if (mainView == _MainView.project)
                       Expanded(
@@ -197,6 +203,7 @@ enum _MainView {
   roles,
   members,
   history,
+  audit,
   project,
   settings,
 }
@@ -1801,6 +1808,7 @@ class _AppSidebar extends StatelessWidget {
     required this.onRoles,
     required this.onMembers,
     required this.onHistory,
+    required this.onAudit,
     required this.onProject,
     required this.onSettings,
   });
@@ -1812,6 +1820,7 @@ class _AppSidebar extends StatelessWidget {
   final VoidCallback onRoles;
   final VoidCallback onMembers;
   final VoidCallback onHistory;
+  final VoidCallback onAudit;
   final VoidCallback onProject;
   final VoidCallback onSettings;
 
@@ -1840,49 +1849,62 @@ class _AppSidebar extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 24),
-          _SidebarButton(
-            icon: Icons.chat_bubble_rounded,
-            label: '消息',
-            selected: selectedView == _MainView.chat,
-            onPressed: onChat,
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  _SidebarButton(
+                    icon: Icons.chat_bubble_rounded,
+                    label: '消息',
+                    selected: selectedView == _MainView.chat,
+                    onPressed: onChat,
+                  ),
+                  _SidebarButton(
+                    icon: Icons.groups_rounded,
+                    label: '团队',
+                    selected: selectedView == _MainView.teams,
+                    onPressed: onTeam,
+                  ),
+                  _SidebarButton(
+                    icon: Icons.memory_rounded,
+                    label: '模型',
+                    selected: selectedView == _MainView.models,
+                    onPressed: onModels,
+                  ),
+                  _SidebarButton(
+                    icon: Icons.badge_rounded,
+                    label: '角色',
+                    selected: selectedView == _MainView.roles,
+                    onPressed: onRoles,
+                  ),
+                  _SidebarButton(
+                    icon: Icons.manage_accounts_rounded,
+                    label: '成员',
+                    selected: selectedView == _MainView.members,
+                    onPressed: onMembers,
+                  ),
+                  _SidebarButton(
+                    icon: Icons.history_rounded,
+                    label: '历史',
+                    selected: selectedView == _MainView.history,
+                    onPressed: onHistory,
+                  ),
+                  _SidebarButton(
+                    icon: Icons.receipt_long_rounded,
+                    label: '审计',
+                    selected: selectedView == _MainView.audit,
+                    onPressed: onAudit,
+                  ),
+                  _SidebarButton(
+                    icon: Icons.folder_copy_rounded,
+                    label: '项目',
+                    selected: selectedView == _MainView.project,
+                    onPressed: onProject,
+                  ),
+                ],
+              ),
+            ),
           ),
-          _SidebarButton(
-            icon: Icons.groups_rounded,
-            label: '团队',
-            selected: selectedView == _MainView.teams,
-            onPressed: onTeam,
-          ),
-          _SidebarButton(
-            icon: Icons.memory_rounded,
-            label: '模型',
-            selected: selectedView == _MainView.models,
-            onPressed: onModels,
-          ),
-          _SidebarButton(
-            icon: Icons.badge_rounded,
-            label: '角色',
-            selected: selectedView == _MainView.roles,
-            onPressed: onRoles,
-          ),
-          _SidebarButton(
-            icon: Icons.manage_accounts_rounded,
-            label: '成员',
-            selected: selectedView == _MainView.members,
-            onPressed: onMembers,
-          ),
-          _SidebarButton(
-            icon: Icons.history_rounded,
-            label: '历史',
-            selected: selectedView == _MainView.history,
-            onPressed: onHistory,
-          ),
-          _SidebarButton(
-            icon: Icons.folder_copy_rounded,
-            label: '项目',
-            selected: selectedView == _MainView.project,
-            onPressed: onProject,
-          ),
-          const Spacer(),
           _SidebarButton(
             icon: Icons.settings_rounded,
             label: '设置',
@@ -2959,6 +2981,72 @@ class _HistoryPageState extends State<_HistoryPage> {
   }
 }
 
+class _AuditLogPage extends StatelessWidget {
+  const _AuditLogPage({required this.controller});
+
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = controller.state.auditLog.toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return _ManagementPage(
+      title: '审计日志',
+      subtitle: '查看本机操作记录和命令执行审计',
+      child: _Panel(
+        title: '操作记录',
+        icon: Icons.receipt_long_rounded,
+        child: Column(
+          children: entries.isEmpty
+              ? [const Text('暂无操作记录')]
+              : entries
+                  .map(
+                    (entry) => _AuditLogRow(entry: entry),
+                  )
+                  .toList(),
+        ),
+      ),
+    );
+  }
+}
+
+class _AuditLogRow extends StatelessWidget {
+  const _AuditLogRow({required this.entry});
+
+  final AuditEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            entry.action,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 4),
+          Text(entry.detail, style: TextStyle(color: Colors.grey.shade700)),
+          const SizedBox(height: 4),
+          Text(
+            '创建时间：${_auditLogTimeText(entry.createdAt)}',
+            style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SettingsPage extends StatefulWidget {
   const _SettingsPage({
     required this.controller,
@@ -2975,7 +3063,6 @@ class _SettingsPageState extends State<_SettingsPage> {
   final sectionKeys = {
     '命令请求': GlobalKey(),
     '导入导出': GlobalKey(),
-    '审计日志': GlobalKey(),
   };
 
   AppController get controller => widget.controller;
@@ -3026,7 +3113,7 @@ class _SettingsPageState extends State<_SettingsPage> {
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    Text('命令、导入导出和审计配置保存在本机'),
+                    Text('命令和导入导出配置保存在本机'),
                   ],
                 ),
               ),
@@ -3107,23 +3194,6 @@ class _SettingsPageState extends State<_SettingsPage> {
                             .toList(),
                   ),
                 ),
-                _Panel(
-                  key: sectionKeys['审计日志'],
-                  title: '审计日志',
-                  icon: Icons.receipt_long_rounded,
-                  child: Column(
-                    children: controller.state.auditLog.isEmpty
-                        ? [const Text('暂无操作记录')]
-                        : controller.state.auditLog
-                            .map(
-                              (entry) => _KeyValueRow(
-                                label: entry.action,
-                                value: entry.detail,
-                              ),
-                            )
-                            .toList(),
-                  ),
-                ),
               ],
             ),
           ),
@@ -3141,7 +3211,6 @@ class _SettingsCategoryBar extends StatelessWidget {
   static const items = [
     (Icons.terminal_rounded, '命令', '命令请求'),
     (Icons.ios_share_rounded, '导入导出', '导入导出'),
-    (Icons.receipt_long_rounded, '审计', '审计日志'),
   ];
 
   @override
@@ -4759,6 +4828,16 @@ String _messageTimeText(DateTime value) {
   final hour = value.hour.toString().padLeft(2, '0');
   final minute = value.minute.toString().padLeft(2, '0');
   return '$hour:$minute';
+}
+
+String _auditLogTimeText(DateTime value) {
+  final year = value.year.toString().padLeft(4, '0');
+  final month = value.month.toString().padLeft(2, '0');
+  final day = value.day.toString().padLeft(2, '0');
+  final hour = value.hour.toString().padLeft(2, '0');
+  final minute = value.minute.toString().padLeft(2, '0');
+  final second = value.second.toString().padLeft(2, '0');
+  return '$year-$month-$day $hour:$minute:$second';
 }
 
 String _conversationMeta(AppController controller, Conversation conversation) {
