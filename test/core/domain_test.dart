@@ -762,6 +762,90 @@ void main() {
       expect(finalMessage.generationDurationMs, isNonZero);
     });
 
+    test('secretary private chat dispatches mentioned member privately',
+        () async {
+      final gateway = ScriptedRecordingGateway(['测试结果：妈妈今年 42 岁']);
+
+      final updated =
+          await TeamOrchestrator(gateway).dispatchSecretaryPrivateMemberTask(
+        AppState.seed(),
+        conversationId: 'conv-member-secretary',
+        userText: '分配任务给测试工程师，询问 7 年前妈妈年龄是儿子的 6 倍。',
+      );
+
+      final secretaryConversation = updated.conversations.firstWhere(
+        (conversation) => conversation.id == 'conv-member-secretary',
+      );
+      final testerConversation = updated.conversations.firstWhere(
+        (conversation) => conversation.id == 'conv-member-tester',
+      );
+
+      expect(
+        testerConversation.messages.map((message) => message.content),
+        contains(
+          contains('任务分配：分配任务给测试工程师，询问 7 年前妈妈年龄是儿子的 6 倍。'),
+        ),
+      );
+      expect(testerConversation.messages.last.authorName, '测试工程师');
+      expect(testerConversation.messages.last.content, contains('妈妈今年 42 岁'));
+      expect(secretaryConversation.messages.last.authorName, '秘书');
+      expect(secretaryConversation.messages.last.content, contains('测试工程师'));
+      expect(
+          secretaryConversation.messages.last.content, contains('妈妈今年 42 岁'));
+      expect(gateway.calls, hasLength(1));
+      expect(gateway.calls.single.systemPrompt, contains('成员名称: 测试工程师'));
+
+      final audit = updated.auditLog.lastWhere(
+        (entry) => entry.action == 'secretary_private_member_dispatch',
+      );
+      expect(audit.metadata!['secretary'], 'member-secretary');
+      expect(audit.metadata!['targetMember'], 'member-tester');
+      expect(audit.metadata!['sourceConversation'], 'conv-member-secretary');
+      expect(audit.metadata!['targetConversation'], 'conv-member-tester');
+      expect(jsonEncode(audit.metadata), contains('7 年前妈妈年龄'));
+      expect(
+          jsonEncode(audit.metadata), isNot(contains('sk-local-placeholder')));
+      expect(jsonEncode(audit.metadata), isNot(contains('apiKey')));
+    });
+
+    test('secretary private dispatch handles multiple mentioned members',
+        () async {
+      final gateway = ScriptedRecordingGateway(['测试结果', '前端结果']);
+
+      final updated =
+          await TeamOrchestrator(gateway).dispatchSecretaryPrivateMemberTask(
+        AppState.seed(),
+        conversationId: 'conv-member-secretary',
+        userText: '请测试工程师和前端工程师分别处理这个问题。',
+      );
+
+      final testerConversation = updated.conversations.firstWhere(
+        (conversation) => conversation.id == 'conv-member-tester',
+      );
+      final frontendConversation = updated.conversations.firstWhere(
+        (conversation) => conversation.id == 'conv-member-frontend',
+      );
+
+      expect(testerConversation.messages.last.content, '测试结果');
+      expect(frontendConversation.messages.last.content, '前端结果');
+      expect(
+        gateway.calls.map((call) => call.systemPrompt).join('\n'),
+        contains('成员名称: 测试工程师'),
+      );
+      expect(
+        gateway.calls.map((call) => call.systemPrompt).join('\n'),
+        contains('成员名称: 前端工程师'),
+      );
+      expect(
+        updated.auditLog
+            .where(
+              (entry) => entry.action == 'secretary_private_member_dispatch',
+            )
+            .map((entry) => entry.metadata!['targetMember']),
+        ['member-tester', 'member-frontend'],
+      );
+    });
+
     test(
         'serial team mode runs assignments in secretary order with incremental summaries',
         () async {

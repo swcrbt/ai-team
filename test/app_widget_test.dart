@@ -526,6 +526,61 @@ void main() {
     expect(controller.state.auditLog.last.action, 'member_chat_dispatched');
   });
 
+  test('controller lets secretary privately dispatch to mentioned members',
+      () async {
+    final gateway = RecordingModelGateway();
+    final controller = AppController(
+      AppState.seed(),
+      TeamOrchestrator(gateway),
+    );
+    addTearDown(controller.dispose);
+
+    controller.startMemberChat('member-secretary');
+    await controller.dispatch('分配任务给测试工程师，询问 7 年前妈妈年龄是儿子的 6 倍。');
+
+    expect(controller.selectedConversationId, 'conv-member-secretary');
+    expect(gateway.modelIds, ['model-local']);
+    final testerConversation =
+        controller.conversationForMember('member-tester');
+    expect(
+      testerConversation.messages.map((message) => message.content),
+      contains(
+        contains('任务分配：分配任务给测试工程师，询问 7 年前妈妈年龄是儿子的 6 倍。'),
+      ),
+    );
+    expect(testerConversation.messages.last.authorName, '测试工程师');
+    expect(testerConversation.messages.last.content, contains('qwen2.5-coder'));
+    expect(controller.currentConversation.messages.last.authorName, '秘书');
+    expect(
+      controller.currentConversation.messages.last.content,
+      contains('测试工程师'),
+    );
+    expect(
+      controller.state.auditLog.map((entry) => entry.action),
+      contains('secretary_private_member_dispatch'),
+    );
+  });
+
+  test('controller keeps ordinary secretary private chat unchanged', () async {
+    final gateway = RecordingModelGateway();
+    final controller = AppController(
+      AppState.seed(),
+      TeamOrchestrator(gateway),
+    );
+    addTearDown(controller.dispose);
+
+    controller.startMemberChat('member-secretary');
+    await controller.dispatch('帮我解释一下这个数学题');
+
+    expect(gateway.modelIds, ['model-main']);
+    expect(controller.currentConversation.messages.last.authorName, '秘书');
+    expect(
+      controller.state.auditLog.map((entry) => entry.action),
+      isNot(contains('secretary_private_member_dispatch')),
+    );
+    expect(controller.state.auditLog.last.action, 'member_chat_dispatched');
+  });
+
   test('controller dispatches selected member chat with the configured model',
       () async {
     final gateway = RecordingModelGateway();
@@ -2481,6 +2536,37 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.textContaining('前端工程师'), findsWidgets);
+  });
+
+  testWidgets(
+      'secretary private chat dispatches directly to member private chat',
+      (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    await tester.enterText(
+      find.byType(TextField).last,
+      '分配任务给测试工程师，询问 7 年前妈妈年龄是儿子的 6 倍。',
+    );
+    await tester.tap(find.byTooltip('发送'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('私聊 · 秘书'), findsOneWidget);
+    expect(find.textContaining('群聊 · 默认开发团队'), findsNothing);
+    expect(find.textContaining('测试工程师'), findsWidgets);
+
+    await tester.tap(
+      find.byKey(const ValueKey('conversation-row-conv-member-tester')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('私聊 · 测试工程师'), findsOneWidget);
+    expect(find.textContaining('任务分配：分配任务给测试工程师'), findsOneWidget);
+    expect(find.textContaining('测试工程师：'), findsWidgets);
   });
 
   testWidgets('send button stops an in-flight chat dispatch', (tester) async {

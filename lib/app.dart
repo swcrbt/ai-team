@@ -742,6 +742,22 @@ class AppController extends ChangeNotifier {
             onProgress: _commit,
           ),
         );
+      } else if (orchestrator
+          .secretaryPrivateDispatchTargets(
+            state,
+            conversationId: conversation.id,
+            userText: trimmed,
+          )
+          .isNotEmpty) {
+        _commit(
+          await orchestrator.dispatchSecretaryPrivateMemberTask(
+            state,
+            conversationId: conversation.id,
+            userText: trimmed,
+            cancellation: cancellation,
+            onProgress: _commit,
+          ),
+        );
       } else {
         _commit(
           await orchestrator.dispatchMemberChat(

@@ -763,6 +763,197 @@ class TeamOrchestrator {
       ],
     );
   }
+
+  List<TeamMember> secretaryPrivateDispatchTargets(
+    AppState state, {
+    required String conversationId,
+    required String userText,
+  }) {
+    final conversation = state.conversations.firstWhere(
+      (item) => item.id == conversationId,
+      orElse: () => const Conversation(
+        id: '',
+        title: '',
+        teamId: '',
+        messages: [],
+      ),
+    );
+    if (conversation.id.isEmpty || conversation.memberId == null) {
+      return const [];
+    }
+    final team = state.teams.firstWhere(
+      (item) => item.id == conversation.teamId,
+      orElse: () => const Team(
+        id: '',
+        name: '',
+        memberIds: [],
+        secretaryMemberId: '',
+      ),
+    );
+    if (team.id.isEmpty || conversation.memberId != team.secretaryMemberId) {
+      return const [];
+    }
+    return _mentionedDispatchMembers(
+      state: state,
+      team: team,
+      userText: userText,
+    );
+  }
+
+  Future<AppState> dispatchSecretaryPrivateMemberTask(
+    AppState state, {
+    required String conversationId,
+    required String userText,
+    ModelRequestCancellation? cancellation,
+    void Function(AppState state)? onProgress,
+  }) async {
+    final sourceConversation =
+        state.conversations.firstWhere((item) => item.id == conversationId);
+    final team = state.teams.firstWhere(
+      (item) => item.id == sourceConversation.teamId,
+    );
+    if (sourceConversation.memberId != team.secretaryMemberId) {
+      throw StateError('只有秘书私聊可以调度成员: $conversationId');
+    }
+    final secretary = state.members.firstWhere(
+      (item) => item.id == team.secretaryMemberId,
+    );
+    final targets = _mentionedDispatchMembers(
+      state: state,
+      team: team,
+      userText: userText,
+    );
+    if (targets.isEmpty) {
+      throw StateError('秘书私聊调度缺少目标成员');
+    }
+
+    final now = DateTime.now();
+    final sourceMessages = [
+      ...sourceConversation.messages,
+      ChatMessage(
+        id: _id('msg'),
+        authorName: '我',
+        content: userText,
+        createdAt: now,
+        isUser: true,
+      ),
+    ];
+    var workingState = _replaceConversation(
+      state,
+      sourceConversation.copyWith(
+        messages: sourceMessages,
+        status: ConversationStatus.running,
+      ),
+    );
+    onProgress?.call(workingState);
+
+    final summaries = <String>[];
+    for (final target in targets) {
+      cancellation?.throwIfCancelled();
+      workingState = _ensureMemberConversation(
+        workingState,
+        teamId: team.id,
+        member: target,
+      );
+      final targetConversation = workingState.conversations.firstWhere(
+        (item) => item.teamId == team.id && item.memberId == target.id,
+      );
+      final targetMessages = [
+        ...targetConversation.messages,
+        ChatMessage(
+          id: _id('msg-assignment'),
+          authorName: secretary.name,
+          memberId: secretary.id,
+          content: '任务分配：$userText',
+          createdAt: DateTime.now(),
+        ),
+      ];
+      workingState = _replaceConversation(
+        workingState,
+        targetConversation.copyWith(
+          messages: targetMessages,
+          status: ConversationStatus.running,
+        ),
+      );
+      onProgress?.call(workingState);
+
+      try {
+        final result = await _runAssignment(
+          state: workingState,
+          workingState: workingState,
+          conversation: targetConversation,
+          team: team,
+          assignment: ParsedAssignment(member: target, instruction: userText),
+          messages: targetMessages,
+          visibleMessages: targetMessages,
+          cancellation: cancellation,
+          onProgress: onProgress,
+        );
+        workingState = result.workingState;
+        summaries.add('${target.name}：${_summarize(result.message.content)}');
+        workingState = _replaceConversation(
+          workingState,
+          targetConversation.copyWith(
+            messages: targetMessages,
+            status: ConversationStatus.idle,
+          ),
+        );
+        workingState = _appendSecretaryPrivateDispatchAudit(
+          workingState,
+          secretary: secretary,
+          target: target,
+          sourceConversation: sourceConversation,
+          targetConversation: targetConversation,
+          userText: userText,
+          status: 'completed',
+        );
+      } catch (error) {
+        cancellation?.throwIfCancelled();
+        summaries.add('${target.name}：调度失败：$error');
+        workingState = _replaceConversation(
+          workingState,
+          targetConversation.copyWith(
+            messages: [
+              ...targetMessages,
+              _systemMessage('任务失败：$error'),
+            ],
+            status: ConversationStatus.failed,
+          ),
+        );
+        workingState = _appendSecretaryPrivateDispatchAudit(
+          workingState,
+          secretary: secretary,
+          target: target,
+          sourceConversation: sourceConversation,
+          targetConversation: targetConversation,
+          userText: userText,
+          status: 'failed',
+        );
+      }
+      onProgress?.call(workingState);
+    }
+
+    final summaryMessage = ChatMessage(
+      id: _id('msg'),
+      authorName: secretary.name,
+      memberId: secretary.id,
+      content: [
+        '已私聊调度成员并汇总结果：',
+        ...summaries.map((summary) => '- $summary'),
+      ].join('\n'),
+      createdAt: DateTime.now(),
+    );
+    sourceMessages.add(summaryMessage);
+    workingState = _replaceConversation(
+      workingState,
+      sourceConversation.copyWith(
+        messages: sourceMessages,
+        status: ConversationStatus.idle,
+      ),
+    );
+    onProgress?.call(workingState);
+    return workingState;
+  }
 }
 
 AppState _appendModelRequestDiagnostic(
@@ -852,6 +1043,64 @@ AppState _appendModelResponseDiagnostic(
       ),
     ],
   );
+}
+
+AppState _appendSecretaryPrivateDispatchAudit(
+  AppState state, {
+  required TeamMember secretary,
+  required TeamMember target,
+  required Conversation sourceConversation,
+  required Conversation targetConversation,
+  required String userText,
+  required String status,
+}) {
+  return state.copyWith(
+    auditLog: [
+      ...state.auditLog,
+      AuditEntry(
+        id: _id('audit'),
+        action: 'secretary_private_member_dispatch',
+        detail: 'secretary=${secretary.id} target=${target.id} status=$status',
+        metadata: {
+          'secretary': secretary.id,
+          'targetMember': target.id,
+          'sourceConversation': sourceConversation.id,
+          'targetConversation': targetConversation.id,
+          'text': userText,
+          'status': status,
+        },
+        createdAt: DateTime.now(),
+      ),
+    ],
+  );
+}
+
+List<TeamMember> _mentionedDispatchMembers({
+  required AppState state,
+  required Team team,
+  required String userText,
+}) {
+  final matches = <({TeamMember member, int index})>[];
+  for (final member in state.members) {
+    if (!team.memberIds.contains(member.id) ||
+        member.id == team.secretaryMemberId) {
+      continue;
+    }
+    final index = userText.indexOf(member.name);
+    if (index >= 0) {
+      matches.add((member: member, index: index));
+    }
+  }
+  matches.sort((a, b) {
+    final byIndex = a.index.compareTo(b.index);
+    if (byIndex != 0) {
+      return byIndex;
+    }
+    return team.memberIds
+        .indexOf(a.member.id)
+        .compareTo(team.memberIds.indexOf(b.member.id));
+  });
+  return matches.map((match) => match.member).toList();
 }
 
 class ParsedAssignment {
@@ -984,6 +1233,40 @@ AppState _replaceConversation(AppState state, Conversation conversation) {
     conversations: state.conversations
         .map((item) => item.id == conversation.id ? conversation : item)
         .toList(),
+  );
+}
+
+AppState _ensureMemberConversation(
+  AppState state, {
+  required String teamId,
+  required TeamMember member,
+}) {
+  final exists = state.conversations.any(
+    (conversation) =>
+        conversation.teamId == teamId && conversation.memberId == member.id,
+  );
+  if (exists) {
+    return state;
+  }
+  return state.copyWith(
+    conversations: [
+      ...state.conversations,
+      Conversation(
+        id: 'conv-$teamId-${member.id}',
+        title: member.name,
+        teamId: teamId,
+        memberId: member.id,
+        messages: [
+          ChatMessage(
+            id: 'msg-welcome-$teamId-${member.id}',
+            authorName: member.name,
+            memberId: member.id,
+            content: '这里是和${member.name}的独立会话。',
+            createdAt: DateTime.now(),
+          ),
+        ],
+      ),
+    ],
   );
 }
 
