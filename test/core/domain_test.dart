@@ -76,6 +76,45 @@ void main() {
 
       expect(restored.taskIds, ['task-1', 'task-2']);
     });
+
+    test('chat messages persist real model thinking content', () {
+      final message = ChatMessage(
+        id: 'msg-thinking',
+        authorName: '前端工程师',
+        content: '结论内容',
+        thinkingContent: '真实 reasoning 字段内容',
+        createdAt: DateTime(2026, 6, 15),
+      );
+
+      final restored = ChatMessage.fromJson(message.toJson());
+
+      expect(restored.content, '结论内容');
+      expect(restored.thinkingContent, '真实 reasoning 字段内容');
+    });
+
+    test('audit entries persist structured metadata', () {
+      final entry = AuditEntry(
+        id: 'audit-raw-response',
+        action: 'model_response_diagnostic',
+        detail: 'thinkingChars=0',
+        metadata: const {
+          'rawResponse': '{"choices":[{"message":{"content":"answer"}}]}',
+          'streaming': false,
+          'model': 'model-main',
+        },
+        createdAt: DateTime(2026, 6, 19, 10),
+      );
+
+      final restored = AuditEntry.fromJson(entry.toJson());
+
+      expect(restored.metadata, isNotNull);
+      expect(
+        restored.metadata!['rawResponse'],
+        '{"choices":[{"message":{"content":"answer"}}]}',
+      );
+      expect(restored.metadata!['streaming'], isFalse);
+      expect(restored.metadata!['model'], 'model-main');
+    });
   });
 
   group('configuration export', () {
@@ -346,6 +385,58 @@ void main() {
         '/Users/example/Library/Application Support/ai_team/state.json',
       );
     });
+
+    test('recovers richer legacy state when app support state is sparse',
+        () async {
+      final temp = await Directory.systemTemp.createTemp('ai_team_migrate_');
+      addTearDown(() async => temp.delete(recursive: true));
+      final target = JsonLocalStore(
+        File('${temp.path}/Application Support/com.example.aiTeam/state.json'),
+        secretStore: MemorySecretStore(),
+      );
+      final legacy = JsonLocalStore(
+        File('${temp.path}/.ai_team/state.json'),
+        secretStore: MemorySecretStore(),
+      );
+      final richerLegacy = AppState.seed().copyWith(
+        models: [
+          AppState.seed().models.first.copyWith(apiKey: 'legacy-key'),
+        ],
+        conversations: [
+          AppState.seed().conversations.first.copyWith(
+            messages: [
+              ...AppState.seed().conversations.first.messages,
+              ChatMessage(
+                id: 'msg-legacy',
+                authorName: '我',
+                content: '旧聊天记录',
+                createdAt: DateTime(2026, 6, 17),
+                isUser: true,
+              ),
+            ],
+          ),
+        ],
+      );
+      await legacy.save(richerLegacy);
+      await target.save(AppState.seed().copyWith(
+        models: [
+          AppState.seed().models.first.copyWith(apiKey: ''),
+        ],
+      ));
+
+      final recovered = await JsonLocalStore.loadWithLegacyRecovery(
+        targetStore: target,
+        legacyStore: legacy,
+      );
+
+      expect(recovered.models.first.apiKey, 'legacy-key');
+      expect(
+        recovered.conversations
+            .expand((conversation) => conversation.messages)
+            .map((message) => message.content),
+        contains('旧聊天记录'),
+      );
+    });
   });
 
   group('role command policy', () {
@@ -464,6 +555,106 @@ void main() {
           ),
         ),
       );
+    });
+
+    test('member chat persists real thinking content from metadata gateway',
+        () async {
+      final gateway = ScriptedMetadataGateway(
+        const ModelCompletion(
+          content: '正式成员回复',
+          thinkingContent: '真实成员 reasoning',
+          diagnostics: ModelResponseDiagnostics(
+            streaming: false,
+            contentLength: 6,
+            thinkingContentLength: 12,
+            thinkingFieldKeys: ['reasoning_content'],
+            rawResponse:
+                '{"choices":[{"message":{"content":"正式成员回复","reasoning_content":"真实成员 reasoning"}}]}',
+          ),
+        ),
+      );
+
+      final updated = await TeamOrchestrator(gateway).dispatchMemberChat(
+        AppState.seed(),
+        conversationId: 'conv-member-secretary',
+        userText: '解释实现方案',
+      );
+
+      final messages = updated.conversations
+          .firstWhere(
+            (conversation) => conversation.id == 'conv-member-secretary',
+          )
+          .messages;
+      expect(messages.last.content, '正式成员回复');
+      expect(messages.last.thinkingContent, '真实成员 reasoning');
+      final diagnosticLog = updated.auditLog.lastWhere(
+        (entry) => entry.action == 'model_response_diagnostic',
+      );
+      expect(diagnosticLog.detail, contains('member=member-secretary'));
+      expect(diagnosticLog.detail, contains('model=model-main'));
+      expect(diagnosticLog.detail, contains('streaming=false'));
+      expect(diagnosticLog.detail,
+          contains('thinkingFieldKeys=reasoning_content'));
+      expect(diagnosticLog.detail, contains('thinkingChars=12'));
+      expect(diagnosticLog.detail, isNot(contains('真实成员 reasoning')));
+      expect(diagnosticLog.detail, isNot(contains('正式成员回复')));
+      expect(diagnosticLog.metadata, isNotNull);
+      expect(
+        diagnosticLog.metadata!['rawResponse'],
+        contains('真实成员 reasoning'),
+      );
+      expect(diagnosticLog.metadata!['streaming'], isFalse);
+      expect(diagnosticLog.metadata!['model'], 'model-main');
+      expect(diagnosticLog.metadata!['message'], messages.last.id);
+      expect(diagnosticLog.metadata!['member'], 'member-secretary');
+    });
+
+    test('member chat streams partial thinking and content through progress',
+        () async {
+      final gateway = ScriptedStreamingMetadataGateway(
+        deltas: const [
+          ModelStreamDelta(thinkingDelta: '先分析'),
+          ModelStreamDelta(contentDelta: '正式'),
+          ModelStreamDelta(contentDelta: '回复'),
+        ],
+      );
+      final progressStates = <AppState>[];
+
+      final updated = await TeamOrchestrator(gateway).dispatchMemberChat(
+        AppState.seed(),
+        conversationId: 'conv-member-secretary',
+        userText: '解释实现方案',
+        onProgress: progressStates.add,
+      );
+
+      final streamingMessages = progressStates
+          .expand((state) => state.conversations)
+          .where((conversation) => conversation.id == 'conv-member-secretary')
+          .expand((conversation) => conversation.messages)
+          .where((message) =>
+              message.memberId == 'member-secretary' &&
+              message.generationStatus == ChatMessageGenerationStatus.streaming)
+          .toList();
+      expect(
+        streamingMessages.map((message) => message.thinkingContent),
+        contains('先分析'),
+      );
+      expect(
+        streamingMessages.map((message) => message.content),
+        contains('正式回复'),
+      );
+
+      final finalMessage = updated.conversations
+          .firstWhere(
+            (conversation) => conversation.id == 'conv-member-secretary',
+          )
+          .messages
+          .last;
+      expect(finalMessage.content, '正式回复');
+      expect(finalMessage.thinkingContent, '先分析');
+      expect(
+          finalMessage.generationStatus, ChatMessageGenerationStatus.complete);
+      expect(finalMessage.generationDurationMs, isNonZero);
     });
 
     test(
@@ -673,5 +864,83 @@ class FailsThenSucceedsRecordingGateway implements ModelGateway {
       throw const ModelGatewayException('前端失败');
     }
     return '$memberName 完成';
+  }
+}
+
+class ScriptedMetadataGateway implements MetadataModelGateway {
+  ScriptedMetadataGateway(this.completion);
+
+  final ModelCompletion completion;
+
+  @override
+  Future<String> complete({
+    required ModelProfile model,
+    required String systemPrompt,
+    required List<ChatMessage> messages,
+    ModelRequestCancellation? cancellation,
+  }) async {
+    cancellation?.throwIfCancelled();
+    return completion.content;
+  }
+
+  @override
+  Future<ModelCompletion> completeWithMetadata({
+    required ModelProfile model,
+    required String systemPrompt,
+    required List<ChatMessage> messages,
+    ModelRequestCancellation? cancellation,
+    ModelStreamDeltaHandler? onDelta,
+  }) async {
+    cancellation?.throwIfCancelled();
+    return completion;
+  }
+}
+
+class ScriptedStreamingMetadataGateway implements MetadataModelGateway {
+  ScriptedStreamingMetadataGateway({required this.deltas});
+
+  final List<ModelStreamDelta> deltas;
+
+  @override
+  Future<String> complete({
+    required ModelProfile model,
+    required String systemPrompt,
+    required List<ChatMessage> messages,
+    ModelRequestCancellation? cancellation,
+  }) async {
+    final completion = await completeWithMetadata(
+      model: model,
+      systemPrompt: systemPrompt,
+      messages: messages,
+      cancellation: cancellation,
+    );
+    return completion.content;
+  }
+
+  @override
+  Future<ModelCompletion> completeWithMetadata({
+    required ModelProfile model,
+    required String systemPrompt,
+    required List<ChatMessage> messages,
+    ModelRequestCancellation? cancellation,
+    ModelStreamDeltaHandler? onDelta,
+  }) async {
+    final content = StringBuffer();
+    final thinking = StringBuffer();
+    for (final delta in deltas) {
+      cancellation?.throwIfCancelled();
+      onDelta?.call(delta);
+      if (delta.contentDelta != null) {
+        content.write(delta.contentDelta);
+      }
+      if (delta.thinkingDelta != null) {
+        thinking.write(delta.thinkingDelta);
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 60));
+    }
+    return ModelCompletion(
+      content: content.toString(),
+      thinkingContent: thinking.toString(),
+    );
   }
 }

@@ -85,7 +85,12 @@ class TeamOrchestrator {
     onProgress?.call(workingState);
 
     cancellation?.throwIfCancelled();
-    var plan = await gateway.complete(
+    var planResult = await _runVisibleModelMessage(
+      workingState: workingState,
+      conversation: conversation,
+      messages: messages,
+      authorName: secretary.name,
+      memberId: secretary.id,
       model: secretaryModel,
       systemPrompt: _secretarySystemPrompt(
         role: secretaryRole,
@@ -93,7 +98,7 @@ class TeamOrchestrator {
         team: team,
         purpose: '秘书分工',
       ),
-      messages: [
+      requestMessages: [
         ...messages,
         ChatMessage(
           id: _id('msg-plan-request'),
@@ -104,10 +109,18 @@ class TeamOrchestrator {
         ),
       ],
       cancellation: cancellation,
+      onProgress: onProgress,
     );
+    workingState = planResult.workingState;
+    var plan = planResult.message.content;
     var parsed = _parseAssignmentPlan(plan: plan, members: workerMembers);
     if (parsed.invalidNames.isNotEmpty) {
-      plan = await gateway.complete(
+      planResult = await _runVisibleModelMessage(
+        workingState: workingState,
+        conversation: conversation,
+        messages: messages,
+        authorName: secretary.name,
+        memberId: secretary.id,
         model: secretaryModel,
         systemPrompt: _secretarySystemPrompt(
           role: secretaryRole,
@@ -115,7 +128,7 @@ class TeamOrchestrator {
           team: team,
           purpose: '秘书分工',
         ),
-        messages: [
+        requestMessages: [
           ...messages,
           ChatMessage(
             id: _id('msg-replan-request'),
@@ -126,7 +139,10 @@ class TeamOrchestrator {
           ),
         ],
         cancellation: cancellation,
+        onProgress: onProgress,
       );
+      workingState = planResult.workingState;
+      plan = planResult.message.content;
       parsed = _parseAssignmentPlan(plan: plan, members: workerMembers);
       if (parsed.invalidNames.isNotEmpty) {
         throw ModelGatewayException(
@@ -134,14 +150,6 @@ class TeamOrchestrator {
         );
       }
     }
-
-    messages.add(ChatMessage(
-      id: _id('msg'),
-      authorName: secretary.name,
-      memberId: secretary.id,
-      content: plan,
-      createdAt: DateTime.now(),
-    ));
 
     if (parsed.assignments.isEmpty) {
       final updatedConversation = conversation.copyWith(
@@ -179,14 +187,18 @@ class TeamOrchestrator {
       for (var index = 0; index < parsed.assignments.length; index++) {
         final outcome = await _runAssignmentWithRecovery(
           state: workingState,
+          workingState: workingState,
+          conversation: conversation,
           team: team,
           assignment: parsed.assignments[index],
           messages: messages,
+          visibleMessages: messages,
           executedMemberIds: executedMemberIds,
           cancellation: cancellation,
+          onProgress: onProgress,
         );
         messages.addAll(outcome.processMessages);
-        messages.add(outcome.message);
+        workingState = outcome.workingState;
         workingState = _replaceTaskAssignment(
           workingState,
           taskAssignments[index].copyWith(
@@ -199,6 +211,8 @@ class TeamOrchestrator {
         );
         final incremental = await _runSecretarySummary(
           state: workingState,
+          workingState: workingState,
+          conversation: conversation,
           team: team,
           secretary: secretary,
           secretaryRole: secretaryRole,
@@ -206,8 +220,9 @@ class TeamOrchestrator {
           messages: messages,
           purpose: '秘书增量汇总',
           cancellation: cancellation,
+          onProgress: onProgress,
         );
-        messages.add(incremental);
+        workingState = incremental.workingState;
         workingState = _replaceConversation(
           workingState,
           conversation.copyWith(
@@ -222,14 +237,18 @@ class TeamOrchestrator {
       for (var index = 0; index < parsed.assignments.length; index++) {
         final outcome = await _runAssignmentWithRecovery(
           state: workingState,
+          workingState: workingState,
+          conversation: conversation,
           team: team,
           assignment: parsed.assignments[index],
           messages: planContextMessages,
+          visibleMessages: messages,
           executedMemberIds: executedMemberIds,
           cancellation: cancellation,
+          onProgress: onProgress,
         );
         messages.addAll(outcome.processMessages);
-        messages.add(outcome.message);
+        workingState = outcome.workingState;
         workingState = _replaceTaskAssignment(
           workingState,
           taskAssignments[index].copyWith(
@@ -245,6 +264,8 @@ class TeamOrchestrator {
 
     final finalSummary = await _runSecretarySummary(
       state: workingState,
+      workingState: workingState,
+      conversation: conversation,
       team: team,
       secretary: secretary,
       secretaryRole: secretaryRole,
@@ -252,8 +273,9 @@ class TeamOrchestrator {
       messages: messages,
       purpose: '秘书最终汇总',
       cancellation: cancellation,
+      onProgress: onProgress,
     );
-    messages.add(finalSummary);
+    workingState = finalSummary.workingState;
 
     final nextStatus = round >= team.maxRounds
         ? ConversationStatus.paused
@@ -279,8 +301,10 @@ class TeamOrchestrator {
     );
   }
 
-  Future<ChatMessage> _runSecretarySummary({
+  Future<_ModelMessageResult> _runSecretarySummary({
     required AppState state,
+    required AppState workingState,
+    required Conversation conversation,
     required Team team,
     required TeamMember secretary,
     required RoleTemplate secretaryRole,
@@ -288,9 +312,15 @@ class TeamOrchestrator {
     required List<ChatMessage> messages,
     required String purpose,
     ModelRequestCancellation? cancellation,
+    void Function(AppState state)? onProgress,
   }) async {
     cancellation?.throwIfCancelled();
-    final content = await gateway.complete(
+    return _runVisibleModelMessage(
+      workingState: workingState,
+      conversation: conversation,
+      messages: messages,
+      authorName: secretary.name,
+      memberId: secretary.id,
       model: secretaryModel,
       systemPrompt: _secretarySystemPrompt(
         role: secretaryRole,
@@ -298,56 +328,63 @@ class TeamOrchestrator {
         team: team,
         purpose: purpose,
       ),
-      messages: messages,
+      requestMessages: messages,
       cancellation: cancellation,
-    );
-    cancellation?.throwIfCancelled();
-    return ChatMessage(
-      id: _id('msg'),
-      authorName: secretary.name,
-      memberId: secretary.id,
-      content: content,
-      createdAt: DateTime.now(),
+      onProgress: onProgress,
     );
   }
 
   Future<_AssignmentOutcome> _runAssignmentWithRecovery({
     required AppState state,
+    required AppState workingState,
+    required Conversation conversation,
     required Team team,
     required ParsedAssignment assignment,
     required List<ChatMessage> messages,
+    required List<ChatMessage> visibleMessages,
     required Set<String> executedMemberIds,
     ModelRequestCancellation? cancellation,
+    void Function(AppState state)? onProgress,
   }) async {
     final processMessages = <ChatMessage>[];
     try {
-      final message = await _runAssignment(
+      final result = await _runAssignment(
         state: state,
+        workingState: workingState,
+        conversation: conversation,
         team: team,
         assignment: assignment,
         messages: messages,
+        visibleMessages: visibleMessages,
         cancellation: cancellation,
+        onProgress: onProgress,
       );
       executedMemberIds.add(assignment.member.id);
       return _AssignmentOutcome(
-        message: message,
+        message: result.message,
         processMessages: processMessages,
+        workingState: result.workingState,
       );
     } catch (firstError) {
       cancellation?.throwIfCancelled();
       processMessages.add(_systemMessage('执行失败，正在重试：$firstError'));
       try {
-        final message = await _runAssignment(
+        final result = await _runAssignment(
           state: state,
+          workingState: workingState,
+          conversation: conversation,
           team: team,
           assignment: assignment,
           messages: messages,
+          visibleMessages: visibleMessages,
           cancellation: cancellation,
+          onProgress: onProgress,
         );
         executedMemberIds.add(assignment.member.id);
         return _AssignmentOutcome(
-          message: message,
+          message: result.message,
           processMessages: processMessages,
+          workingState: result.workingState,
         );
       } catch (secondError) {
         cancellation?.throwIfCancelled();
@@ -362,6 +399,7 @@ class TeamOrchestrator {
           return _AssignmentOutcome(
             message: _systemMessage('${assignment.member.name} 执行失败，无法转派。'),
             processMessages: processMessages,
+            workingState: workingState,
             failed: true,
           );
         }
@@ -370,44 +408,58 @@ class TeamOrchestrator {
             '${assignment.member.name} 重试失败，已转派给 ${replacement.name}',
           ),
         );
-        final message = await _runAssignment(
+        final result = await _runAssignment(
           state: state,
+          workingState: workingState,
+          conversation: conversation,
           team: team,
           assignment: ParsedAssignment(
             member: replacement,
             instruction: assignment.instruction,
           ),
           messages: messages,
+          visibleMessages: visibleMessages,
           cancellation: cancellation,
+          onProgress: onProgress,
         );
         executedMemberIds.add(replacement.id);
         return _AssignmentOutcome(
-          message: message,
+          message: result.message,
           processMessages: processMessages,
+          workingState: result.workingState,
         );
       }
     }
   }
 
-  Future<ChatMessage> _runAssignment({
+  Future<_ModelMessageResult> _runAssignment({
     required AppState state,
+    required AppState workingState,
+    required Conversation conversation,
     required Team team,
     required ParsedAssignment assignment,
     required List<ChatMessage> messages,
+    required List<ChatMessage> visibleMessages,
     ModelRequestCancellation? cancellation,
+    void Function(AppState state)? onProgress,
   }) async {
     final member = assignment.member;
     final role = state.roles.firstWhere((item) => item.id == member.roleId);
     final model = state.models.firstWhere((item) => item.id == member.modelId);
     _ensureModelReady(member: member, model: model);
     cancellation?.throwIfCancelled();
-    final content = await gateway.complete(
+    return _runVisibleModelMessage(
+      workingState: workingState,
+      conversation: conversation,
+      messages: visibleMessages,
+      authorName: member.name,
+      memberId: member.id,
       model: model,
       systemPrompt: role.renderSystemPrompt(
         memberName: member.name,
         teamName: team.name,
       ),
-      messages: [
+      requestMessages: [
         ...messages,
         ChatMessage(
           id: _id('msg-assignment'),
@@ -417,15 +469,177 @@ class TeamOrchestrator {
         ),
       ],
       cancellation: cancellation,
+      onProgress: onProgress,
     );
-    cancellation?.throwIfCancelled();
-    return ChatMessage(
-      id: _id('msg'),
-      authorName: member.name,
-      memberId: member.id,
-      content: content,
-      createdAt: DateTime.now(),
-    );
+  }
+
+  Future<_ModelMessageResult> _runVisibleModelMessage({
+    required AppState workingState,
+    required Conversation conversation,
+    required List<ChatMessage> messages,
+    required String authorName,
+    required String? memberId,
+    required ModelProfile model,
+    required String systemPrompt,
+    required List<ChatMessage> requestMessages,
+    ModelRequestCancellation? cancellation,
+    void Function(AppState state)? onProgress,
+  }) async {
+    final startedAt = DateTime.now();
+    final contentBuffer = StringBuffer();
+    final thinkingBuffer = StringBuffer();
+    var nextState = workingState;
+    var lastProgressAt = DateTime.fromMillisecondsSinceEpoch(0);
+    ChatMessage? current;
+
+    void publish(ChatMessage message, {bool force = false}) {
+      _replaceMessageInList(messages, message);
+      nextState = _replaceConversation(
+        nextState,
+        conversation.copyWith(
+          messages: [...messages],
+          status: ConversationStatus.running,
+        ),
+      );
+      final now = DateTime.now();
+      if (force ||
+          now.difference(lastProgressAt) >= const Duration(milliseconds: 50)) {
+        lastProgressAt = now;
+        onProgress?.call(nextState);
+      }
+    }
+
+    if (model.streaming) {
+      current = ChatMessage(
+        id: _id('msg'),
+        authorName: authorName,
+        memberId: memberId,
+        content: '',
+        createdAt: startedAt,
+        generationStatus: ChatMessageGenerationStatus.streaming,
+        generationDurationMs: 0,
+      );
+      messages.add(current);
+      publish(current, force: true);
+    }
+
+    try {
+      final completion = await completeModelWithMetadata(
+        gateway,
+        model: model,
+        systemPrompt: systemPrompt,
+        messages: requestMessages,
+        cancellation: cancellation,
+        onDelta: model.streaming
+            ? (delta) {
+                final contentDelta = delta.contentDelta;
+                if (contentDelta != null) {
+                  contentBuffer.write(contentDelta);
+                }
+                final thinkingDelta = delta.thinkingDelta;
+                if (thinkingDelta != null) {
+                  thinkingBuffer.write(thinkingDelta);
+                }
+                final existing = current;
+                if (existing == null) {
+                  return;
+                }
+                final wasEmpty = existing.content.trim().isEmpty &&
+                    (existing.thinkingContent?.trim().isEmpty ?? true);
+                final elapsedMs =
+                    DateTime.now().difference(startedAt).inMilliseconds;
+                current = existing.copyWith(
+                  content: contentBuffer.toString(),
+                  thinkingContent:
+                      _normalizeOptionalText(thinkingBuffer.toString()),
+                  generationStatus: ChatMessageGenerationStatus.streaming,
+                  generationDurationMs: elapsedMs,
+                );
+                publish(current!, force: wasEmpty);
+              }
+            : null,
+      );
+      cancellation?.throwIfCancelled();
+      final elapsedMs = DateTime.now().difference(startedAt).inMilliseconds;
+      final finalMessage = (current ??
+              ChatMessage(
+                id: _id('msg'),
+                authorName: authorName,
+                memberId: memberId,
+                content: completion.content,
+                thinkingContent: completion.thinkingContent,
+                createdAt: DateTime.now(),
+              ))
+          .copyWith(
+        content: completion.content,
+        thinkingContent: _normalizeOptionalText(
+              completion.thinkingContent ?? thinkingBuffer.toString(),
+            ) ??
+            current?.thinkingContent,
+        generationStatus: ChatMessageGenerationStatus.complete,
+        generationDurationMs: model.streaming ? elapsedMs : null,
+      );
+      if (current == null) {
+        messages.add(finalMessage);
+      } else {
+        _replaceMessageInList(messages, finalMessage);
+      }
+      nextState = _replaceConversation(
+        nextState,
+        conversation.copyWith(
+          messages: [...messages],
+          status: ConversationStatus.running,
+        ),
+      );
+      nextState = _appendModelResponseDiagnostic(
+        nextState,
+        conversationId: conversation.id,
+        messageId: finalMessage.id,
+        memberId: memberId,
+        model: model,
+        diagnostics: completion.diagnostics ??
+            ModelResponseDiagnostics(
+              streaming: model.streaming,
+              contentLength: finalMessage.content.length,
+              thinkingContentLength: finalMessage.thinkingContent?.length ?? 0,
+            ),
+      );
+      if (model.streaming) {
+        onProgress?.call(nextState);
+      }
+      return _ModelMessageResult(
+        message: finalMessage,
+        workingState: nextState,
+      );
+    } catch (_) {
+      final existing = current;
+      if (existing != null) {
+        final hasPartialContent = existing.content.trim().isNotEmpty ||
+            (existing.thinkingContent?.trim().isNotEmpty ?? false);
+        if (hasPartialContent) {
+          final status = cancellation?.isCancelled == true
+              ? ChatMessageGenerationStatus.stopped
+              : ChatMessageGenerationStatus.failed;
+          final partial = existing.copyWith(
+            generationStatus: status,
+            generationDurationMs:
+                DateTime.now().difference(startedAt).inMilliseconds,
+          );
+          _replaceMessageInList(messages, partial);
+        } else {
+          messages.removeWhere((message) => message.id == existing.id);
+        }
+        nextState = _replaceConversation(
+          nextState,
+          conversation.copyWith(
+            messages: [...messages],
+            status: ConversationStatus.running,
+          ),
+        );
+        onProgress?.call(nextState);
+      }
+      rethrow;
+    }
   }
 
   TeamMember? _findReplacementMember({
@@ -503,23 +717,22 @@ class TeamOrchestrator {
     onProgress?.call(workingState);
 
     cancellation?.throwIfCancelled();
-    final content = await gateway.complete(
+    final result = await _runVisibleModelMessage(
+      workingState: workingState,
+      conversation: conversation,
+      messages: messages,
+      authorName: member.name,
+      memberId: member.id,
       model: model,
       systemPrompt: role.renderSystemPrompt(
         memberName: member.name,
         teamName: team.name,
       ),
-      messages: messages,
+      requestMessages: messages,
       cancellation: cancellation,
+      onProgress: onProgress,
     );
-    cancellation?.throwIfCancelled();
-    messages.add(ChatMessage(
-      id: _id('msg'),
-      authorName: member.name,
-      memberId: member.id,
-      content: content,
-      createdAt: DateTime.now(),
-    ));
+    workingState = result.workingState;
     final updatedConversation = conversation.copyWith(
       messages: messages,
       status: ConversationStatus.idle,
@@ -536,6 +749,58 @@ class TeamOrchestrator {
       ],
     );
   }
+}
+
+AppState _appendModelResponseDiagnostic(
+  AppState state, {
+  required String conversationId,
+  required String messageId,
+  required String? memberId,
+  required ModelProfile model,
+  required ModelResponseDiagnostics diagnostics,
+}) {
+  final thinkingFieldKeys = diagnostics.thinkingFieldKeys.isEmpty
+      ? 'none'
+      : diagnostics.thinkingFieldKeys.join(',');
+  final detail = [
+    'conversation=$conversationId',
+    'message=$messageId',
+    if (memberId != null) 'member=$memberId',
+    'model=${model.id}',
+    'modelName=${model.name}',
+    'streaming=${diagnostics.streaming}',
+    'contentChars=${diagnostics.contentLength}',
+    'thinkingChars=${diagnostics.thinkingContentLength}',
+    'thinkingFieldKeys=$thinkingFieldKeys',
+    'contentDeltas=${diagnostics.contentDeltaCount}',
+    'thinkingDeltas=${diagnostics.thinkingDeltaCount}',
+  ].join(' ');
+  final metadata = <String, Object?>{
+    'conversation': conversationId,
+    'message': messageId,
+    if (memberId != null) 'member': memberId,
+    'model': model.id,
+    'modelName': model.name,
+    'streaming': diagnostics.streaming,
+    'contentChars': diagnostics.contentLength,
+    'thinkingChars': diagnostics.thinkingContentLength,
+    'thinkingFieldKeys': diagnostics.thinkingFieldKeys,
+    'contentDeltas': diagnostics.contentDeltaCount,
+    'thinkingDeltas': diagnostics.thinkingDeltaCount,
+    if (diagnostics.rawResponse != null) 'rawResponse': diagnostics.rawResponse,
+  };
+  return state.copyWith(
+    auditLog: [
+      ...state.auditLog,
+      AuditEntry(
+        id: _id('audit'),
+        action: 'model_response_diagnostic',
+        detail: detail,
+        metadata: metadata,
+        createdAt: DateTime.now(),
+      ),
+    ],
+  );
 }
 
 class ParsedAssignment {
@@ -562,12 +827,24 @@ class _AssignmentOutcome {
   const _AssignmentOutcome({
     required this.message,
     required this.processMessages,
+    required this.workingState,
     this.failed = false,
   });
 
   final ChatMessage message;
   final List<ChatMessage> processMessages;
+  final AppState workingState;
   final bool failed;
+}
+
+class _ModelMessageResult {
+  const _ModelMessageResult({
+    required this.message,
+    required this.workingState,
+  });
+
+  final ChatMessage message;
+  final AppState workingState;
 }
 
 _AssignmentPlan _parseAssignmentPlan({
@@ -665,6 +942,19 @@ AppState _replaceTaskAssignment(AppState state, TaskAssignment assignment) {
         .map((item) => item.id == assignment.id ? assignment : item)
         .toList(),
   );
+}
+
+void _replaceMessageInList(List<ChatMessage> messages, ChatMessage message) {
+  final index = messages.indexWhere((item) => item.id == message.id);
+  if (index < 0) {
+    messages.add(message);
+    return;
+  }
+  messages[index] = message;
+}
+
+String? _normalizeOptionalText(String value) {
+  return value.trim().isEmpty ? null : value;
 }
 
 String _summarize(String content) {

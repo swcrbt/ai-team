@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:ui' show PointerDeviceKind;
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -14,7 +14,7 @@ import 'package:ai_team/core/orchestrator.dart';
 
 void main() {
   test('controller notifies persistence callback after configuration changes',
-      () {
+      () async {
     AppState? persisted;
     final controller = AppController(
       AppState.seed(),
@@ -32,8 +32,41 @@ void main() {
         apiKey: 'secret',
       ),
     );
+    await controller.flushPersistence();
 
     expect(persisted, isNotNull);
+    expect(persisted!.models.map((model) => model.id), contains('model-extra'));
+  });
+
+  test('controller flushes async persistence before shutdown', () async {
+    AppState? persisted;
+    final saveCompleter = Completer<void>();
+    final controller = AppController(
+      AppState.seed(),
+      TeamOrchestrator(FakeModelGateway()),
+      onStateChanged: (state) async {
+        await saveCompleter.future;
+        persisted = state;
+      },
+    );
+    addTearDown(controller.dispose);
+
+    controller.addModel(
+      const ModelProfile(
+        id: 'model-extra',
+        name: 'Extra',
+        baseUrl: 'https://example.com/v1',
+        modelName: 'example-model',
+        apiKey: 'secret',
+      ),
+    );
+    final flushed = controller.flushPersistence();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(persisted, isNull);
+    saveCompleter.complete();
+    await flushed;
+
     expect(persisted!.models.map((model) => model.id), contains('model-extra'));
   });
 
@@ -603,6 +636,7 @@ void main() {
     addTearDown(controller.dispose);
 
     controller.addWorkspacePath(temp.path);
+    await controller.flushPersistence();
     final preview = await controller.readWorkspaceFile(
       workspaceId: persisted!.workspaces.single.id,
       relativePath: 'README.md',
@@ -613,6 +647,7 @@ void main() {
       proposedContent: 'new docs\n',
       memberName: '前端工程师',
     );
+    await controller.flushPersistence();
 
     expect(preview, 'old docs\n');
     expect(controller.patchProposals.single.diff, contains('+new docs'));
@@ -794,7 +829,7 @@ void main() {
     expect(controller.state.auditLog.last.action, 'team_task_stopped');
   });
 
-  test('controller blocks dispatch while a conversation is paused or stopped',
+  test('controller blocks dispatch while paused but allows restart after stop',
       () async {
     final controller = AppController(
       AppState.seed(),
@@ -818,10 +853,14 @@ void main() {
 
     controller.stopConversation();
     final stoppedCount = controller.currentConversation.messages.length;
-    await controller.dispatch('停止后不应执行');
+    await controller.dispatch('停止后可以重新发送');
 
-    expect(controller.currentConversation.messages.length, stoppedCount);
-    expect(controller.error, contains('已停止'));
+    expect(
+      controller.currentConversation.messages.length,
+      greaterThan(stoppedCount),
+    );
+    expect(controller.error, isNull);
+    expect(controller.currentConversation.status, ConversationStatus.idle);
   });
 
   testWidgets('desktop workspace separates chat and settings surfaces',
@@ -964,9 +1003,6 @@ void main() {
             ),
           ],
         ),
-        ...seed.conversations.where(
-          (item) => item.id != conversation.id,
-        ),
       ],
     );
 
@@ -1005,7 +1041,7 @@ void main() {
     );
     final messagePadding = messageRegion.child! as Padding;
     expect(messagePadding.padding, const EdgeInsets.only(bottom: 10));
-    expect(find.byTooltip('复制消息'), findsNothing);
+    expect(find.byTooltip('复制'), findsNothing);
     expect(find.text('09:05'), findsNothing);
 
     final nextMessageTopBeforeHover = tester.getTopLeft(
@@ -1019,18 +1055,24 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byTooltip('复制消息'), findsOneWidget);
+    expect(find.byTooltip('复制'), findsOneWidget);
+    expect(find.byIcon(Icons.copy_rounded), findsOneWidget);
     expect(find.text('09:05'), findsOneWidget);
     expect(
       tester
           .getTopLeft(find.widgetWithText(SelectableText, nextMessageContent)),
       nextMessageTopBeforeHover,
     );
+    await tester.tap(find.byTooltip('复制'));
+    await tester.pump();
+
+    expect(find.byIcon(Icons.check_rounded), findsOneWidget);
+    expect(find.text('已复制消息'), findsNothing);
 
     await mouse.removePointer();
   });
 
-  testWidgets('chat scrolls to the latest message after sending',
+  testWidgets('chat messages show real model thinking content when present',
       (tester) async {
     final seed = AppState.seed();
     final conversation = seed.conversations.firstWhere(
@@ -1039,17 +1081,143 @@ void main() {
     final state = seed.copyWith(
       conversations: [
         conversation.copyWith(
-          messages: List.generate(
-            45,
-            (index) => ChatMessage(
-              id: 'msg-history-$index',
+          messages: [
+            ChatMessage(
+              id: 'msg-thinking',
               authorName: '秘书',
-              content: '历史消息 $index\n${'填充内容 ' * 12}',
-              createdAt: DateTime(2026, 6, 14, 8).add(
-                Duration(minutes: index),
-              ),
+              content: '正式回复',
+              thinkingContent: '供应商返回的真实 reasoning 内容',
+              createdAt: DateTime(2026, 6, 15, 9, 5),
             ),
-          ),
+          ],
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: state,
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    expect(find.text('思考过程'), findsOneWidget);
+    expect(find.text('供应商返回的真实 reasoning 内容'), findsNothing);
+    expect(find.widgetWithText(SelectableText, '正式回复'), findsOneWidget);
+
+    await tester.tap(find.text('思考过程'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('供应商返回的真实 reasoning 内容'), findsOneWidget);
+  });
+
+  testWidgets('streaming thinking auto-expands then folds after completion',
+      (tester) async {
+    final seed = AppState.seed();
+    final conversation = seed.conversations.firstWhere(
+      (item) => item.id == 'conv-member-secretary',
+    );
+    final state = seed.copyWith(
+      conversations: [
+        conversation.copyWith(
+          messages: [
+            ChatMessage(
+              id: 'msg-streaming-thinking',
+              authorName: '秘书',
+              content: '正在回复',
+              thinkingContent: '流式思考内容',
+              createdAt: DateTime.now().subtract(const Duration(seconds: 2)),
+              generationStatus: ChatMessageGenerationStatus.streaming,
+            ),
+            ChatMessage(
+              id: 'msg-complete-thinking',
+              authorName: '秘书',
+              content: '完成回复',
+              thinkingContent: '完成思考内容',
+              createdAt: DateTime(2026, 6, 15, 9, 5),
+              generationDurationMs: 11000,
+            ),
+          ],
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: state,
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    expect(find.textContaining('思考中…'), findsOneWidget);
+    expect(find.text('流式思考内容'), findsOneWidget);
+    expect(find.text('已完成思考 · 11s'), findsOneWidget);
+    expect(find.text('完成思考内容'), findsNothing);
+
+    await tester.tap(find.text('已完成思考 · 11s'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('完成思考内容'), findsOneWidget);
+  });
+
+  testWidgets('team chat shows member name outside the message bubble',
+      (tester) async {
+    final seed = AppState.seed();
+    final conversation = seed.conversations.firstWhere(
+      (item) => item.id == 'conv-team-default',
+    );
+    final state = seed.copyWith(
+      conversations: [
+        conversation.copyWith(
+          messages: [
+            ChatMessage(
+              id: 'msg-team-member',
+              authorName: '秘书',
+              memberId: 'member-secretary',
+              content: '群聊消息内容',
+              createdAt: DateTime(2026, 6, 17),
+            ),
+          ],
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: state,
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    final list = find.byKey(const ValueKey('chat-message-list'));
+    final memberName = find.descendant(of: list, matching: find.text('秘书'));
+    final content = find.descendant(of: list, matching: find.text('群聊消息内容'));
+    expect(memberName, findsOneWidget);
+    expect(content, findsOneWidget);
+    expect(
+      tester.getTopLeft(memberName).dy,
+      lessThan(tester.getTopLeft(content).dy),
+    );
+  });
+
+  testWidgets('private chat does not repeat member name in messages',
+      (tester) async {
+    final seed = AppState.seed();
+    final conversation = seed.conversations.firstWhere(
+      (item) => item.id == 'conv-member-secretary',
+    );
+    final state = seed.copyWith(
+      conversations: [
+        conversation.copyWith(
+          messages: [
+            ChatMessage(
+              id: 'msg-private-member',
+              authorName: '秘书',
+              memberId: 'member-secretary',
+              content: '私聊消息内容',
+              createdAt: DateTime(2026, 6, 17),
+            ),
+          ],
         ),
         ...seed.conversations.where(
           (item) => item.id != conversation.id,
@@ -1060,13 +1228,107 @@ void main() {
     await tester.pumpWidget(
       AiTeamApp(
         initialState: state,
-        modelGateway: RecordingModelGateway(),
+        modelGateway: FakeModelGateway(),
       ),
     );
 
     final list = find.byKey(const ValueKey('chat-message-list'));
+    expect(
+      find.descendant(of: list, matching: find.text('秘书')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: list, matching: find.text('私聊消息内容')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('streaming message suppresses duplicate typing indicator',
+      (tester) async {
+    final seed = AppState.seed();
+    final conversation = seed.conversations.firstWhere(
+      (item) => item.id == 'conv-member-secretary',
+    );
+    final state = seed.copyWith(
+      conversations: [
+        conversation.copyWith(
+          status: ConversationStatus.running,
+          messages: [
+            ChatMessage(
+              id: 'msg-streaming-secretary',
+              authorName: '秘书',
+              memberId: 'member-secretary',
+              content: '',
+              createdAt: DateTime.now(),
+              generationStatus: ChatMessageGenerationStatus.streaming,
+            ),
+          ],
+        ),
+        ...seed.conversations.where(
+          (item) => item.id != conversation.id,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: state,
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    expect(find.text('正在输入中'), findsOneWidget);
+    expect(find.textContaining('秘书 正在输入中'), findsNothing);
+  });
+
+  testWidgets('chat messages omit thinking section when provider omits it',
+      (tester) async {
+    final seed = AppState.seed();
+    final conversation = seed.conversations.firstWhere(
+      (item) => item.id == 'conv-member-secretary',
+    );
+    final state = seed.copyWith(
+      conversations: [
+        conversation.copyWith(
+          messages: [
+            ChatMessage(
+              id: 'msg-no-thinking',
+              authorName: '秘书',
+              content: '普通回复',
+              createdAt: DateTime(2026, 6, 15, 9, 5),
+            ),
+          ],
+        ),
+        ...seed.conversations.where(
+          (item) => item.id != conversation.id,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: state,
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    expect(find.text('思考过程'), findsNothing);
+    expect(find.widgetWithText(SelectableText, '普通回复'), findsOneWidget);
+  });
+
+  testWidgets('chat scrolls to the latest message after sending',
+      (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: _stateWithLongSecretaryChat(),
+        modelGateway: RecordingModelGateway(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byKey(const ValueKey('chat-message-list'));
     expect(list, findsOneWidget);
-    await tester.drag(list, const Offset(0, 900));
+    await tester.drag(list, const Offset(0, -10000));
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField).last, '滚动到最新消息');
@@ -1085,6 +1347,598 @@ void main() {
       listView.controller!.offset,
       listView.controller!.position.maxScrollExtent,
     );
+  });
+
+  testWidgets('chat auto follow uses an immediate jump instead of animation',
+      (tester) async {
+    final gateway = BlockingModelGateway();
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: _stateWithLongSecretaryChat(),
+        modelGateway: gateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byKey(const ValueKey('chat-message-list'));
+    final controller = tester.widget<ListView>(list).controller!;
+    await tester.drag(list, const Offset(0, -10000));
+    await tester.pumpAndSettle();
+    expect(controller.offset, controller.position.maxScrollExtent);
+
+    await tester.enterText(find.byType(TextField).last, '发送后不应启动滚动动画');
+    await tester.tap(find.byTooltip('发送'));
+    await tester.pump();
+
+    expect(controller.offset, controller.position.maxScrollExtent);
+
+    await gateway.started.future.timeout(const Duration(seconds: 1));
+    await tester.tap(find.byTooltip('停止生成'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('chat keeps manual scroll position when new activity arrives',
+      (tester) async {
+    final gateway = BlockingModelGateway();
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: _stateWithLongSecretaryChat(),
+        modelGateway: gateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byKey(const ValueKey('chat-message-list'));
+    final controller = tester.widget<ListView>(list).controller!;
+    await tester.drag(list, const Offset(0, -10000));
+    await tester.pumpAndSettle();
+    expect(controller.offset, controller.position.maxScrollExtent);
+
+    await tester.drag(list, const Offset(0, 900));
+    await tester.pumpAndSettle();
+    final manualOffset = controller.offset;
+    expect(manualOffset, lessThan(controller.position.maxScrollExtent - 96));
+
+    await tester.enterText(find.byType(TextField).last, '后台活动不应拉到底部');
+    await tester.tap(find.byTooltip('发送'));
+    await gateway.started.future.timeout(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(controller.offset, manualOffset);
+
+    await tester.tap(find.byTooltip('停止生成'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('chat cancels pending auto follow after immediate user scroll',
+      (tester) async {
+    final gateway = BlockingModelGateway();
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: _stateWithLongSecretaryChat(),
+        modelGateway: gateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byKey(const ValueKey('chat-message-list'));
+    final controller = tester.widget<ListView>(list).controller!;
+    await tester.drag(list, const Offset(0, -10000));
+    await tester.pumpAndSettle();
+    controller.jumpTo(controller.position.maxScrollExtent - 48);
+    await tester.pump();
+
+    await tester.enterText(find.byType(TextField).last, '发送后马上滚动历史');
+    await tester.tap(find.byTooltip('发送'));
+    await tester.drag(list, const Offset(0, 900));
+    await tester.pump();
+    final manualOffset = controller.offset;
+    expect(manualOffset, lessThan(controller.position.maxScrollExtent - 96));
+
+    await gateway.started.future.timeout(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(controller.offset, manualOffset);
+    expect(find.byTooltip('回到底部'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('停止生成'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('chat restores each conversation scroll position after switching',
+      (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: _stateWithLongSecretaryChat(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byKey(const ValueKey('chat-message-list'));
+    final controller = tester.widget<ListView>(list).controller!;
+    await tester.drag(list, const Offset(0, -900));
+    await tester.pumpAndSettle();
+
+    final secretaryOffset = controller.offset;
+    expect(secretaryOffset, greaterThan(0));
+    expect(secretaryOffset, lessThan(controller.position.maxScrollExtent - 96));
+
+    await tester.tap(
+      find.byKey(const ValueKey('conversation-row-conv-member-frontend')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('conversation-row-conv-member-secretary')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(controller.offset, secretaryOffset);
+  });
+
+  testWidgets('chat shows a back to bottom button after manual scroll',
+      (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: _stateWithLongSecretaryChat(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byKey(const ValueKey('chat-message-list'));
+    final controller = tester.widget<ListView>(list).controller!;
+    await tester.drag(list, const Offset(0, -10000));
+    await tester.pumpAndSettle();
+    expect(controller.offset, controller.position.maxScrollExtent);
+    expect(find.byTooltip('回到底部'), findsNothing);
+
+    await tester.drag(list, const Offset(0, 900));
+    await tester.pumpAndSettle();
+
+    expect(controller.offset, lessThan(controller.position.maxScrollExtent));
+    expect(find.byTooltip('回到底部'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('回到底部'));
+    await tester.pumpAndSettle();
+
+    expect(controller.offset, controller.position.maxScrollExtent);
+    expect(find.byTooltip('回到底部'), findsNothing);
+  });
+
+  testWidgets('chat follows streaming content while pinned near bottom',
+      (tester) async {
+    final gateway = ScriptedStreamingWidgetGateway(
+      deltas: [
+        const ModelStreamDelta(contentDelta: '流式回复开始\n'),
+        ModelStreamDelta(contentDelta: '${'持续输出内容 ' * 24}\n'),
+        ModelStreamDelta(contentDelta: '${'更多输出内容 ' * 24}\n'),
+        ModelStreamDelta(contentDelta: '${'最后一段输出 ' * 24}\n'),
+      ],
+    );
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: _stateWithLongSecretaryChat(),
+        modelGateway: gateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byKey(const ValueKey('chat-message-list'));
+    final controller = tester.widget<ListView>(list).controller!;
+    await tester.drag(list, const Offset(0, -10000));
+    await tester.pumpAndSettle();
+    expect(controller.offset, controller.position.maxScrollExtent);
+
+    await tester.enterText(find.byType(TextField).last, '请流式输出长回复');
+    await tester.tap(find.byTooltip('发送'));
+    for (var index = 0; index < gateway.deltas.length + 1; index++) {
+      await tester.pump(const Duration(milliseconds: 80));
+    }
+    await gateway.completed.future;
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('最后一段输出'), findsWidgets);
+    expect(controller.offset, controller.position.maxScrollExtent);
+  });
+
+  testWidgets('chat keeps following a large streaming delta from bottom',
+      (tester) async {
+    final gateway = ScriptedStreamingWidgetGateway(
+      deltas: [
+        ModelStreamDelta(contentDelta: '${'单次大段流式输出 ' * 220}\n'),
+      ],
+      deltaDelay: Duration.zero,
+    );
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: _stateWithLongSecretaryChat(),
+        modelGateway: gateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byKey(const ValueKey('chat-message-list'));
+    final controller = tester.widget<ListView>(list).controller!;
+    await tester.drag(list, const Offset(0, -10000));
+    await tester.pumpAndSettle();
+    expect(controller.offset, controller.position.maxScrollExtent);
+
+    await tester.enterText(find.byType(TextField).last, '请流式输出很长回复');
+    await tester.tap(find.byTooltip('发送'));
+    await _pumpStreamingFrames(tester, count: 4);
+    await gateway.completed.future.timeout(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('单次大段流式输出'), findsWidgets);
+    expect(controller.offset, controller.position.maxScrollExtent);
+    expect(find.byTooltip('回到底部'), findsNothing);
+  });
+
+  testWidgets('chat allows manual scrolling during streaming output',
+      (tester) async {
+    final gateway = ScriptedStreamingWidgetGateway(
+      deltas: [
+        const ModelStreamDelta(contentDelta: '流式回复开始\n'),
+        ModelStreamDelta(contentDelta: '${'持续输出内容 ' * 24}\n'),
+        ModelStreamDelta(contentDelta: '${'更多输出内容 ' * 24}\n'),
+        ModelStreamDelta(contentDelta: '${'最后一段输出 ' * 24}\n'),
+      ],
+      pauseAfterDeltaIndex: 1,
+    );
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: _stateWithLongSecretaryChat(),
+        modelGateway: gateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byKey(const ValueKey('chat-message-list'));
+    final controller = tester.widget<ListView>(list).controller!;
+    await tester.drag(list, const Offset(0, -10000));
+    await tester.pumpAndSettle();
+    expect(controller.offset, controller.position.maxScrollExtent);
+
+    await tester.enterText(find.byType(TextField).last, '请流式输出长回复');
+    await tester.tap(find.byTooltip('发送'));
+    for (var index = 0; index < 3; index++) {
+      await tester.pump(const Duration(milliseconds: 80));
+    }
+    await gateway.paused.future.timeout(const Duration(seconds: 1));
+
+    await tester.drag(list, const Offset(0, 900));
+    await tester.pumpAndSettle();
+    final manualOffset = controller.offset;
+    expect(manualOffset, lessThan(controller.position.maxScrollExtent - 96));
+    expect(find.byTooltip('回到底部'), findsOneWidget);
+
+    gateway.resume();
+    await _pumpStreamingFrames(tester, count: gateway.deltas.length + 1);
+    await gateway.completed.future;
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('最后一段输出'), findsWidgets);
+    expect(controller.offset, manualOffset);
+    expect(find.byTooltip('回到底部'), findsOneWidget);
+  });
+
+  testWidgets('chat allows manual scrolling while streaming continues',
+      (tester) async {
+    final gateway = ScriptedStreamingWidgetGateway(
+      deltas: [
+        for (var index = 0; index < 12; index++)
+          ModelStreamDelta(contentDelta: '持续流式输出 $index ${'内容 ' * 30}\n'),
+      ],
+      deltaDelay: const Duration(milliseconds: 20),
+    );
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: _stateWithLongSecretaryChat(),
+        modelGateway: gateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byKey(const ValueKey('chat-message-list'));
+    final controller = tester.widget<ListView>(list).controller!;
+    await tester.drag(list, const Offset(0, -10000));
+    await tester.pumpAndSettle();
+    expect(controller.offset, controller.position.maxScrollExtent);
+
+    await tester.enterText(find.byType(TextField).last, '请持续流式输出');
+    await tester.tap(find.byTooltip('发送'));
+    await _pumpStreamingFrames(tester, count: 2);
+
+    await tester.drag(list, const Offset(0, 900));
+    await tester.pump();
+    final manualOffset = controller.offset;
+    expect(manualOffset, lessThan(controller.position.maxScrollExtent - 96));
+
+    await _pumpStreamingFrames(tester, count: 12);
+    await gateway.completed.future.timeout(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('持续流式输出 11'), findsWidgets);
+    expect(controller.offset, manualOffset);
+    expect(find.byTooltip('回到底部'), findsOneWidget);
+  });
+
+  testWidgets('chat cancels queued auto follow when user scrolls during stream',
+      (tester) async {
+    final gateway = ScriptedStreamingWidgetGateway(
+      deltas: [
+        const ModelStreamDelta(contentDelta: '流式回复开始\n'),
+        ModelStreamDelta(contentDelta: '${'继续输出内容 ' * 80}\n'),
+        ModelStreamDelta(contentDelta: '${'不会拉回底部 ' * 80}\n'),
+      ],
+      pauseAfterDeltaIndex: 0,
+    );
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: _stateWithLongSecretaryChat(),
+        modelGateway: gateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byKey(const ValueKey('chat-message-list'));
+    final controller = tester.widget<ListView>(list).controller!;
+    await tester.drag(list, const Offset(0, -10000));
+    await tester.pumpAndSettle();
+    expect(controller.offset, controller.position.maxScrollExtent);
+
+    await tester.enterText(find.byType(TextField).last, '请流式输出长回复');
+    await tester.tap(find.byTooltip('发送'));
+    await gateway.paused.future.timeout(const Duration(seconds: 1));
+
+    await tester.drag(list, const Offset(0, 900));
+    await tester.pump();
+    final manualOffset = controller.offset;
+    expect(manualOffset, lessThan(controller.position.maxScrollExtent - 96));
+
+    gateway.resume();
+    await _pumpStreamingFrames(tester, count: gateway.deltas.length + 1);
+    await gateway.completed.future.timeout(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('不会拉回底部'), findsWidgets);
+    expect(controller.offset, manualOffset);
+    expect(find.byTooltip('回到底部'), findsOneWidget);
+  });
+
+  testWidgets('chat mouse wheel scrolling disables streaming auto follow',
+      (tester) async {
+    final gateway = ScriptedStreamingWidgetGateway(
+      deltas: [
+        const ModelStreamDelta(contentDelta: '流式回复开始\n'),
+        ModelStreamDelta(contentDelta: '${'滚轮后继续输出 ' * 80}\n'),
+      ],
+      pauseAfterDeltaIndex: 0,
+    );
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: _stateWithLongSecretaryChat(),
+        modelGateway: gateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byKey(const ValueKey('chat-message-list'));
+    final controller = tester.widget<ListView>(list).controller!;
+    await tester.drag(list, const Offset(0, -10000));
+    await tester.pumpAndSettle();
+    expect(controller.offset, controller.position.maxScrollExtent);
+
+    await tester.enterText(find.byType(TextField).last, '请流式输出长回复');
+    await tester.tap(find.byTooltip('发送'));
+    await gateway.paused.future.timeout(const Duration(seconds: 1));
+    await tester.pump();
+
+    await tester.sendEventToBinding(
+      PointerScrollEvent(
+        position: tester.getCenter(list),
+        scrollDelta: const Offset(0, -900),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final wheelOffset = controller.offset;
+    expect(wheelOffset, lessThan(controller.position.maxScrollExtent - 96));
+    expect(find.byTooltip('回到底部'), findsOneWidget);
+
+    gateway.resume();
+    await _pumpStreamingFrames(tester, count: gateway.deltas.length + 1);
+    await gateway.completed.future.timeout(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('滚轮后继续输出'), findsWidgets);
+    expect(controller.offset, wheelOffset);
+  });
+
+  testWidgets('chat small upward wheel scroll disables streaming auto follow',
+      (tester) async {
+    final gateway = ScriptedStreamingWidgetGateway(
+      deltas: [
+        const ModelStreamDelta(contentDelta: '流式回复开始\n'),
+        for (var index = 0; index < 8; index++)
+          ModelStreamDelta(contentDelta: '小步滚轮后继续输出 $index ${'内容 ' * 30}\n'),
+      ],
+      deltaDelay: const Duration(milliseconds: 20),
+    );
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: _stateWithLongSecretaryChat(),
+        modelGateway: gateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byKey(const ValueKey('chat-message-list'));
+    final controller = tester.widget<ListView>(list).controller!;
+    await tester.drag(list, const Offset(0, -10000));
+    await tester.pumpAndSettle();
+    expect(controller.offset, controller.position.maxScrollExtent);
+
+    await tester.enterText(find.byType(TextField).last, '请持续流式输出');
+    await tester.tap(find.byTooltip('发送'));
+    await _pumpStreamingFrames(tester, count: 2);
+
+    await tester.sendEventToBinding(
+      PointerScrollEvent(
+        position: tester.getCenter(list),
+        scrollDelta: const Offset(0, -20),
+      ),
+    );
+    await tester.pump();
+    final wheelOffset = controller.offset;
+    expect(
+      controller.position.maxScrollExtent - wheelOffset,
+      lessThan(96),
+    );
+
+    await _pumpStreamingFrames(tester, count: 10);
+    await gateway.completed.future.timeout(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('小步滚轮后继续输出 7'), findsWidgets);
+    expect(controller.offset, wheelOffset);
+    expect(find.byTooltip('回到底部'), findsOneWidget);
+  });
+
+  testWidgets('chat back to bottom resumes follow after small wheel scroll',
+      (tester) async {
+    final gateway = ScriptedStreamingWidgetGateway(
+      deltas: [
+        const ModelStreamDelta(contentDelta: '流式回复开始\n'),
+        ModelStreamDelta(contentDelta: '${'点击回到底部后继续输出 ' * 60}\n'),
+      ],
+      pauseAfterDeltaIndex: 0,
+    );
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: _stateWithLongSecretaryChat(),
+        modelGateway: gateway,
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byKey(const ValueKey('chat-message-list'));
+    final controller = tester.widget<ListView>(list).controller!;
+    await tester.drag(list, const Offset(0, -10000));
+    await tester.pumpAndSettle();
+    expect(controller.offset, controller.position.maxScrollExtent);
+
+    await tester.enterText(find.byType(TextField).last, '请流式输出长回复');
+    await tester.tap(find.byTooltip('发送'));
+    await gateway.paused.future.timeout(const Duration(seconds: 1));
+    await tester.pump();
+
+    await tester.sendEventToBinding(
+      PointerScrollEvent(
+        position: tester.getCenter(list),
+        scrollDelta: const Offset(0, -20),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('回到底部'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('回到底部'));
+    await tester.pumpAndSettle();
+    expect(controller.offset, controller.position.maxScrollExtent);
+    expect(find.byTooltip('回到底部'), findsNothing);
+
+    gateway.resume();
+    await _pumpStreamingFrames(tester, count: gateway.deltas.length + 1);
+    await gateway.completed.future.timeout(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('点击回到底部后继续输出'), findsWidgets);
+    expect(controller.offset, controller.position.maxScrollExtent);
+  });
+
+  testWidgets('chat resumes auto follow after scrolling back near bottom',
+      (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: _stateWithLongSecretaryChat(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byKey(const ValueKey('chat-message-list'));
+    final controller = tester.widget<ListView>(list).controller!;
+    await tester.drag(list, const Offset(0, -10000));
+    await tester.pumpAndSettle();
+    expect(controller.offset, controller.position.maxScrollExtent);
+
+    await tester.sendEventToBinding(
+      PointerScrollEvent(
+        position: tester.getCenter(list),
+        scrollDelta: const Offset(0, -160),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      controller.position.maxScrollExtent - controller.offset,
+      greaterThan(96),
+    );
+    expect(find.byTooltip('回到底部'), findsOneWidget);
+
+    await tester.sendEventToBinding(
+      PointerScrollEvent(
+        position: tester.getCenter(list),
+        scrollDelta: const Offset(0, 100),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      controller.position.maxScrollExtent - controller.offset,
+      lessThanOrEqualTo(96),
+    );
+    expect(find.byTooltip('回到底部'), findsNothing);
+  });
+
+  testWidgets('chat restores follow when a manual scroll ends at bottom',
+      (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: _stateWithLongSecretaryChat(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byKey(const ValueKey('chat-message-list'));
+    final controller = tester.widget<ListView>(list).controller!;
+    await tester.drag(list, const Offset(0, -10000));
+    await tester.pumpAndSettle();
+    expect(controller.offset, controller.position.maxScrollExtent);
+
+    await tester.sendEventToBinding(
+      PointerScrollEvent(
+        position: tester.getCenter(list),
+        scrollDelta: const Offset(0, -20),
+      ),
+    );
+    await tester.pump();
+    expect(find.byTooltip('回到底部'), findsOneWidget);
+
+    ScrollEndNotification(
+      metrics: FixedScrollMetrics(
+        minScrollExtent: controller.position.minScrollExtent,
+        maxScrollExtent: controller.position.maxScrollExtent,
+        pixels: controller.position.maxScrollExtent,
+        viewportDimension: controller.position.viewportDimension,
+        axisDirection: AxisDirection.down,
+        devicePixelRatio: tester.view.devicePixelRatio,
+      ),
+      context: tester.element(list),
+    ).dispatch(tester.element(list));
+    await tester.pump();
+
+    expect(find.byTooltip('回到底部'), findsNothing);
   });
 
   testWidgets('left sidebar uses a deep black background', (tester) async {
@@ -1379,6 +2233,12 @@ void main() {
           id: 'audit-new',
           action: 'new_action',
           detail: '较新操作',
+          metadata: const {
+            'rawResponse':
+                '{"choices":[{"message":{"content":"原始模型返回","reasoning_content":"原始思考字段"}}]}',
+            'streaming': false,
+            'model': 'model-main',
+          },
           createdAt: DateTime(2026, 6, 15, 9, 6, 7),
         ),
       ],
@@ -1406,6 +2266,23 @@ void main() {
     final newActionTop = tester.getTopLeft(find.text('new_action')).dy;
     final oldActionTop = tester.getTopLeft(find.text('old_action')).dy;
     expect(newActionTop, lessThan(oldActionTop));
+
+    await tester.tap(
+      find.descendant(
+        of: find.ancestor(
+          of: find.text('new_action'),
+          matching: find.byType(Container),
+        ),
+        matching: find.byTooltip('查看详情'),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('审计详情'), findsOneWidget);
+    expect(find.text('原始返回内容'), findsOneWidget);
+    expect(find.textContaining('原始模型返回'), findsOneWidget);
+    expect(find.textContaining('原始思考字段'), findsOneWidget);
+    expect(find.text('model: model-main'), findsOneWidget);
   });
 
   testWidgets('sidebar model button opens an independent model page',
@@ -1543,6 +2420,31 @@ void main() {
     expect(find.textContaining('任务已停止'), findsWidgets);
   });
 
+  testWidgets('chat can send again after stopping generation', (tester) async {
+    final gateway = BlockingThenRecordingGateway();
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: gateway,
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField).last, '先停止');
+    await tester.tap(find.byTooltip('发送'));
+    await gateway.started.future.timeout(const Duration(seconds: 1));
+    await tester.pump();
+
+    await tester.tap(find.byTooltip('停止生成'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last, '停止后继续');
+    await tester.tap(find.byTooltip('发送'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('当前会话已停止'), findsNothing);
+    expect(find.textContaining('停止后继续'), findsWidgets);
+    expect(find.textContaining('已恢复回复'), findsWidgets);
+  });
+
   testWidgets('enter submits the focused chat message', (tester) async {
     final gateway = RecordingModelGateway();
     await tester.pumpWidget(
@@ -1637,6 +2539,42 @@ void main() {
   });
 }
 
+AppState _stateWithLongSecretaryChat() {
+  final seed = AppState.seed();
+  final conversation = seed.conversations.firstWhere(
+    (item) => item.id == 'conv-member-secretary',
+  );
+  return seed.copyWith(
+    conversations: [
+      conversation.copyWith(
+        messages: List.generate(
+          45,
+          (index) => ChatMessage(
+            id: 'msg-history-$index',
+            authorName: '秘书',
+            content: '历史消息 $index\n${'填充内容 ' * 12}',
+            createdAt: DateTime(2026, 6, 14, 8).add(
+              Duration(minutes: index),
+            ),
+          ),
+        ),
+      ),
+      ...seed.conversations.where(
+        (item) => item.id != conversation.id,
+      ),
+    ],
+  );
+}
+
+Future<void> _pumpStreamingFrames(
+  WidgetTester tester, {
+  required int count,
+}) async {
+  for (var index = 0; index < count; index++) {
+    await tester.pump(const Duration(milliseconds: 80));
+  }
+}
+
 class BlockingModelGateway implements ModelGateway {
   final Completer<void> started = Completer<void>();
   ModelRequestCancellation? cancellation;
@@ -1658,6 +2596,31 @@ class BlockingModelGateway implements ModelGateway {
   }
 }
 
+class BlockingThenRecordingGateway implements ModelGateway {
+  final Completer<void> started = Completer<void>();
+  ModelRequestCancellation? cancellation;
+  var callCount = 0;
+
+  @override
+  Future<String> complete({
+    required ModelProfile model,
+    required String systemPrompt,
+    required List<ChatMessage> messages,
+    ModelRequestCancellation? cancellation,
+  }) async {
+    callCount++;
+    if (callCount == 1) {
+      this.cancellation = cancellation;
+      if (!started.isCompleted) {
+        started.complete();
+      }
+      await cancellation!.cancelled;
+      cancellation.throwIfCancelled();
+    }
+    return '已恢复回复';
+  }
+}
+
 class RecordingModelGateway implements ModelGateway {
   final List<String> modelIds = [];
   final List<String> modelNames = [];
@@ -1672,6 +2635,73 @@ class RecordingModelGateway implements ModelGateway {
     modelIds.add(model.id);
     modelNames.add(model.modelName);
     return '使用 ${model.modelName} 回复';
+  }
+}
+
+class ScriptedStreamingWidgetGateway implements MetadataModelGateway {
+  ScriptedStreamingWidgetGateway({
+    required this.deltas,
+    this.pauseAfterDeltaIndex,
+    this.deltaDelay = const Duration(milliseconds: 60),
+  });
+
+  final List<ModelStreamDelta> deltas;
+  final int? pauseAfterDeltaIndex;
+  final Duration deltaDelay;
+  final Completer<void> completed = Completer<void>();
+  final Completer<void> paused = Completer<void>();
+  final Completer<void> _resume = Completer<void>();
+
+  void resume() {
+    if (!_resume.isCompleted) {
+      _resume.complete();
+    }
+  }
+
+  @override
+  Future<String> complete({
+    required ModelProfile model,
+    required String systemPrompt,
+    required List<ChatMessage> messages,
+    ModelRequestCancellation? cancellation,
+  }) async {
+    final completion = await completeWithMetadata(
+      model: model,
+      systemPrompt: systemPrompt,
+      messages: messages,
+      cancellation: cancellation,
+    );
+    return completion.content;
+  }
+
+  @override
+  Future<ModelCompletion> completeWithMetadata({
+    required ModelProfile model,
+    required String systemPrompt,
+    required List<ChatMessage> messages,
+    ModelRequestCancellation? cancellation,
+    ModelStreamDeltaHandler? onDelta,
+  }) async {
+    final content = StringBuffer();
+    for (var index = 0; index < deltas.length; index++) {
+      final delta = deltas[index];
+      cancellation?.throwIfCancelled();
+      onDelta?.call(delta);
+      if (delta.contentDelta != null) {
+        content.write(delta.contentDelta);
+      }
+      if (pauseAfterDeltaIndex == index) {
+        if (!paused.isCompleted) {
+          paused.complete();
+        }
+        await _resume.future;
+      }
+      await Future<void>.delayed(deltaDelay);
+    }
+    if (!completed.isCompleted) {
+      completed.complete();
+    }
+    return ModelCompletion(content: content.toString());
   }
 }
 

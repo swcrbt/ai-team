@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -12,6 +13,8 @@ import 'core/local_store.dart';
 import 'core/model_gateway.dart';
 import 'core/orchestrator.dart';
 import 'core/patching.dart';
+
+typedef StateChanged = FutureOr<void> Function(AppState state);
 
 class AiTeamApp extends StatelessWidget {
   const AiTeamApp({
@@ -24,7 +27,7 @@ class AiTeamApp extends StatelessWidget {
 
   final AppState initialState;
   final ModelGateway modelGateway;
-  final ValueChanged<AppState>? onStateChanged;
+  final StateChanged? onStateChanged;
   final FileDialogService fileDialogs;
 
   @override
@@ -61,7 +64,7 @@ class AiTeamHome extends StatefulWidget {
 
   final AppState initialState;
   final ModelGateway modelGateway;
-  final ValueChanged<AppState>? onStateChanged;
+  final StateChanged? onStateChanged;
   final FileDialogService fileDialogs;
 
   @override
@@ -85,6 +88,7 @@ class _AiTeamHomeState extends State<AiTeamHome> {
 
   @override
   void dispose() {
+    unawaited(controller.flushPersistence());
     controller.dispose();
     super.dispose();
   }
@@ -236,7 +240,7 @@ class AppController extends ChangeNotifier {
   final Set<String> pinnedConversationIds = <String>{};
   final List<String> pinnedConversationOrderIds = <String>[];
   final TeamOrchestrator orchestrator;
-  final ValueChanged<AppState>? onStateChanged;
+  final StateChanged? onStateChanged;
   final FileDialogService fileDialogs;
   final JsonLocalStore exportStore;
   bool isDispatching = false;
@@ -244,6 +248,7 @@ class AppController extends ChangeNotifier {
   String? _runningTaskId;
   ModelRequestCancellation? _activeCancellation;
   ConversationStatus? _requestedCancellationStatus;
+  Future<void> _persistenceQueue = Future<void>.value();
 
   Team get currentTeam {
     final activeId = activeTeamId;
@@ -686,10 +691,6 @@ class AppController extends ChangeNotifier {
     final status = currentConversation.status;
     if (status == ConversationStatus.paused) {
       error = '当前会话已暂停，请先点击继续。';
-      return false;
-    }
-    if (status == ConversationStatus.stopped) {
-      error = '当前会话已停止，不能继续调度。';
       return false;
     }
     return true;
@@ -1482,6 +1483,10 @@ class AppController extends ChangeNotifier {
                               id: message.id,
                               authorName: message.authorName,
                               content: content,
+                              thinkingContent: message.thinkingContent,
+                              generationStatus: message.generationStatus,
+                              generationDurationMs:
+                                  message.generationDurationMs,
                               createdAt: message.createdAt,
                               memberId: message.memberId,
                               isUser: message.isUser,
@@ -1611,8 +1616,24 @@ class AppController extends ChangeNotifier {
     if (!state.conversations.any((item) => item.id == selectedConversationId)) {
       selectedConversationId = _initialConversationId(state);
     }
-    onStateChanged?.call(state);
+    _persistState(state);
     notifyListeners();
+  }
+
+  Future<void> flushPersistence() => _persistenceQueue;
+
+  void _persistState(AppState snapshot) {
+    final handler = onStateChanged;
+    if (handler == null) {
+      return;
+    }
+    final save = _persistenceQueue.then(
+      (_) => Future<void>.sync(() => handler(snapshot)),
+    );
+    _persistenceQueue = save.catchError((Object error, StackTrace stackTrace) {
+      this.error = '状态保存失败：$error';
+    });
+    unawaited(_persistenceQueue);
   }
 
   void _syncConversationOrder() {
@@ -2191,12 +2212,29 @@ class _ChatPane extends StatefulWidget {
   State<_ChatPane> createState() => _ChatPaneState();
 }
 
+enum _MessageUserScrollDirection { idle, history, bottom }
+
 class _ChatPaneState extends State<_ChatPane> {
+  static const _autoScrollBottomThreshold = 96.0;
+  static const _messageBottomReachedTolerance = 1.0;
+
   final textController = TextEditingController();
   final messageScrollController = ScrollController();
+  final messageScrollOffsetsByConversation = <String, double>{};
+  final messageAutoFollowByConversation = <String, bool>{};
+  final messageUserScrollDirectionsByConversation =
+      <String, _MessageUserScrollDirection>{};
   String? lastConversationId;
   int lastMessageListItemCount = -1;
   String? lastMessageId;
+  int lastMessageContentLength = -1;
+  int lastMessageThinkingLength = -1;
+  ChatMessageGenerationStatus? lastMessageGenerationStatus;
+  bool messageScrollFrameScheduled = false;
+  String? pendingMessageScrollConversationId;
+  int? pendingMessageScrollVersion;
+  int messageAutoScrollVersion = 0;
+  bool isProgrammaticMessageScroll = false;
 
   @override
   void dispose() {
@@ -2215,17 +2253,38 @@ class _ChatPaneState extends State<_ChatPane> {
     final messageListItemCount = conversation.messages.length +
         typingMembers.length +
         pendingPatches.length;
-    final currentLastMessageId =
-        conversation.messages.isEmpty ? null : conversation.messages.last.id;
-    final shouldScrollToBottom = conversation.id != lastConversationId ||
+    final currentLastMessage =
+        conversation.messages.isEmpty ? null : conversation.messages.last;
+    final currentLastMessageId = currentLastMessage?.id;
+    final currentLastMessageContentLength =
+        currentLastMessage?.content.length ?? 0;
+    final currentLastMessageThinkingLength =
+        currentLastMessage?.thinkingContent?.length ?? 0;
+    final currentLastMessageGenerationStatus =
+        currentLastMessage?.generationStatus;
+    final conversationChanged = conversation.id != lastConversationId;
+    final messageStructureChanged = conversationChanged ||
         messageListItemCount != lastMessageListItemCount ||
         currentLastMessageId != lastMessageId;
+    final lastMessageBodyChanged =
+        currentLastMessageContentLength != lastMessageContentLength ||
+            currentLastMessageThinkingLength != lastMessageThinkingLength ||
+            currentLastMessageGenerationStatus != lastMessageGenerationStatus;
+    if (conversationChanged) {
+      _restoreMessageScrollOffset(conversation.id);
+    }
     lastConversationId = conversation.id;
     lastMessageListItemCount = messageListItemCount;
     lastMessageId = currentLastMessageId;
-    if (shouldScrollToBottom) {
-      _scrollMessagesToBottom();
+    lastMessageContentLength = currentLastMessageContentLength;
+    lastMessageThinkingLength = currentLastMessageThinkingLength;
+    lastMessageGenerationStatus = currentLastMessageGenerationStatus;
+    if (!conversationChanged &&
+        (messageStructureChanged || lastMessageBodyChanged) &&
+        _autoFollowMessages(conversation.id)) {
+      _scheduleMessageScrollToBottom(conversation.id);
     }
+    final showBackToBottomButton = !_autoFollowMessages(conversation.id);
     return Column(
       children: [
         Container(
@@ -2280,30 +2339,63 @@ class _ChatPaneState extends State<_ChatPane> {
           ),
         ),
         Expanded(
-          child: ColoredBox(
-            color: const Color(0xFFFCFCFD),
-            child: ListView.builder(
-              key: const ValueKey('chat-message-list'),
-              controller: messageScrollController,
-              padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
-              itemCount: messageListItemCount,
-              itemBuilder: (context, index) {
-                if (index < conversation.messages.length) {
-                  return _MessageBubble(message: conversation.messages[index]);
-                }
-                final typingIndex = index - conversation.messages.length;
-                if (typingIndex < typingMembers.length) {
-                  return _TypingIndicator(member: typingMembers[typingIndex]);
-                }
-                final patch =
-                    pendingPatches[typingIndex - typingMembers.length];
-                return _ChatPatchConfirmationCard(
-                  patch: patch,
-                  onApply: () => widget.controller.applyPatch(patch),
-                  onReject: () => widget.controller.rejectPatch(patch),
-                );
-              },
-            ),
+          child: Stack(
+            children: [
+              ColoredBox(
+                color: const Color(0xFFFCFCFD),
+                child: Listener(
+                  onPointerSignal: (event) => _handleMessagePointerSignal(
+                    event,
+                    conversation.id,
+                  ),
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: (notification) =>
+                        _handleMessageScrollNotification(
+                      notification,
+                      conversation.id,
+                    ),
+                    child: ListView.builder(
+                      key: const ValueKey('chat-message-list'),
+                      controller: messageScrollController,
+                      padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
+                      itemCount: messageListItemCount,
+                      itemBuilder: (context, index) {
+                        if (index < conversation.messages.length) {
+                          return _MessageBubble(
+                            message: conversation.messages[index],
+                            showAuthorName: conversation.memberId == null,
+                          );
+                        }
+                        final typingIndex =
+                            index - conversation.messages.length;
+                        if (typingIndex < typingMembers.length) {
+                          return _TypingIndicator(
+                            member: typingMembers[typingIndex],
+                          );
+                        }
+                        final patch =
+                            pendingPatches[typingIndex - typingMembers.length];
+                        return _ChatPatchConfirmationCard(
+                          patch: patch,
+                          onApply: () => widget.controller.applyPatch(patch),
+                          onReject: () => widget.controller.rejectPatch(patch),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+              if (showBackToBottomButton)
+                Positioned(
+                  right: 24,
+                  bottom: 18,
+                  child: IconButton.filledTonal(
+                    tooltip: '回到底部',
+                    onPressed: _scrollCurrentConversationToBottom,
+                    icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                  ),
+                ),
+            ],
           ),
         ),
         if (widget.controller.error != null)
@@ -2426,17 +2518,233 @@ class _ChatPaneState extends State<_ChatPane> {
     );
   }
 
-  void _scrollMessagesToBottom() {
+  bool _autoFollowMessages(String conversationId) {
+    return messageAutoFollowByConversation[conversationId] ?? true;
+  }
+
+  bool _isNearMessageBottom() {
+    if (!messageScrollController.hasClients) {
+      return true;
+    }
+    return _isNearMessageBottomMetrics(messageScrollController.position);
+  }
+
+  bool _isNearMessageBottomMetrics(ScrollMetrics metrics) {
+    return metrics.maxScrollExtent - metrics.pixels <=
+        _autoScrollBottomThreshold;
+  }
+
+  bool _isAtMessageBottomMetrics(ScrollMetrics metrics) {
+    return metrics.maxScrollExtent - metrics.pixels <=
+        _messageBottomReachedTolerance;
+  }
+
+  bool _handleMessageScrollNotification(
+    ScrollNotification notification,
+    String conversationId,
+  ) {
+    if (notification.metrics.axis != Axis.vertical ||
+        isProgrammaticMessageScroll) {
+      return false;
+    }
+    final previousOffset = messageScrollOffsetsByConversation[conversationId];
+    _recordMessageScrollPosition(
+      conversationId,
+      notification.metrics.pixels,
+    );
+    if (notification is ScrollUpdateNotification &&
+        notification.scrollDelta != null) {
+      final scrollDelta = _messageScrollDelta(notification, previousOffset);
+      if (scrollDelta < 0) {
+        _recordMessageScrollDirection(
+          conversationId,
+          _MessageUserScrollDirection.history,
+        );
+        _disableMessageAutoFollow(conversationId);
+      } else if (scrollDelta > 0) {
+        _recordMessageScrollDirection(
+          conversationId,
+          _MessageUserScrollDirection.bottom,
+        );
+        if (_isNearMessageBottomMetrics(notification.metrics)) {
+          _setMessageAutoFollow(conversationId, true);
+        }
+      }
+    } else if (notification is ScrollEndNotification) {
+      _restoreMessageAutoFollowAfterUserScrollEnd(
+        conversationId,
+        notification.metrics,
+      );
+    }
+    return false;
+  }
+
+  double _messageScrollDelta(
+    ScrollUpdateNotification notification,
+    double? previousOffset,
+  ) {
+    if (previousOffset != null) {
+      final delta = notification.metrics.pixels - previousOffset;
+      if (delta != 0) {
+        return delta;
+      }
+    }
+    return notification.scrollDelta ?? 0;
+  }
+
+  void _handleMessagePointerSignal(
+    PointerSignalEvent event,
+    String conversationId,
+  ) {
+    if (event is! PointerScrollEvent ||
+        !messageScrollController.hasClients ||
+        widget.controller.currentConversation.id != conversationId) {
+      return;
+    }
+    final position = messageScrollController.position;
+    final scrollDelta = event.scrollDelta.dy;
+    if (scrollDelta < 0 && position.pixels > position.minScrollExtent) {
+      _recordMessageScrollDirection(
+        conversationId,
+        _MessageUserScrollDirection.history,
+      );
+      _disableMessageAutoFollow(conversationId);
+    } else if (scrollDelta > 0) {
+      _recordMessageScrollDirection(
+        conversationId,
+        _MessageUserScrollDirection.bottom,
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted ||
+            !messageScrollController.hasClients ||
+            widget.controller.currentConversation.id != conversationId) {
+          return;
+        }
+        _restoreMessageAutoFollowAfterUserScrollEnd(
+          conversationId,
+          messageScrollController.position,
+        );
+      });
+    }
+  }
+
+  void _recordMessageScrollPosition(String conversationId, double offset) {
+    messageScrollOffsetsByConversation[conversationId] = offset;
+  }
+
+  void _recordMessageScrollDirection(
+    String conversationId,
+    _MessageUserScrollDirection direction,
+  ) {
+    messageUserScrollDirectionsByConversation[conversationId] = direction;
+  }
+
+  _MessageUserScrollDirection _lastMessageScrollDirection(
+    String conversationId,
+  ) {
+    return messageUserScrollDirectionsByConversation[conversationId] ??
+        _MessageUserScrollDirection.idle;
+  }
+
+  void _restoreMessageAutoFollowAfterUserScrollEnd(
+    String conversationId,
+    ScrollMetrics metrics,
+  ) {
+    if (_isAtMessageBottomMetrics(metrics) ||
+        (_lastMessageScrollDirection(conversationId) ==
+                _MessageUserScrollDirection.bottom &&
+            _isNearMessageBottomMetrics(metrics))) {
+      _recordMessageScrollDirection(
+        conversationId,
+        _MessageUserScrollDirection.idle,
+      );
+      _setMessageAutoFollow(conversationId, true);
+    }
+  }
+
+  void _setMessageAutoFollow(String conversationId, bool value) {
+    final previous = _autoFollowMessages(conversationId);
+    messageAutoFollowByConversation[conversationId] = value;
+    if (previous != value &&
+        mounted &&
+        widget.controller.currentConversation.id == conversationId) {
+      setState(() {});
+    }
+  }
+
+  void _disableMessageAutoFollow(String conversationId) {
+    _cancelPendingMessageAutoScroll();
+    _setMessageAutoFollow(conversationId, false);
+  }
+
+  void _restoreMessageScrollOffset(String conversationId) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !messageScrollController.hasClients) {
+      if (!mounted ||
+          !messageScrollController.hasClients ||
+          widget.controller.currentConversation.id != conversationId) {
         return;
       }
-      messageScrollController.animateTo(
-        messageScrollController.position.maxScrollExtent,
-        duration: const Duration(milliseconds: 180),
-        curve: Curves.easeOutCubic,
+      final savedOffset = messageScrollOffsetsByConversation[conversationId];
+      final position = messageScrollController.position;
+      final target = (savedOffset ?? position.minScrollExtent)
+          .clamp(position.minScrollExtent, position.maxScrollExtent)
+          .toDouble();
+      _jumpMessageScrollTo(target, conversationId);
+      _recordMessageScrollPosition(
+        conversationId,
+        messageScrollController.position.pixels,
       );
+      _setMessageAutoFollow(conversationId, _isNearMessageBottom());
     });
+  }
+
+  void _scrollCurrentConversationToBottom() {
+    final conversationId = widget.controller.currentConversation.id;
+    _setMessageAutoFollow(conversationId, true);
+    _scheduleMessageScrollToBottom(conversationId);
+  }
+
+  void _scheduleMessageScrollToBottom(String conversationId) {
+    pendingMessageScrollConversationId = conversationId;
+    pendingMessageScrollVersion = messageAutoScrollVersion;
+    if (messageScrollFrameScheduled) {
+      return;
+    }
+    messageScrollFrameScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      messageScrollFrameScheduled = false;
+      final scheduledConversationId = pendingMessageScrollConversationId;
+      final scheduledVersion = pendingMessageScrollVersion;
+      pendingMessageScrollConversationId = null;
+      pendingMessageScrollVersion = null;
+      if (!mounted ||
+          !messageScrollController.hasClients ||
+          scheduledConversationId == null ||
+          scheduledVersion != messageAutoScrollVersion ||
+          widget.controller.currentConversation.id != scheduledConversationId ||
+          !_autoFollowMessages(scheduledConversationId)) {
+        return;
+      }
+      final target = messageScrollController.position.maxScrollExtent;
+      _jumpMessageScrollTo(target, scheduledConversationId);
+    });
+  }
+
+  void _cancelPendingMessageAutoScroll() {
+    pendingMessageScrollConversationId = null;
+    pendingMessageScrollVersion = null;
+    messageAutoScrollVersion++;
+  }
+
+  void _jumpMessageScrollTo(double target, String conversationId) {
+    isProgrammaticMessageScroll = true;
+    messageScrollController.jumpTo(target);
+    isProgrammaticMessageScroll = false;
+    _recordMessageScrollPosition(
+      conversationId,
+      messageScrollController.position.pixels,
+    );
+    _setMessageAutoFollow(conversationId, _isNearMessageBottom());
   }
 }
 
@@ -2484,9 +2792,13 @@ class _TypingIndicator extends StatelessWidget {
 }
 
 class _MessageBubble extends StatefulWidget {
-  const _MessageBubble({required this.message});
+  const _MessageBubble({
+    required this.message,
+    required this.showAuthorName,
+  });
 
   final ChatMessage message;
+  final bool showAuthorName;
 
   @override
   State<_MessageBubble> createState() => _MessageBubbleState();
@@ -2494,11 +2806,70 @@ class _MessageBubble extends StatefulWidget {
 
 class _MessageBubbleState extends State<_MessageBubble> {
   bool hovered = false;
+  bool thinkingExpanded = false;
+  bool copied = false;
+  Timer? copyResetTimer;
+  Timer? streamingTitleTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncThinkingState(null);
+  }
+
+  @override
+  void dispose() {
+    copyResetTimer?.cancel();
+    streamingTitleTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant _MessageBubble oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.message.id != widget.message.id) {
+      thinkingExpanded = false;
+      copied = false;
+      copyResetTimer?.cancel();
+    }
+    _syncThinkingState(oldWidget.message);
+  }
+
+  void _syncThinkingState(ChatMessage? oldMessage) {
+    final message = widget.message;
+    if (message.generationStatus == ChatMessageGenerationStatus.streaming) {
+      thinkingExpanded = true;
+      streamingTitleTimer ??= Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) {
+          setState(() {});
+        }
+      });
+      return;
+    }
+    streamingTitleTimer?.cancel();
+    streamingTitleTimer = null;
+    if (oldMessage?.generationStatus == ChatMessageGenerationStatus.streaming &&
+        message.generationStatus == ChatMessageGenerationStatus.complete) {
+      thinkingExpanded = false;
+    }
+    if (message.generationStatus == ChatMessageGenerationStatus.failed ||
+        message.generationStatus == ChatMessageGenerationStatus.stopped) {
+      thinkingExpanded = true;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final message = widget.message;
     final alignRight = message.isUser;
+    final showAuthorName = !alignRight && widget.showAuthorName;
+    final thinkingContent =
+        alignRight ? null : _normalizedThinkingContent(message);
+    final inlineStatus = thinkingContent == null
+        ? _messageInlineGenerationStatus(message)
+        : null;
+    final showMessageHeader =
+        !alignRight && (showAuthorName || inlineStatus != null);
     final bubble = Container(
       constraints: const BoxConstraints(maxWidth: 680),
       padding: const EdgeInsets.all(14),
@@ -2512,14 +2883,29 @@ class _MessageBubbleState extends State<_MessageBubble> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!alignRight) ...[
-            Text(
-              message.authorName,
-              style: const TextStyle(fontWeight: FontWeight.w700),
+          if (thinkingContent != null) ...[
+            _MessageThinkingDisclosure(
+              content: thinkingContent,
+              title: _thinkingTitle(message),
+              expanded: thinkingExpanded,
+              onToggle: () {
+                setState(() {
+                  thinkingExpanded = !thinkingExpanded;
+                });
+              },
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
           ],
-          SelectableText(message.content),
+          if (_isAwaitingFirstModelOutput(message))
+            Text(
+              '正在输入中',
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontWeight: FontWeight.w600,
+              ),
+            )
+          else
+            SelectableText(message.content),
         ],
       ),
     );
@@ -2538,7 +2924,7 @@ class _MessageBubbleState extends State<_MessageBubble> {
                 ),
                 const SizedBox(width: 4),
                 IconButton(
-                  tooltip: '复制消息',
+                  tooltip: '复制',
                   visualDensity: VisualDensity.compact,
                   style: IconButton.styleFrom(
                     fixedSize: const Size.square(28),
@@ -2546,13 +2932,11 @@ class _MessageBubbleState extends State<_MessageBubble> {
                     padding: EdgeInsets.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
-                  onPressed: () {
-                    Clipboard.setData(ClipboardData(text: message.content));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('已复制消息')),
-                    );
-                  },
-                  icon: const Icon(Icons.copy_rounded, size: 16),
+                  onPressed: _copyMessage,
+                  icon: Icon(
+                    copied ? Icons.check_rounded : Icons.copy_rounded,
+                    size: 16,
+                  ),
                 ),
               ],
             )
@@ -2562,6 +2946,34 @@ class _MessageBubbleState extends State<_MessageBubble> {
       crossAxisAlignment:
           alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
       children: [
+        if (showMessageHeader) ...[
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (showAuthorName)
+                Text(
+                  message.authorName,
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              if (inlineStatus != null) ...[
+                if (showAuthorName) const SizedBox(width: 6),
+                Text(
+                  inlineStatus,
+                  style: TextStyle(
+                    color: Colors.grey.shade500,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 4),
+        ],
         bubble,
         const SizedBox(height: 4),
         Align(
@@ -2611,6 +3023,89 @@ class _MessageBubbleState extends State<_MessageBubble> {
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  void _copyMessage() {
+    unawaited(Clipboard.setData(ClipboardData(text: widget.message.content)));
+    copyResetTimer?.cancel();
+    setState(() => copied = true);
+    copyResetTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() => copied = false);
+      }
+    });
+  }
+}
+
+class _MessageThinkingDisclosure extends StatelessWidget {
+  const _MessageThinkingDisclosure({
+    required this.content,
+    required this.title,
+    required this.expanded,
+    required this.onToggle,
+  });
+
+  final String content;
+  final String title;
+  final bool expanded;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF7F8FA),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            onTap: onToggle,
+            borderRadius: BorderRadius.circular(6),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    expanded
+                        ? Icons.keyboard_arrow_down_rounded
+                        : Icons.keyboard_arrow_right_rounded,
+                    size: 18,
+                    color: colors.primary,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: colors.primary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (expanded)
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 240),
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+                child: SelectableText(
+                  content,
+                  style: TextStyle(
+                    color: Colors.grey.shade700,
+                    height: 1.45,
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -3028,11 +3523,25 @@ class _AuditLogRow extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            entry.action,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontWeight: FontWeight.w700),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  entry.action,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+              IconButton(
+                tooltip: entry.metadata == null ? '无详情' : '查看详情',
+                onPressed: entry.metadata == null
+                    ? null
+                    : () => _showAuditLogDetails(context, entry),
+                icon: const Icon(Icons.info_outline_rounded),
+              ),
+            ],
           ),
           const SizedBox(height: 4),
           Text(entry.detail, style: TextStyle(color: Colors.grey.shade700)),
@@ -3045,6 +3554,116 @@ class _AuditLogRow extends StatelessWidget {
       ),
     );
   }
+}
+
+void _showAuditLogDetails(BuildContext context, AuditEntry entry) {
+  final metadata = entry.metadata ?? const <String, Object?>{};
+  final rawResponse = metadata['rawResponse'] as String?;
+  final structuredEntries = metadata.entries
+      .where((item) => item.key != 'rawResponse')
+      .toList(growable: false);
+  showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('审计详情'),
+      content: SizedBox(
+        width: 720,
+        height: 520,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _AuditDetailSection(
+                title: '基础信息',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SelectableText('action: ${entry.action}'),
+                    SelectableText(
+                      'createdAt: ${_auditLogTimeText(entry.createdAt)}',
+                    ),
+                  ],
+                ),
+              ),
+              _AuditDetailSection(
+                title: '摘要',
+                child: SelectableText(entry.detail),
+              ),
+              if (structuredEntries.isNotEmpty)
+                _AuditDetailSection(
+                  title: '结构化字段',
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: structuredEntries
+                        .map(
+                          (item) => SelectableText(
+                            '${item.key}: ${_auditMetadataValueText(item.value)}',
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+              if (rawResponse != null)
+                _AuditDetailSection(
+                  title: '原始返回内容',
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF9FAFB),
+                      border: Border.all(color: const Color(0xFFE5E7EB)),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: SelectableText(rawResponse),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('关闭'),
+        ),
+      ],
+    ),
+  );
+}
+
+class _AuditDetailSection extends StatelessWidget {
+  const _AuditDetailSection({
+    required this.title,
+    required this.child,
+  });
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 6),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+String _auditMetadataValueText(Object? value) {
+  if (value is Iterable) {
+    return value.join(',');
+  }
+  return value.toString();
 }
 
 class _SettingsPage extends StatefulWidget {
@@ -4884,6 +5503,50 @@ String _conversationPreview(Conversation conversation) {
   return '${message.authorName}: ${message.content}'.replaceAll('\n', ' ');
 }
 
+String? _normalizedThinkingContent(ChatMessage message) {
+  final thinkingContent = message.thinkingContent;
+  if (thinkingContent == null || thinkingContent.trim().isEmpty) {
+    return null;
+  }
+  return thinkingContent;
+}
+
+String _thinkingTitle(ChatMessage message) {
+  final duration = _messageGenerationDurationText(message);
+  return switch (message.generationStatus) {
+    ChatMessageGenerationStatus.streaming => '思考中… $duration',
+    ChatMessageGenerationStatus.failed => '思考失败 · $duration',
+    ChatMessageGenerationStatus.stopped => '思考已停止 · $duration',
+    ChatMessageGenerationStatus.complete =>
+      message.generationDurationMs == null ? '思考过程' : '已完成思考 · $duration',
+  };
+}
+
+String? _messageInlineGenerationStatus(ChatMessage message) {
+  final duration = _messageGenerationDurationText(message);
+  return switch (message.generationStatus) {
+    ChatMessageGenerationStatus.failed => '失败 · $duration',
+    ChatMessageGenerationStatus.stopped => '已停止 · $duration',
+    _ => null,
+  };
+}
+
+bool _isAwaitingFirstModelOutput(ChatMessage message) {
+  return !message.isUser &&
+      message.generationStatus == ChatMessageGenerationStatus.streaming &&
+      message.content.trim().isEmpty &&
+      (message.thinkingContent?.trim().isEmpty ?? true);
+}
+
+String _messageGenerationDurationText(ChatMessage message) {
+  final milliseconds =
+      message.generationStatus == ChatMessageGenerationStatus.streaming
+          ? DateTime.now().difference(message.createdAt).inMilliseconds
+          : message.generationDurationMs ?? 0;
+  final seconds = (milliseconds / 1000).ceil().clamp(0, 9999);
+  return '${seconds}s';
+}
+
 IconData _conversationListIcon(
   AppController controller,
   Conversation conversation,
@@ -4959,8 +5622,19 @@ List<TeamMember> _typingMembers(
   if (conversation.status != ConversationStatus.running) {
     return const [];
   }
+  final streamingMemberIds = conversation.messages
+      .where(
+        (message) =>
+            message.generationStatus == ChatMessageGenerationStatus.streaming &&
+            message.memberId != null,
+      )
+      .map((message) => message.memberId!)
+      .toSet();
   final memberId = conversation.memberId;
   if (memberId != null) {
+    if (streamingMemberIds.contains(memberId)) {
+      return const [];
+    }
     return [
       controller.state.members.firstWhere((member) => member.id == memberId),
     ];
@@ -4969,12 +5643,11 @@ List<TeamMember> _typingMembers(
       .where((assignment) => assignment.status == TaskAssignmentStatus.running)
       .toList();
   if (runningAssignments.isEmpty) {
-    return [
-      controller.currentMembers.firstWhere(
-        (member) => !member.isSecretary,
-        orElse: () => controller.currentMembers.first,
-      ),
-    ];
+    final fallback = controller.currentMembers.firstWhere(
+      (member) => !member.isSecretary,
+      orElse: () => controller.currentMembers.first,
+    );
+    return streamingMemberIds.contains(fallback.id) ? const [] : [fallback];
   }
   return runningAssignments
       .map(
@@ -4982,6 +5655,7 @@ List<TeamMember> _typingMembers(
           (member) => member.id == assignment.memberId,
         ),
       )
+      .where((member) => !streamingMemberIds.contains(member.id))
       .toList();
 }
 

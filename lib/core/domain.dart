@@ -1,5 +1,7 @@
 enum ConversationStatus { idle, running, paused, stopped, failed }
 
+enum ChatMessageGenerationStatus { complete, streaming, failed, stopped }
+
 enum TeamCollaborationMode { serial, parallel }
 
 enum CommandDecision { allowed, requiresConfirmation, denied }
@@ -608,6 +610,9 @@ class ChatMessage {
     required this.authorName,
     required this.content,
     required this.createdAt,
+    this.thinkingContent,
+    this.generationStatus = ChatMessageGenerationStatus.complete,
+    this.generationDurationMs,
     this.memberId,
     this.isUser = false,
     this.taskIds = const [],
@@ -616,15 +621,41 @@ class ChatMessage {
   final String id;
   final String authorName;
   final String content;
+  final String? thinkingContent;
+  final ChatMessageGenerationStatus generationStatus;
+  final int? generationDurationMs;
   final DateTime createdAt;
   final String? memberId;
   final bool isUser;
   final List<String> taskIds;
 
+  ChatMessage copyWith({
+    String? content,
+    String? thinkingContent,
+    ChatMessageGenerationStatus? generationStatus,
+    int? generationDurationMs,
+  }) {
+    return ChatMessage(
+      id: id,
+      authorName: authorName,
+      content: content ?? this.content,
+      thinkingContent: thinkingContent ?? this.thinkingContent,
+      generationStatus: generationStatus ?? this.generationStatus,
+      generationDurationMs: generationDurationMs ?? this.generationDurationMs,
+      createdAt: createdAt,
+      memberId: memberId,
+      isUser: isUser,
+      taskIds: taskIds,
+    );
+  }
+
   Map<String, Object?> toJson() => {
         'id': id,
         'authorName': authorName,
         'content': content,
+        'thinkingContent': thinkingContent,
+        'generationStatus': generationStatus.name,
+        'generationDurationMs': generationDurationMs,
         'createdAt': createdAt.toIso8601String(),
         'memberId': memberId,
         'isUser': isUser,
@@ -635,6 +666,12 @@ class ChatMessage {
         id: json['id'] as String,
         authorName: json['authorName'] as String,
         content: json['content'] as String,
+        thinkingContent: json['thinkingContent'] as String?,
+        generationStatus: ChatMessageGenerationStatus.values.byName(
+          json['generationStatus'] as String? ??
+              ChatMessageGenerationStatus.complete.name,
+        ),
+        generationDurationMs: (json['generationDurationMs'] as num?)?.toInt(),
         createdAt: DateTime.parse(json['createdAt'] as String),
         memberId: json['memberId'] as String?,
         isUser: (json['isUser'] as bool?) ?? false,
@@ -806,26 +843,33 @@ class AuditEntry {
     required this.action,
     required this.detail,
     required this.createdAt,
+    this.metadata,
   });
 
   final String id;
   final String action;
   final String detail;
+  final Map<String, Object?>? metadata;
   final DateTime createdAt;
 
   Map<String, Object?> toJson() => {
         'id': id,
         'action': action,
         'detail': detail,
+        'metadata': metadata,
         'createdAt': createdAt.toIso8601String(),
       };
 
-  factory AuditEntry.fromJson(Map<String, Object?> json) => AuditEntry(
-        id: json['id'] as String,
-        action: json['action'] as String,
-        detail: json['detail'] as String,
-        createdAt: DateTime.parse(json['createdAt'] as String),
-      );
+  factory AuditEntry.fromJson(Map<String, Object?> json) {
+    final metadata = json['metadata'];
+    return AuditEntry(
+      id: json['id'] as String,
+      action: json['action'] as String,
+      detail: json['detail'] as String,
+      metadata: metadata is Map ? Map<String, Object?>.from(metadata) : null,
+      createdAt: DateTime.parse(json['createdAt'] as String),
+    );
+  }
 }
 
 class AppState {

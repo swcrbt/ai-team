@@ -12,8 +12,12 @@ Future<void> main() async {
   final store = JsonLocalStore.applicationSupportStore(
     await getApplicationSupportDirectory(),
   );
-  await _migrateLegacyState(store);
-  final state = await store.load();
+  final legacyStore = JsonLocalStore.defaultStore();
+  await _migrateLegacyState(store, legacyStore);
+  final state = await JsonLocalStore.loadWithLegacyRecovery(
+    targetStore: store,
+    legacyStore: legacyStore,
+  );
   runApp(AiTeamApp(
     initialState: state,
     modelGateway: OpenAiCompatibleGateway(),
@@ -21,11 +25,13 @@ Future<void> main() async {
   ));
 }
 
-Future<void> _migrateLegacyState(JsonLocalStore targetStore) async {
+Future<void> _migrateLegacyState(
+  JsonLocalStore targetStore,
+  JsonLocalStore legacyStore,
+) async {
   if (await targetStore.file.exists()) {
     return;
   }
-  final legacyStore = JsonLocalStore.defaultStore();
   if (!await legacyStore.file.exists()) {
     return;
   }
