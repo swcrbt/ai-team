@@ -2314,6 +2314,10 @@ class _ChatPaneState extends State<_ChatPane> {
             currentLastMessageThinkingLength != lastMessageThinkingLength ||
             currentLastMessageGenerationStatus != lastMessageGenerationStatus;
     if (conversationChanged) {
+      final previousConversationId = lastConversationId;
+      if (previousConversationId != null) {
+        _saveCurrentMessageScrollOffset(previousConversationId);
+      }
       _restoreMessageScrollOffset(conversation.id);
     }
     lastConversationId = conversation.id;
@@ -2673,6 +2677,17 @@ class _ChatPaneState extends State<_ChatPane> {
 
   void _recordMessageScrollPosition(String conversationId, double offset) {
     messageScrollOffsetsByConversation[conversationId] = offset;
+  }
+
+  void _saveCurrentMessageScrollOffset(String conversationId) {
+    if (!messageScrollController.hasClients) {
+      return;
+    }
+    final position = messageScrollController.position;
+    final offset = position.pixels
+        .clamp(position.minScrollExtent, position.maxScrollExtent)
+        .toDouble();
+    _recordMessageScrollPosition(conversationId, offset);
   }
 
   void _recordMessageScrollDirection(

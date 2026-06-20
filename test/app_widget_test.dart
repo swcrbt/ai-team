@@ -1531,6 +1531,46 @@ void main() {
     expect(controller.offset, secretaryOffset);
   });
 
+  testWidgets('chat saves current scroll position before switching conversations',
+      (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: _stateWithLongSecretaryChat(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byKey(const ValueKey('chat-message-list'));
+    final controller = tester.widget<ListView>(list).controller!;
+    await tester.drag(list, const Offset(0, -900));
+    await tester.pumpAndSettle();
+
+    final cachedOffset = controller.offset;
+    final currentOffset = cachedOffset + 120;
+    controller.jumpTo(currentOffset);
+    final chatPaneState = tester.state<State>(
+      find.byWidgetPredicate(
+        (widget) => widget.runtimeType.toString() == '_ChatPane',
+      ),
+    );
+    (chatPaneState as dynamic)
+            .messageScrollOffsetsByConversation['conv-member-secretary'] =
+        cachedOffset;
+    expect(controller.offset, currentOffset);
+
+    await tester.tap(
+      find.byKey(const ValueKey('conversation-row-conv-member-frontend')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('conversation-row-conv-member-secretary')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(controller.offset, currentOffset);
+  });
+
   testWidgets('chat shows a back to bottom button after manual scroll',
       (tester) async {
     await tester.pumpWidget(
