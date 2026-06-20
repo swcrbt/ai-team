@@ -2565,7 +2565,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.textContaining('私聊 · 测试工程师'), findsOneWidget);
-    expect(find.textContaining('任务分配：分配任务给测试工程师'), findsOneWidget);
+    expect(
+      find.text('任务分配：分配任务给测试工程师，询问 7 年前妈妈年龄是儿子的 6 倍。'),
+      findsOneWidget,
+    );
     expect(find.textContaining('测试工程师：'), findsWidgets);
   });
 

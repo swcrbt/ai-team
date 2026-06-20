@@ -809,6 +809,57 @@ void main() {
       expect(jsonEncode(audit.metadata), isNot(contains('apiKey')));
     });
 
+    test('secretary private dispatch sends one user task to member model',
+        () async {
+      final gateway = ScriptedRecordingGateway(['测试完成']);
+
+      final updated =
+          await TeamOrchestrator(gateway).dispatchSecretaryPrivateMemberTask(
+        AppState.seed(),
+        conversationId: 'conv-member-secretary',
+        userText: '分配任务给测试工程师，询问1+1等于多少',
+      );
+
+      final modelMessages = gateway.calls.single.messages;
+      final taskMessages = modelMessages
+          .where((message) => message.content.contains('任务分配：'))
+          .toList();
+      expect(taskMessages, hasLength(1));
+      expect(modelMessages.last.isUser, isTrue);
+      expect(
+        modelMessages.last.content,
+        '任务分配：分配任务给测试工程师，询问1+1等于多少',
+      );
+
+      final testerConversation = updated.conversations.firstWhere(
+        (conversation) => conversation.id == 'conv-member-tester',
+      );
+      expect(
+        testerConversation.messages
+            .where((message) => message.content.contains('任务分配：'))
+            .length,
+        1,
+      );
+
+      final requestAudit = updated.auditLog.lastWhere(
+        (entry) =>
+            entry.action == 'model_request_diagnostic' &&
+            entry.metadata?['member'] == 'member-tester',
+      );
+      final requestBody = requestAudit.metadata!['requestBody']
+          as Map<String, Object?>;
+      final messages = requestBody['messages'] as List<Object?>;
+      final encodedTaskMessages = messages
+          .where((message) =>
+              (message as Map<String, Object?>)['content']
+                  .toString()
+                  .contains('任务分配：'))
+          .cast<Map<String, Object?>>()
+          .toList();
+      expect(encodedTaskMessages, hasLength(1));
+      expect(messages.last, containsPair('role', 'user'));
+    });
+
     test('secretary private dispatch reports waiting before member replies',
         () async {
       final gateway = BlockingRecordingGateway();
@@ -901,6 +952,48 @@ void main() {
       expect(audit.metadata!['status'], 'failed');
       expect(audit.metadata!['responseChars'], 0);
       expect(audit.metadata!['error'], contains('成员未返回内容'));
+    });
+
+    test('secretary private dispatch keeps response diagnostics for empty reply',
+        () async {
+      final updated = await TeamOrchestrator(
+        ScriptedMetadataGateway(
+          const ModelCompletion(
+            content: '',
+            diagnostics: ModelResponseDiagnostics(
+              streaming: true,
+              contentLength: 0,
+              thinkingContentLength: 0,
+              contentDeltaCount: 1,
+              rawResponse: 'data: {"choices":[{"delta":{"content":""}}]}\n\n'
+                  'data: [DONE]\n',
+              requestBody: {'model': 'test-model'},
+            ),
+          ),
+        ),
+      ).dispatchSecretaryPrivateMemberTask(
+        AppState.seed(),
+        conversationId: 'conv-member-secretary',
+        userText: '分配任务给测试工程师，检查空回复。',
+      );
+
+      final responseAudit = updated.auditLog.lastWhere(
+        (entry) =>
+            entry.action == 'model_response_diagnostic' &&
+            entry.metadata?['member'] == 'member-tester',
+      );
+      expect(responseAudit.metadata!['contentChars'], 0);
+      expect(
+        responseAudit.metadata!['rawResponse'],
+        contains('data: [DONE]'),
+      );
+      expect(responseAudit.metadata!['requestBody'], containsPair('model', 'test-model'));
+
+      final dispatchAudit = updated.auditLog.lastWhere(
+        (entry) => entry.action == 'secretary_private_member_dispatch',
+      );
+      expect(dispatchAudit.metadata!['status'], 'failed');
+      expect(dispatchAudit.metadata!['error'], contains('成员未返回内容'));
     });
 
     test('secretary private dispatch handles multiple mentioned members',

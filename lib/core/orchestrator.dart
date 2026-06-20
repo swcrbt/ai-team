@@ -466,6 +466,7 @@ class TeamOrchestrator {
           authorName: '秘书',
           content: '任务分配：${assignment.instruction}',
           createdAt: DateTime.now(),
+          isUser: true,
         ),
       ],
       cancellation: cancellation,
@@ -894,16 +895,16 @@ class TeamOrchestrator {
           conversation: targetConversation,
           team: team,
           assignment: ParsedAssignment(member: target, instruction: userText),
-          messages: targetMessages,
+          messages: targetConversation.messages,
           visibleMessages: targetMessages,
           cancellation: cancellation,
           onProgress: onProgress,
         );
+        workingState = result.workingState;
         if (result.message.content.trim().isEmpty &&
             (result.message.thinkingContent?.trim().isEmpty ?? true)) {
           throw const ModelGatewayException('成员未返回内容');
         }
-        workingState = result.workingState;
         summaries.add('${target.name}：${_summarize(result.message.content)}');
         workingState = _replaceConversation(
           workingState,
