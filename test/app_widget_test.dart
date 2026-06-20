@@ -1531,6 +1531,62 @@ void main() {
     expect(controller.offset, secretaryOffset);
   });
 
+  testWidgets('chat restores bottom intent after private content grows while away',
+      (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: _stateWithLongTeamAndSecretaryChats(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byKey(const ValueKey('chat-message-list'));
+    final controller = tester.widget<ListView>(list).controller!;
+    await tester.drag(list, const Offset(0, -10000));
+    await tester.pumpAndSettle();
+    expect(controller.offset, controller.position.maxScrollExtent);
+    final savedBottomMax = controller.position.maxScrollExtent;
+
+    await tester.tap(
+      find.byKey(const ValueKey('conversation-row-conv-team-default')),
+    );
+    await tester.pumpAndSettle();
+
+    final homeState = tester.state<State>(find.byType(AiTeamHome));
+    final appController = (homeState as dynamic).controller as AppController;
+    final currentState = appController.state;
+    appController.state = currentState.copyWith(
+      conversations: currentState.conversations.map((conversation) {
+        if (conversation.id != 'conv-member-secretary') {
+          return conversation;
+        }
+        return conversation.copyWith(
+          messages: [
+            ...conversation.messages,
+            ChatMessage(
+              id: 'msg-secretary-grown-while-away',
+              authorName: '秘书',
+              memberId: 'member-secretary',
+              content: '离开期间新增的长回复\n${'长内容 ' * 240}',
+              createdAt: DateTime(2026, 6, 20, 12),
+            ),
+          ],
+        );
+      }).toList(),
+    );
+    (appController as dynamic).notifyListeners();
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('conversation-row-conv-member-secretary')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(controller.position.maxScrollExtent, greaterThan(savedBottomMax));
+    expect(controller.offset, closeTo(controller.position.maxScrollExtent, 1));
+  });
+
   testWidgets('chat saves current scroll position before switching conversations',
       (tester) async {
     await tester.pumpWidget(

@@ -233,6 +233,16 @@ enum _MainView {
   settings,
 }
 
+class _MessageScrollState {
+  const _MessageScrollState({
+    required this.offset,
+    required this.pinnedToBottom,
+  });
+
+  final double offset;
+  final bool pinnedToBottom;
+}
+
 class AppController extends ChangeNotifier {
   AppController(
     AppState initialState,
@@ -260,7 +270,7 @@ class AppController extends ChangeNotifier {
   final List<String> conversationOrderIds = <String>[];
   final Set<String> pinnedConversationIds = <String>{};
   final List<String> pinnedConversationOrderIds = <String>[];
-  final _messageScrollOffsetsByConversation = <String, double>{};
+  final _messageScrollStatesByConversation = <String, _MessageScrollState>{};
   double _conversationListScrollOffset = 0;
   final TeamOrchestrator orchestrator;
   final StateChanged? onStateChanged;
@@ -382,11 +392,23 @@ class AppController extends ChangeNotifier {
   }
 
   double? messageScrollOffsetForConversation(String conversationId) {
-    return _messageScrollOffsetsByConversation[conversationId];
+    return _messageScrollStatesByConversation[conversationId]?.offset;
   }
 
-  void recordMessageScrollOffset(String conversationId, double offset) {
-    _messageScrollOffsetsByConversation[conversationId] = offset;
+  bool messageScrollPinnedToBottomForConversation(String conversationId) {
+    return _messageScrollStatesByConversation[conversationId]?.pinnedToBottom ??
+        false;
+  }
+
+  void recordMessageScrollOffset(
+    String conversationId,
+    double offset, {
+    bool pinnedToBottom = false,
+  }) {
+    _messageScrollStatesByConversation[conversationId] = _MessageScrollState(
+      offset: offset,
+      pinnedToBottom: pinnedToBottom,
+    );
   }
 
   Conversation conversationForMember(String memberId) {
@@ -2685,9 +2707,11 @@ class _ChatPaneState extends State<_ChatPane> {
     }
     final previousOffset =
         widget.controller.messageScrollOffsetForConversation(conversationId);
+    final pinnedToBottom = _isNearMessageBottomMetrics(notification.metrics);
     _recordMessageScrollPosition(
       conversationId,
       notification.metrics.pixels,
+      pinnedToBottom: pinnedToBottom,
     );
     if (notification is ScrollUpdateNotification &&
         notification.scrollDelta != null) {
@@ -2765,8 +2789,16 @@ class _ChatPaneState extends State<_ChatPane> {
     }
   }
 
-  void _recordMessageScrollPosition(String conversationId, double offset) {
-    widget.controller.recordMessageScrollOffset(conversationId, offset);
+  void _recordMessageScrollPosition(
+    String conversationId,
+    double offset, {
+    bool pinnedToBottom = false,
+  }) {
+    widget.controller.recordMessageScrollOffset(
+      conversationId,
+      offset,
+      pinnedToBottom: pinnedToBottom,
+    );
   }
 
   void _saveCurrentMessageScrollOffset(String conversationId) {
@@ -2777,7 +2809,11 @@ class _ChatPaneState extends State<_ChatPane> {
     final offset = position.pixels
         .clamp(position.minScrollExtent, position.maxScrollExtent)
         .toDouble();
-    _recordMessageScrollPosition(conversationId, offset);
+    _recordMessageScrollPosition(
+      conversationId,
+      offset,
+      pinnedToBottom: _isNearMessageBottomMetrics(position),
+    );
   }
 
   void _recordMessageScrollDirection(
@@ -2834,16 +2870,20 @@ class _ChatPaneState extends State<_ChatPane> {
       }
       final savedOffset =
           widget.controller.messageScrollOffsetForConversation(conversationId);
+      if (widget.controller
+          .messageScrollPinnedToBottomForConversation(conversationId)) {
+        _setMessageAutoFollow(conversationId, true);
+        _scheduleMessageScrollToBottom(
+          conversationId,
+          settleFrames: _messageBottomSettleFrameCount,
+        );
+        return;
+      }
       final position = messageScrollController.position;
       final target = (savedOffset ?? position.minScrollExtent)
           .clamp(position.minScrollExtent, position.maxScrollExtent)
           .toDouble();
       _jumpMessageScrollTo(target, conversationId);
-      _recordMessageScrollPosition(
-        conversationId,
-        messageScrollController.position.pixels,
-      );
-      _setMessageAutoFollow(conversationId, _isNearMessageBottom());
     });
   }
 
@@ -2907,11 +2947,13 @@ class _ChatPaneState extends State<_ChatPane> {
     isProgrammaticMessageScroll = true;
     messageScrollController.jumpTo(target);
     isProgrammaticMessageScroll = false;
+    final pinnedToBottom = _isNearMessageBottom();
     _recordMessageScrollPosition(
       conversationId,
       messageScrollController.position.pixels,
+      pinnedToBottom: pinnedToBottom,
     );
-    _setMessageAutoFollow(conversationId, _isNearMessageBottom());
+    _setMessageAutoFollow(conversationId, pinnedToBottom);
   }
 }
 

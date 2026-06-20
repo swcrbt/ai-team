@@ -413,6 +413,71 @@ void main() {
       );
     });
 
+    testWidgets('secretary private bottom scroll follows content growth while away',
+        (tester) async {
+      final trace = _ScrollTrace();
+      await _pumpE2eApp(tester);
+
+      await _selectConversation(tester, _secretaryConversationId);
+      await tester.drag(_messageListFinder, const Offset(0, -10000));
+      await tester.pumpAndSettle();
+      await trace.capture(tester, 'secretary private initially at bottom');
+      final initialController = _messageListController(tester);
+      expect(
+        initialController.offset,
+        closeTo(initialController.position.maxScrollExtent, 1),
+        reason: trace.dump(),
+      );
+      final savedBottomMax =
+          _messageListController(tester).position.maxScrollExtent;
+
+      await tester.tap(
+        find.byKey(const ValueKey('conversation-row-$_groupConversationId')),
+      );
+      await tester.pumpAndSettle();
+      await trace.capture(tester, 'group selected before secretary grows');
+
+      final appController = _appController(tester);
+      final currentState = appController.state;
+      appController.state = currentState.copyWith(
+        conversations: currentState.conversations.map((conversation) {
+          if (conversation.id != _secretaryConversationId) {
+            return conversation;
+          }
+          return conversation.copyWith(
+            messages: [
+              ...conversation.messages,
+              ChatMessage(
+                id: 'e2e-secretary-grown-while-away',
+                authorName: '秘书',
+                memberId: 'member-secretary',
+                content: 'E2E 离开期间新增的秘书长回复\n${'长内容 ' * 240}',
+                createdAt: DateTime(2026, 6, 20, 12),
+              ),
+            ],
+          );
+        }).toList(),
+      );
+      (appController as dynamic).notifyListeners();
+      await tester.pumpAndSettle();
+      await trace.capture(tester, 'group after secretary growth completed');
+
+      await _selectConversation(tester, _secretaryConversationId);
+      await trace.capture(tester, 'secretary private restored after growth');
+      final restoredController = _messageListController(tester);
+      expect(
+        restoredController.position.maxScrollExtent,
+        greaterThan(savedBottomMax + 1),
+        reason: trace.dump(),
+      );
+      expect(
+        restoredController.offset,
+        closeTo(restoredController.position.maxScrollExtent, 1),
+        reason: 'secretary private did not restore to current bottom\n'
+            '${trace.dump()}',
+      );
+    });
+
     testWidgets('streaming private manual history survives group switch',
         (tester) async {
       final trace = _ScrollTrace();
@@ -586,7 +651,8 @@ class _ScrollTrace {
         controller.visibleConversations.map((item) => item.id).join(',');
     final storedOffsets = _diagnosticConversationIds
         .map(
-          (id) => '$id=${controller.messageScrollOffsetForConversation(id)}',
+          (id) => '$id=${controller.messageScrollOffsetForConversation(id)}'
+              ':pinned=${controller.messageScrollPinnedToBottomForConversation(id)}',
         )
         .join(';');
     final hasBackToBottom = find.byTooltip('回到底部').evaluate().isNotEmpty;
