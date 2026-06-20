@@ -92,6 +92,7 @@ class AiTeamHome extends StatefulWidget {
 
 class _AiTeamHomeState extends State<AiTeamHome> {
   late AppController controller;
+  final chatPaneKey = GlobalKey<_ChatPaneState>();
   _MainView mainView = _MainView.chat;
 
   @override
@@ -112,6 +113,13 @@ class _AiTeamHomeState extends State<AiTeamHome> {
     super.dispose();
   }
 
+  void _showMainView(_MainView view) {
+    if (mainView == _MainView.chat && view != _MainView.chat) {
+      chatPaneKey.currentState?.saveCurrentConversationScrollOffset();
+    }
+    setState(() => mainView = view);
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -129,32 +137,22 @@ class _AiTeamHomeState extends State<AiTeamHome> {
                       width: 72,
                       child: _AppSidebar(
                         selectedView: mainView,
-                        onChat: () => setState(() => mainView = _MainView.chat),
-                        onTeam: () {
-                          setState(() => mainView = _MainView.teams);
-                        },
-                        onModels: () =>
-                            setState(() => mainView = _MainView.models),
-                        onRoles: () =>
-                            setState(() => mainView = _MainView.roles),
-                        onMembers: () =>
-                            setState(() => mainView = _MainView.members),
-                        onHistory: () =>
-                            setState(() => mainView = _MainView.history),
-                        onAudit: () =>
-                            setState(() => mainView = _MainView.audit),
-                        onProject: () =>
-                            setState(() => mainView = _MainView.project),
-                        onSettings: () =>
-                            setState(() => mainView = _MainView.settings),
+                        onChat: () => _showMainView(_MainView.chat),
+                        onTeam: () => _showMainView(_MainView.teams),
+                        onModels: () => _showMainView(_MainView.models),
+                        onRoles: () => _showMainView(_MainView.roles),
+                        onMembers: () => _showMainView(_MainView.members),
+                        onHistory: () => _showMainView(_MainView.history),
+                        onAudit: () => _showMainView(_MainView.audit),
+                        onProject: () => _showMainView(_MainView.project),
+                        onSettings: () => _showMainView(_MainView.settings),
                       ),
                     ),
                     if (mainView == _MainView.teams)
                       Expanded(
                         child: _TeamManagementPage(
                           controller: controller,
-                          onStartChat: () =>
-                              setState(() => mainView = _MainView.chat),
+                          onStartChat: () => _showMainView(_MainView.chat),
                         ),
                       )
                     else if (mainView == _MainView.models)
@@ -169,8 +167,7 @@ class _AiTeamHomeState extends State<AiTeamHome> {
                       Expanded(
                         child: _MemberManagementPage(
                           controller: controller,
-                          onStartChat: () =>
-                              setState(() => mainView = _MainView.chat),
+                          onStartChat: () => _showMainView(_MainView.chat),
                         ),
                       )
                     else if (mainView == _MainView.history)
@@ -206,7 +203,12 @@ class _AiTeamHomeState extends State<AiTeamHome> {
                         ),
                       ),
                       const VerticalDivider(width: 1),
-                      Expanded(child: _ChatPane(controller: controller)),
+                      Expanded(
+                        child: _ChatPane(
+                          key: chatPaneKey,
+                          controller: controller,
+                        ),
+                      ),
                     ],
                   ],
                 );
@@ -258,6 +260,7 @@ class AppController extends ChangeNotifier {
   final List<String> conversationOrderIds = <String>[];
   final Set<String> pinnedConversationIds = <String>{};
   final List<String> pinnedConversationOrderIds = <String>[];
+  final _messageScrollOffsetsByConversation = <String, double>{};
   final TeamOrchestrator orchestrator;
   final StateChanged? onStateChanged;
   final FileDialogService fileDialogs;
@@ -370,6 +373,14 @@ class AppController extends ChangeNotifier {
   List<TeamMember> get currentMembers => state.members
       .where((member) => currentTeam.memberIds.contains(member.id))
       .toList();
+
+  double? messageScrollOffsetForConversation(String conversationId) {
+    return _messageScrollOffsetsByConversation[conversationId];
+  }
+
+  void recordMessageScrollOffset(String conversationId, double offset) {
+    _messageScrollOffsetsByConversation[conversationId] = offset;
+  }
 
   Conversation conversationForMember(String memberId) {
     return state.conversations.firstWhere(
@@ -2245,7 +2256,7 @@ class _RailTile extends StatelessWidget {
 }
 
 class _ChatPane extends StatefulWidget {
-  const _ChatPane({required this.controller});
+  const _ChatPane({super.key, required this.controller});
 
   final AppController controller;
 
@@ -2262,7 +2273,6 @@ class _ChatPaneState extends State<_ChatPane> {
 
   final textController = TextEditingController();
   final messageScrollController = ScrollController();
-  final messageScrollOffsetsByConversation = <String, double>{};
   final messageAutoFollowByConversation = <String, bool>{};
   final messageUserScrollDirectionsByConversation =
       <String, _MessageUserScrollDirection>{};
@@ -2281,9 +2291,16 @@ class _ChatPaneState extends State<_ChatPane> {
 
   @override
   void dispose() {
+    saveCurrentConversationScrollOffset();
     textController.dispose();
     messageScrollController.dispose();
     super.dispose();
+  }
+
+  void saveCurrentConversationScrollOffset() {
+    final conversationId =
+        lastConversationId ?? widget.controller.currentConversation.id;
+    _saveCurrentMessageScrollOffset(conversationId);
   }
 
   @override
@@ -2594,7 +2611,8 @@ class _ChatPaneState extends State<_ChatPane> {
         isProgrammaticMessageScroll) {
       return false;
     }
-    final previousOffset = messageScrollOffsetsByConversation[conversationId];
+    final previousOffset =
+        widget.controller.messageScrollOffsetForConversation(conversationId);
     _recordMessageScrollPosition(
       conversationId,
       notification.metrics.pixels,
@@ -2676,7 +2694,7 @@ class _ChatPaneState extends State<_ChatPane> {
   }
 
   void _recordMessageScrollPosition(String conversationId, double offset) {
-    messageScrollOffsetsByConversation[conversationId] = offset;
+    widget.controller.recordMessageScrollOffset(conversationId, offset);
   }
 
   void _saveCurrentMessageScrollOffset(String conversationId) {
@@ -2742,7 +2760,8 @@ class _ChatPaneState extends State<_ChatPane> {
           widget.controller.currentConversation.id != conversationId) {
         return;
       }
-      final savedOffset = messageScrollOffsetsByConversation[conversationId];
+      final savedOffset =
+          widget.controller.messageScrollOffsetForConversation(conversationId);
       final position = messageScrollController.position;
       final target = (savedOffset ?? position.minScrollExtent)
           .clamp(position.minScrollExtent, position.maxScrollExtent)

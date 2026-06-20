@@ -1549,14 +1549,11 @@ void main() {
     final cachedOffset = controller.offset;
     final currentOffset = cachedOffset + 120;
     controller.jumpTo(currentOffset);
-    final chatPaneState = tester.state<State>(
-      find.byWidgetPredicate(
-        (widget) => widget.runtimeType.toString() == '_ChatPane',
-      ),
-    );
-    (chatPaneState as dynamic)
-            .messageScrollOffsetsByConversation['conv-member-secretary'] =
-        cachedOffset;
+    final homeState = tester.state<State>(find.byType(AiTeamHome));
+    (homeState as dynamic).controller.recordMessageScrollOffset(
+          'conv-member-secretary',
+          cachedOffset,
+        );
     expect(controller.offset, currentOffset);
 
     await tester.tap(
@@ -1569,6 +1566,87 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(controller.offset, currentOffset);
+  });
+
+  testWidgets('chat restores group scroll after opening member chat from members page',
+      (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: _stateWithLongTeamAndSecretaryChats(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('conversation-row-conv-team-default')),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byKey(const ValueKey('chat-message-list'));
+    final controller = tester.widget<ListView>(list).controller!;
+    await tester.drag(list, const Offset(0, -900));
+    await tester.pumpAndSettle();
+    final teamOffset = controller.offset;
+    expect(teamOffset, greaterThan(0));
+    expect(teamOffset, lessThan(controller.position.maxScrollExtent - 96));
+
+    await tester.tap(find.byTooltip('成员'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, '发起聊天').at(1));
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('conversation-row-conv-team-default')),
+    );
+    await tester.pumpAndSettle();
+
+    final restoredController = tester.widget<ListView>(list).controller!;
+    expect(restoredController.offset, teamOffset);
+  });
+
+  testWidgets('chat preserves separate group and private scroll positions',
+      (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: _stateWithLongTeamAndSecretaryChats(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(
+      find.byKey(const ValueKey('conversation-row-conv-team-default')),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byKey(const ValueKey('chat-message-list'));
+    final controller = tester.widget<ListView>(list).controller!;
+    await tester.drag(list, const Offset(0, -700));
+    await tester.pumpAndSettle();
+    final teamOffset = controller.offset;
+    expect(teamOffset, greaterThan(0));
+
+    await tester.tap(
+      find.byKey(const ValueKey('conversation-row-conv-member-secretary')),
+    );
+    await tester.pumpAndSettle();
+    await tester.drag(list, const Offset(0, -1100));
+    await tester.pumpAndSettle();
+    final secretaryOffset = controller.offset;
+    expect(secretaryOffset, greaterThan(teamOffset));
+
+    await tester.tap(
+      find.byKey(const ValueKey('conversation-row-conv-team-default')),
+    );
+    await tester.pumpAndSettle();
+    expect(controller.offset, teamOffset);
+
+    await tester.tap(
+      find.byKey(const ValueKey('conversation-row-conv-member-secretary')),
+    );
+    await tester.pumpAndSettle();
+    expect(controller.offset, secretaryOffset);
   });
 
   testWidgets('chat shows a back to bottom button after manual scroll',
@@ -2841,6 +2919,54 @@ AppState _stateWithLongSecretaryChat() {
         (item) => item.id != conversation.id,
       ),
     ],
+  );
+}
+
+AppState _stateWithLongTeamAndSecretaryChats() {
+  final seed = AppState.seed();
+  final teamConversation = seed.conversations.firstWhere(
+    (item) => item.id == 'conv-team-default',
+  );
+  final secretaryConversation = seed.conversations.firstWhere(
+    (item) => item.id == 'conv-member-secretary',
+  );
+  return seed.copyWith(
+    conversations: seed.conversations.map((conversation) {
+      if (conversation.id == teamConversation.id) {
+        return conversation.copyWith(
+          messages: List.generate(
+            45,
+            (index) => ChatMessage(
+              id: 'msg-team-history-$index',
+              authorName: index.isEven ? '秘书' : '前端工程师',
+              memberId:
+                  index.isEven ? 'member-secretary' : 'member-frontend',
+              content: '群聊历史消息 $index\n${'团队填充内容 ' * 12}',
+              createdAt: DateTime(2026, 6, 14, 8).add(
+                Duration(minutes: index),
+              ),
+            ),
+          ),
+        );
+      }
+      if (conversation.id == secretaryConversation.id) {
+        return conversation.copyWith(
+          messages: List.generate(
+            45,
+            (index) => ChatMessage(
+              id: 'msg-secretary-history-$index',
+              authorName: '秘书',
+              memberId: 'member-secretary',
+              content: '秘书历史消息 $index\n${'私聊填充内容 ' * 12}',
+              createdAt: DateTime(2026, 6, 14, 9).add(
+                Duration(minutes: index),
+              ),
+            ),
+          ),
+        );
+      }
+      return conversation;
+    }).toList(),
   );
 }
 
