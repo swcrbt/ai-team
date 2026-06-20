@@ -22,7 +22,7 @@ void main() {
         tester,
         trace,
         'frontend private scrolled before group switch',
-        const Offset(0, -950),
+        const Offset(0, 950),
       );
 
       await _selectConversation(tester, _groupConversationId);
@@ -57,7 +57,7 @@ void main() {
       await trace.capture(tester, 'selected group chat');
 
       final groupController = _messageListController(tester);
-      await tester.drag(_messageListFinder, const Offset(0, -900));
+      await tester.drag(_messageListFinder, const Offset(0, 900));
       await tester.pumpAndSettle();
       final groupOffsetBeforeLeave = groupController.offset;
       expect(groupOffsetBeforeLeave, greaterThan(0), reason: trace.dump());
@@ -88,14 +88,14 @@ void main() {
       await _pumpE2eApp(tester);
 
       await _selectConversation(tester, _secretaryConversationId);
-      await tester.drag(_messageListFinder, const Offset(0, -1100));
+      await tester.drag(_messageListFinder, const Offset(0, 1100));
       await tester.pumpAndSettle();
       final privateOffsetBeforeLeave = _messageListController(tester).offset;
       expect(privateOffsetBeforeLeave, greaterThan(0), reason: trace.dump());
       await trace.capture(tester, 'private scrolled before group switch');
 
       await _selectConversation(tester, _groupConversationId);
-      await tester.drag(_messageListFinder, const Offset(0, -700));
+      await tester.drag(_messageListFinder, const Offset(0, 700));
       await tester.pumpAndSettle();
       await trace.capture(tester, 'group scrolled after private');
 
@@ -108,15 +108,6 @@ void main() {
       await tester.pumpAndSettle();
       await trace.capture(tester, 'private restore settled');
 
-      final storedPrivateOffset =
-          _appController(tester).messageScrollOffsetForConversation(
-        _secretaryConversationId,
-      );
-      expect(
-        storedPrivateOffset,
-        isNot(anyOf(isNull, closeTo(0, 1))),
-        reason: trace.dump(),
-      );
       expect(
         _messageListController(tester).offset,
         closeTo(privateOffsetBeforeLeave, 1),
@@ -130,17 +121,19 @@ void main() {
       await _pumpE2eApp(tester);
 
       await _selectConversation(tester, _groupConversationId);
-      await tester.drag(_messageListFinder, const Offset(0, -700));
+      await tester.drag(_messageListFinder, const Offset(0, 700));
       await tester.pumpAndSettle();
       final groupOffset = _messageListController(tester).offset;
       expect(groupOffset, greaterThan(0), reason: trace.dump());
       await trace.capture(tester, 'group scrolled');
 
       await _selectConversation(tester, _secretaryConversationId);
-      await tester.drag(_messageListFinder, const Offset(0, -1100));
+      await tester.drag(_messageListFinder, const Offset(0, 1100));
       await tester.pumpAndSettle();
       final privateOffset = _messageListController(tester).offset;
-      expect(privateOffset, greaterThan(groupOffset), reason: trace.dump());
+      expect(privateOffset, greaterThan(0), reason: trace.dump());
+      expect(privateOffset, isNot(closeTo(groupOffset, 1)),
+          reason: trace.dump());
       await trace.capture(tester, 'private scrolled');
 
       for (var index = 0; index < 2; index++) {
@@ -172,7 +165,7 @@ void main() {
         tester,
         trace,
         'frontend private scrolled',
-        const Offset(0, -850),
+        const Offset(0, 850),
       );
 
       await _selectConversation(tester, _testerConversationId);
@@ -180,7 +173,7 @@ void main() {
         tester,
         trace,
         'tester private scrolled',
-        const Offset(0, -1250),
+        const Offset(0, 1250),
       );
       expect(testerOffset, isNot(closeTo(frontendOffset, 1)),
           reason: trace.dump());
@@ -215,7 +208,7 @@ void main() {
         tester,
         trace,
         'group scrolled before repeated switches',
-        const Offset(0, -650),
+        const Offset(0, 650),
       );
 
       await _selectConversation(tester, _secretaryConversationId);
@@ -223,7 +216,7 @@ void main() {
         tester,
         trace,
         'secretary scrolled before repeated switches',
-        const Offset(0, -950),
+        const Offset(0, 950),
       );
 
       await _selectConversation(tester, _frontendConversationId);
@@ -231,7 +224,7 @@ void main() {
         tester,
         trace,
         'frontend scrolled before repeated switches',
-        const Offset(0, -1250),
+        const Offset(0, 1250),
       );
 
       for (var index = 0; index < 2; index++) {
@@ -269,7 +262,7 @@ void main() {
         tester,
         trace,
         'frontend private scrolled before members page',
-        const Offset(0, -950),
+        const Offset(0, 950),
       );
 
       await _openSidebarPage(tester, '成员');
@@ -297,7 +290,7 @@ void main() {
         tester,
         trace,
         'frontend private scrolled before opening tester',
-        const Offset(0, -950),
+        const Offset(0, 950),
       );
 
       await _openSidebarPage(tester, '成员');
@@ -325,7 +318,7 @@ void main() {
         tester,
         trace,
         'frontend private scrolled before settings',
-        const Offset(0, -1050),
+        const Offset(0, 1050),
       );
 
       await _openSidebarPage(tester, '设置');
@@ -352,7 +345,7 @@ void main() {
         tester,
         trace,
         'frontend private scrolled before group activity',
-        const Offset(0, -950),
+        const Offset(0, 950),
       );
 
       await _selectConversation(tester, _groupConversationId);
@@ -389,7 +382,7 @@ void main() {
         tester,
         trace,
         'group scrolled to history',
-        const Offset(0, -650),
+        const Offset(0, 650),
       );
 
       await _selectConversation(tester, _frontendConversationId);
@@ -413,7 +406,8 @@ void main() {
       );
     });
 
-    testWidgets('secretary private bottom scroll follows content growth while away',
+    testWidgets(
+        'secretary private bottom scroll follows content growth while away',
         (tester) async {
       final trace = _ScrollTrace();
       await _pumpE2eApp(tester);
@@ -569,12 +563,6 @@ const _groupConversationId = 'conv-team-default';
 const _secretaryConversationId = 'conv-member-secretary';
 const _frontendConversationId = 'conv-member-frontend';
 const _testerConversationId = 'conv-member-tester';
-const _diagnosticConversationIds = [
-  _groupConversationId,
-  _secretaryConversationId,
-  _frontendConversationId,
-  _testerConversationId,
-];
 
 Finder get _messageListFinder =>
     find.byKey(const ValueKey('chat-message-list'));
@@ -649,18 +637,11 @@ class _ScrollTrace {
     final conversationId = controller.selectedConversationId;
     final visibleRows =
         controller.visibleConversations.map((item) => item.id).join(',');
-    final storedOffsets = _diagnosticConversationIds
-        .map(
-          (id) => '$id=${controller.messageScrollOffsetForConversation(id)}'
-              ':pinned=${controller.messageScrollPinnedToBottomForConversation(id)}',
-        )
-        .join(';');
     final hasBackToBottom = find.byTooltip('回到底部').evaluate().isNotEmpty;
     if (_messageListFinder.evaluate().isEmpty) {
       _entries.add(
         '$label | conversation=$conversationId | list=absent | '
-        'backToBottom=$hasBackToBottom | rows=$visibleRows | '
-        'stored={$storedOffsets}',
+        'backToBottom=$hasBackToBottom | rows=$visibleRows',
       );
       return;
     }
@@ -671,8 +652,7 @@ class _ScrollTrace {
       'hasClients=$hasClients | '
       'offset=${hasClients ? scrollController.offset : 'none'} | '
       'max=${hasClients ? scrollController.position.maxScrollExtent : 'none'} | '
-      'backToBottom=$hasBackToBottom | rows=$visibleRows | '
-      'stored={$storedOffsets}',
+      'backToBottom=$hasBackToBottom | rows=$visibleRows',
     );
   }
 

@@ -92,7 +92,7 @@ class AiTeamHome extends StatefulWidget {
 
 class _AiTeamHomeState extends State<AiTeamHome> {
   late AppController controller;
-  final chatPaneKey = GlobalKey<_ChatPaneState>();
+  final chatPaneKeys = <String, GlobalKey<_ChatPaneState>>{};
   _MainView mainView = _MainView.chat;
 
   @override
@@ -114,9 +114,6 @@ class _AiTeamHomeState extends State<AiTeamHome> {
   }
 
   void _showMainView(_MainView view) {
-    if (mainView == _MainView.chat && view != _MainView.chat) {
-      chatPaneKey.currentState?.saveCurrentConversationScrollOffset();
-    }
     setState(() => mainView = view);
   }
 
@@ -148,68 +145,18 @@ class _AiTeamHomeState extends State<AiTeamHome> {
                         onSettings: () => _showMainView(_MainView.settings),
                       ),
                     ),
-                    if (mainView == _MainView.teams)
-                      Expanded(
-                        child: _TeamManagementPage(
-                          controller: controller,
-                          onStartChat: () => _showMainView(_MainView.chat),
-                        ),
-                      )
-                    else if (mainView == _MainView.models)
-                      Expanded(
-                        child: _ModelManagementPage(controller: controller),
-                      )
-                    else if (mainView == _MainView.roles)
-                      Expanded(
-                        child: _RoleManagementPage(controller: controller),
-                      )
-                    else if (mainView == _MainView.members)
-                      Expanded(
-                        child: _MemberManagementPage(
-                          controller: controller,
-                          onStartChat: () => _showMainView(_MainView.chat),
-                        ),
-                      )
-                    else if (mainView == _MainView.history)
-                      Expanded(
-                        child: _HistoryPage(controller: controller),
-                      )
-                    else if (mainView == _MainView.audit)
-                      Expanded(
-                        child: _AuditLogPage(controller: controller),
-                      )
-                    else if (mainView == _MainView.project)
-                      Expanded(
-                        child: _ProjectPage(
-                          controller: controller,
-                        ),
-                      )
-                    else if (mainView == _MainView.settings)
-                      Expanded(
-                        child: _SettingsPage(
-                          controller: controller,
-                        ),
-                      )
-                    else ...[
-                      SizedBox(
-                        width: conversationListWidth,
-                        child: _ConversationList(
-                          controller: controller,
-                          selectedView: mainView,
-                          onSelectConversation: (conversationId) {
-                            controller.selectConversation(conversationId);
-                            setState(() => mainView = _MainView.chat);
-                          },
-                        ),
+                    Expanded(
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          Offstage(
+                            offstage: mainView != _MainView.chat,
+                            child: _buildChatWorkspace(conversationListWidth),
+                          ),
+                          if (mainView != _MainView.chat) _buildSecondaryView(),
+                        ],
                       ),
-                      const VerticalDivider(width: 1),
-                      Expanded(
-                        child: _ChatPane(
-                          key: chatPaneKey,
-                          controller: controller,
-                        ),
-                      ),
-                    ],
+                    ),
                   ],
                 );
               },
@@ -218,6 +165,76 @@ class _AiTeamHomeState extends State<AiTeamHome> {
         );
       },
     );
+  }
+
+  Widget _buildChatWorkspace(double conversationListWidth) {
+    final conversations = controller.visibleConversations;
+    final visibleConversationIds = conversations
+        .map(
+          (conversation) => conversation.id,
+        )
+        .toSet();
+    chatPaneKeys.removeWhere(
+      (conversationId, key) => !visibleConversationIds.contains(conversationId),
+    );
+    final selectedIndex = conversations.indexWhere(
+      (conversation) => conversation.id == controller.selectedConversationId,
+    );
+    return Row(
+      children: [
+        SizedBox(
+          width: conversationListWidth,
+          child: _ConversationList(
+            controller: controller,
+            selectedView: mainView,
+            onSelectConversation: (conversationId) {
+              controller.selectConversation(conversationId);
+              setState(() => mainView = _MainView.chat);
+            },
+          ),
+        ),
+        const VerticalDivider(width: 1),
+        Expanded(
+          child: IndexedStack(
+            index: selectedIndex < 0 ? 0 : selectedIndex,
+            children: conversations
+                .map(
+                  (conversation) => _ChatPane(
+                    key: chatPaneKeys.putIfAbsent(
+                      conversation.id,
+                      () => GlobalKey<_ChatPaneState>(
+                        debugLabel: 'chat-pane-${conversation.id}',
+                      ),
+                    ),
+                    controller: controller,
+                    conversationId: conversation.id,
+                  ),
+                )
+                .toList(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSecondaryView() {
+    return switch (mainView) {
+      _MainView.teams => _TeamManagementPage(
+          controller: controller,
+          onStartChat: () => _showMainView(_MainView.chat),
+        ),
+      _MainView.models => _ModelManagementPage(controller: controller),
+      _MainView.roles => _RoleManagementPage(controller: controller),
+      _MainView.members => _MemberManagementPage(
+          controller: controller,
+          onStartChat: () => _showMainView(_MainView.chat),
+        ),
+      _MainView.history => _HistoryPage(controller: controller),
+      _MainView.audit => _AuditLogPage(controller: controller),
+      _MainView.project => _ProjectPage(controller: controller),
+      _MainView.settings => _SettingsPage(controller: controller),
+      _MainView.chat => const SizedBox.shrink(),
+    };
   }
 }
 
@@ -231,16 +248,6 @@ enum _MainView {
   audit,
   project,
   settings,
-}
-
-class _MessageScrollState {
-  const _MessageScrollState({
-    required this.offset,
-    required this.pinnedToBottom,
-  });
-
-  final double offset;
-  final bool pinnedToBottom;
 }
 
 class AppController extends ChangeNotifier {
@@ -270,7 +277,6 @@ class AppController extends ChangeNotifier {
   final List<String> conversationOrderIds = <String>[];
   final Set<String> pinnedConversationIds = <String>{};
   final List<String> pinnedConversationOrderIds = <String>[];
-  final _messageScrollStatesByConversation = <String, _MessageScrollState>{};
   double _conversationListScrollOffset = 0;
   final TeamOrchestrator orchestrator;
   final StateChanged? onStateChanged;
@@ -280,6 +286,7 @@ class AppController extends ChangeNotifier {
   String? error;
   String? _runningTaskId;
   ModelRequestCancellation? _activeCancellation;
+  String? _activeDispatchConversationId;
   ConversationStatus? _requestedCancellationStatus;
   Future<void> _persistenceQueue = Future<void>.value();
 
@@ -310,9 +317,27 @@ class AppController extends ChangeNotifier {
       return a.createdAt.compareTo(b.createdAt);
     });
 
+  List<TaskAssignment> taskAssignmentsForConversation(String conversationId) {
+    return state.taskAssignments
+        .where((assignment) => assignment.conversationId == conversationId)
+        .toList()
+      ..sort((a, b) {
+        final roundComparison = b.round.compareTo(a.round);
+        if (roundComparison != 0) {
+          return roundComparison;
+        }
+        return a.createdAt.compareTo(b.createdAt);
+      });
+  }
+
   List<QueuedTask> get tasksForCurrentConversation => state.queuedTasks
       .where((task) => task.conversationId == currentConversation.id)
       .toList();
+
+  List<QueuedTask> tasksForConversation(String conversationId) =>
+      state.queuedTasks
+          .where((task) => task.conversationId == conversationId)
+          .toList();
 
   List<QueuedTask> get pendingTasksForCurrentConversation {
     final tasks = tasksForCurrentConversation
@@ -336,6 +361,25 @@ class AppController extends ChangeNotifier {
           (item) => item.teamId == currentTeam.id && item.memberId == null,
         ),
       );
+
+  Conversation conversationById(String conversationId) =>
+      _conversationById(conversationId);
+
+  List<TeamMember> membersForConversation(String conversationId) {
+    final conversation = _conversationById(conversationId);
+    final team = _requireTeam(conversation.teamId);
+    return state.members
+        .where((member) => team.memberIds.contains(member.id))
+        .toList();
+  }
+
+  Team teamForConversation(String conversationId) {
+    return _requireTeam(_conversationById(conversationId).teamId);
+  }
+
+  bool isConversationDispatching(String conversationId) {
+    return isDispatching && _activeDispatchConversationId == conversationId;
+  }
 
   Conversation get teamConversation => state.conversations.firstWhere(
         (item) => item.teamId == currentTeam.id && item.memberId == null,
@@ -389,26 +433,6 @@ class AppController extends ChangeNotifier {
 
   void recordConversationListScrollOffset(double offset) {
     _conversationListScrollOffset = offset;
-  }
-
-  double? messageScrollOffsetForConversation(String conversationId) {
-    return _messageScrollStatesByConversation[conversationId]?.offset;
-  }
-
-  bool messageScrollPinnedToBottomForConversation(String conversationId) {
-    return _messageScrollStatesByConversation[conversationId]?.pinnedToBottom ??
-        false;
-  }
-
-  void recordMessageScrollOffset(
-    String conversationId,
-    double offset, {
-    bool pinnedToBottom = false,
-  }) {
-    _messageScrollStatesByConversation[conversationId] = _MessageScrollState(
-      offset: offset,
-      pinnedToBottom: pinnedToBottom,
-    );
   }
 
   Conversation conversationForMember(String memberId) {
@@ -746,8 +770,8 @@ class AppController extends ChangeNotifier {
     await runNextQueuedTask();
   }
 
-  bool _canDispatchCurrentConversation() {
-    final status = currentConversation.status;
+  bool _canDispatchConversation(String conversationId) {
+    final status = _conversationById(conversationId).status;
     if (status == ConversationStatus.paused) {
       error = '当前会话已暂停，请先点击继续。';
       return false;
@@ -756,11 +780,18 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> dispatch(String text) async {
+    await dispatchConversation(selectedConversationId, text);
+  }
+
+  Future<void> dispatchConversation(
+    String conversationId,
+    String text,
+  ) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty || isDispatching) {
       return;
     }
-    if (!_canDispatchCurrentConversation()) {
+    if (!_canDispatchConversation(conversationId)) {
       notifyListeners();
       return;
     }
@@ -768,10 +799,11 @@ class AppController extends ChangeNotifier {
     error = null;
     final cancellation = ModelRequestCancellation();
     _activeCancellation = cancellation;
+    _activeDispatchConversationId = conversationId;
     _requestedCancellationStatus = null;
     notifyListeners();
     try {
-      final conversation = currentConversation;
+      final conversation = _conversationById(conversationId);
       if (conversation.memberId == null) {
         _commit(
           await orchestrator.dispatchTeamTask(
@@ -812,15 +844,17 @@ class AppController extends ChangeNotifier {
     } catch (exception) {
       if (cancellation.isCancelled) {
         _commitCancelledDispatch(
+          conversationId,
           _requestedCancellationStatus ?? ConversationStatus.stopped,
         );
         return;
       }
       error = exception.toString();
-      final failed = currentConversation.copyWith(
+      final conversation = _conversationById(conversationId);
+      final failed = conversation.copyWith(
         status: ConversationStatus.failed,
         messages: [
-          ...currentConversation.messages,
+          ...conversation.messages,
           ChatMessage(
             id: 'msg-${DateTime.now().microsecondsSinceEpoch}',
             authorName: '系统',
@@ -841,29 +875,40 @@ class AppController extends ChangeNotifier {
       if (identical(_activeCancellation, cancellation)) {
         _activeCancellation = null;
       }
+      if (_activeDispatchConversationId == conversationId) {
+        _activeDispatchConversationId = null;
+      }
       _requestedCancellationStatus = null;
       notifyListeners();
     }
   }
 
   void pauseConversation() {
-    if (isDispatching) {
-      _cancelActiveDispatch(ConversationStatus.paused);
+    pauseConversationById(selectedConversationId);
+  }
+
+  void pauseConversationById(String conversationId) {
+    if (isConversationDispatching(conversationId)) {
+      _cancelActiveDispatch(conversationId, ConversationStatus.paused);
       return;
     }
-    _setConversationStatus(ConversationStatus.paused);
+    _setConversationStatus(conversationId, ConversationStatus.paused);
   }
 
   void resumeConversation() {
-    _setConversationStatus(ConversationStatus.idle);
+    _setConversationStatus(selectedConversationId, ConversationStatus.idle);
   }
 
   void stopConversation() {
-    if (isDispatching) {
-      _cancelActiveDispatch(ConversationStatus.stopped);
+    stopConversationById(selectedConversationId);
+  }
+
+  void stopConversationById(String conversationId) {
+    if (isConversationDispatching(conversationId)) {
+      _cancelActiveDispatch(conversationId, ConversationStatus.stopped);
       return;
     }
-    _setConversationStatus(ConversationStatus.stopped);
+    _setConversationStatus(conversationId, ConversationStatus.stopped);
   }
 
   Team addTeam({
@@ -1485,8 +1530,11 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  void _setConversationStatus(ConversationStatus status) {
-    final updated = currentConversation.copyWith(status: status);
+  void _setConversationStatus(
+    String conversationId,
+    ConversationStatus status,
+  ) {
+    final updated = _conversationById(conversationId).copyWith(status: status);
     _commit(
       state.copyWith(
         conversations: state.conversations
@@ -1577,23 +1625,30 @@ class AppController extends ChangeNotifier {
     );
   }
 
-  void _cancelActiveDispatch(ConversationStatus status) {
+  void _cancelActiveDispatch(
+    String conversationId,
+    ConversationStatus status,
+  ) {
     _requestedCancellationStatus = status;
     _activeCancellation?.cancel();
-    _setConversationStatus(status);
+    _setConversationStatus(conversationId, status);
   }
 
-  void _commitCancelledDispatch(ConversationStatus status) {
+  void _commitCancelledDispatch(
+    String conversationId,
+    ConversationStatus status,
+  ) {
     final action = status == ConversationStatus.paused
         ? 'team_task_paused'
         : 'team_task_stopped';
     final content = status == ConversationStatus.paused
         ? '任务已暂停，继续后可以重新发起下一轮协作。'
         : '任务已停止，本轮未完成的模型请求已取消。';
-    final updated = currentConversation.copyWith(
+    final conversation = _conversationById(conversationId);
+    final updated = conversation.copyWith(
       status: status,
       messages: [
-        ...currentConversation.messages,
+        ...conversation.messages,
         ChatMessage(
           id: 'msg-${DateTime.now().microsecondsSinceEpoch}',
           authorName: '系统',
@@ -1620,7 +1675,7 @@ class AppController extends ChangeNotifier {
           AuditEntry(
             id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
             action: action,
-            detail: currentTeam.id,
+            detail: teamForConversation(conversationId).id,
             createdAt: DateTime.now(),
           ),
         ],
@@ -2350,9 +2405,14 @@ class _RailTile extends StatelessWidget {
 }
 
 class _ChatPane extends StatefulWidget {
-  const _ChatPane({super.key, required this.controller});
+  const _ChatPane({
+    super.key,
+    required this.controller,
+    required this.conversationId,
+  });
 
   final AppController controller;
+  final String conversationId;
 
   @override
   State<_ChatPane> createState() => _ChatPaneState();
@@ -2367,43 +2427,39 @@ class _ChatPaneState extends State<_ChatPane> {
 
   final textController = TextEditingController();
   final messageScrollController = ScrollController();
-  final messageAutoFollowByConversation = <String, bool>{};
-  final messageUserScrollDirectionsByConversation =
-      <String, _MessageUserScrollDirection>{};
-  String? lastConversationId;
+  bool messageAutoFollow = true;
+  _MessageUserScrollDirection messageUserScrollDirection =
+      _MessageUserScrollDirection.idle;
   int lastMessageListItemCount = -1;
   String? lastMessageId;
   int lastMessageContentLength = -1;
   int lastMessageThinkingLength = -1;
   ChatMessageGenerationStatus? lastMessageGenerationStatus;
   bool messageScrollFrameScheduled = false;
-  String? pendingMessageScrollConversationId;
   int? pendingMessageScrollVersion;
   int pendingMessageScrollSettleFrames = 0;
   int messageAutoScrollVersion = 0;
   bool isProgrammaticMessageScroll = false;
+  double? lastRecordedMessageScrollOffset;
 
   @override
   void dispose() {
-    saveCurrentConversationScrollOffset();
     textController.dispose();
     messageScrollController.dispose();
     super.dispose();
   }
 
-  void saveCurrentConversationScrollOffset() {
-    final conversationId =
-        lastConversationId ?? widget.controller.currentConversation.id;
-    _saveCurrentMessageScrollOffset(conversationId);
-  }
-
   @override
   Widget build(BuildContext context) {
-    final conversation = widget.controller.currentConversation;
+    final conversation =
+        widget.controller.conversationById(widget.conversationId);
     final typingMembers = _typingMembers(widget.controller, conversation);
-    final pendingPatches = widget.controller.patchProposals
-        .where((patch) => patch.status == PatchStatus.pending)
-        .toList();
+    final pendingPatches =
+        widget.controller.selectedConversationId == conversation.id
+            ? widget.controller.patchProposals
+                .where((patch) => patch.status == PatchStatus.pending)
+                .toList()
+            : const <PatchProposal>[];
     final messageListItemCount = conversation.messages.length +
         typingMembers.length +
         pendingPatches.length;
@@ -2416,33 +2472,25 @@ class _ChatPaneState extends State<_ChatPane> {
         currentLastMessage?.thinkingContent?.length ?? 0;
     final currentLastMessageGenerationStatus =
         currentLastMessage?.generationStatus;
-    final conversationChanged = conversation.id != lastConversationId;
-    final messageStructureChanged = conversationChanged ||
+    final messageStructureChanged =
         messageListItemCount != lastMessageListItemCount ||
-        currentLastMessageId != lastMessageId;
+            currentLastMessageId != lastMessageId;
     final lastMessageBodyChanged =
         currentLastMessageContentLength != lastMessageContentLength ||
             currentLastMessageThinkingLength != lastMessageThinkingLength ||
             currentLastMessageGenerationStatus != lastMessageGenerationStatus;
-    if (conversationChanged) {
-      final previousConversationId = lastConversationId;
-      if (previousConversationId != null) {
-        _saveCurrentMessageScrollOffset(previousConversationId);
-      }
-      _restoreMessageScrollOffset(conversation.id);
-    }
-    lastConversationId = conversation.id;
     lastMessageListItemCount = messageListItemCount;
     lastMessageId = currentLastMessageId;
     lastMessageContentLength = currentLastMessageContentLength;
     lastMessageThinkingLength = currentLastMessageThinkingLength;
     lastMessageGenerationStatus = currentLastMessageGenerationStatus;
-    if (!conversationChanged &&
-        (messageStructureChanged || lastMessageBodyChanged) &&
-        _autoFollowMessages(conversation.id)) {
-      _scheduleMessageScrollToBottom(conversation.id);
+    if ((messageStructureChanged || lastMessageBodyChanged) &&
+        messageAutoFollow) {
+      _scheduleMessageScrollToBottom(
+        settleFrames: _messageBottomSettleFrameCount,
+      );
     }
-    final showBackToBottomButton = !_autoFollowMessages(conversation.id);
+    final showBackToBottomButton = !messageAutoFollow;
     return Column(
       children: [
         Container(
@@ -2504,41 +2552,43 @@ class _ChatPaneState extends State<_ChatPane> {
                 child: Listener(
                   onPointerSignal: (event) => _handleMessagePointerSignal(
                     event,
-                    conversation.id,
                   ),
                   child: NotificationListener<ScrollNotification>(
                     onNotification: (notification) =>
-                        _handleMessageScrollNotification(
-                      notification,
-                      conversation.id,
-                    ),
-                    child: ListView.builder(
-                      key: const ValueKey('chat-message-list'),
-                      controller: messageScrollController,
-                      padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
-                      itemCount: messageListItemCount,
-                      itemBuilder: (context, index) {
-                        if (index < conversation.messages.length) {
-                          return _MessageBubble(
-                            message: conversation.messages[index],
-                            showAuthorName: conversation.memberId == null,
+                        _handleMessageScrollNotification(notification),
+                    child: KeyedSubtree(
+                      key: ValueKey(
+                        'chat-message-list-${conversation.id}',
+                      ),
+                      child: ListView.builder(
+                        key: const ValueKey('chat-message-list'),
+                        controller: messageScrollController,
+                        padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
+                        itemCount: messageListItemCount,
+                        itemBuilder: (context, index) {
+                          if (index < conversation.messages.length) {
+                            return _MessageBubble(
+                              message: conversation.messages[index],
+                              showAuthorName: conversation.memberId == null,
+                            );
+                          }
+                          final typingIndex =
+                              index - conversation.messages.length;
+                          if (typingIndex < typingMembers.length) {
+                            return _TypingIndicator(
+                              member: typingMembers[typingIndex],
+                            );
+                          }
+                          final patch = pendingPatches[
+                              typingIndex - typingMembers.length];
+                          return _ChatPatchConfirmationCard(
+                            patch: patch,
+                            onApply: () => widget.controller.applyPatch(patch),
+                            onReject: () =>
+                                widget.controller.rejectPatch(patch),
                           );
-                        }
-                        final typingIndex =
-                            index - conversation.messages.length;
-                        if (typingIndex < typingMembers.length) {
-                          return _TypingIndicator(
-                            member: typingMembers[typingIndex],
-                          );
-                        }
-                        final patch =
-                            pendingPatches[typingIndex - typingMembers.length];
-                        return _ChatPatchConfirmationCard(
-                          patch: patch,
-                          onApply: () => widget.controller.applyPatch(patch),
-                          onReject: () => widget.controller.rejectPatch(patch),
-                        );
-                      },
+                        },
+                      ),
                     ),
                   ),
                 ),
@@ -2566,7 +2616,10 @@ class _ChatPaneState extends State<_ChatPane> {
               style: const TextStyle(color: Color(0xFFBE123C)),
             ),
           ),
-        _TaskQueueBar(controller: widget.controller),
+        _TaskQueueBar(
+          controller: widget.controller,
+          conversationId: conversation.id,
+        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 10, 24, 18),
           child: DecoratedBox(
@@ -2581,6 +2634,7 @@ class _ChatPaneState extends State<_ChatPane> {
                   child: Focus(
                     onKeyEvent: _handleInputKeyEvent,
                     child: TextField(
+                      key: ValueKey('chat-input-${conversation.id}'),
                       controller: textController,
                       minLines: 1,
                       maxLines: 4,
@@ -2609,11 +2663,15 @@ class _ChatPaneState extends State<_ChatPane> {
                 ),
                 IconButton.filled(
                   tooltip: widget.controller.isDispatching ? '停止生成' : '发送',
-                  onPressed: widget.controller.isDispatching
-                      ? widget.controller.stopConversation
-                      : _submit,
+                  onPressed: widget.controller
+                          .isConversationDispatching(conversation.id)
+                      ? () => widget.controller
+                          .stopConversationById(conversation.id)
+                      : widget.controller.isDispatching
+                          ? null
+                          : _submit,
                   icon: Icon(
-                    widget.controller.isDispatching
+                    widget.controller.isConversationDispatching(conversation.id)
                         ? Icons.stop_rounded
                         : Icons.send_rounded,
                   ),
@@ -2630,7 +2688,7 @@ class _ChatPaneState extends State<_ChatPane> {
   Future<void> _submit() async {
     final text = textController.text;
     textController.clear();
-    await widget.controller.dispatch(text);
+    await widget.controller.dispatchConversation(widget.conversationId, text);
   }
 
   KeyEventResult _handleInputKeyEvent(FocusNode node, KeyEvent event) {
@@ -2639,8 +2697,8 @@ class _ChatPaneState extends State<_ChatPane> {
     }
     final key = event.logicalKey;
     if (key == LogicalKeyboardKey.escape) {
-      if (widget.controller.isDispatching) {
-        widget.controller.stopConversation();
+      if (widget.controller.isConversationDispatching(widget.conversationId)) {
+        widget.controller.stopConversationById(widget.conversationId);
         return KeyEventResult.handled;
       }
       return KeyEventResult.ignored;
@@ -2676,10 +2734,6 @@ class _ChatPaneState extends State<_ChatPane> {
     );
   }
 
-  bool _autoFollowMessages(String conversationId) {
-    return messageAutoFollowByConversation[conversationId] ?? true;
-  }
-
   bool _isNearMessageBottom() {
     if (!messageScrollController.hasClients) {
       return true;
@@ -2699,43 +2753,29 @@ class _ChatPaneState extends State<_ChatPane> {
 
   bool _handleMessageScrollNotification(
     ScrollNotification notification,
-    String conversationId,
   ) {
     if (notification.metrics.axis != Axis.vertical ||
         isProgrammaticMessageScroll) {
       return false;
     }
-    final previousOffset =
-        widget.controller.messageScrollOffsetForConversation(conversationId);
-    final pinnedToBottom = _isNearMessageBottomMetrics(notification.metrics);
+    final previousOffset = lastRecordedMessageScrollOffset;
     _recordMessageScrollPosition(
-      conversationId,
       notification.metrics.pixels,
-      pinnedToBottom: pinnedToBottom,
     );
     if (notification is ScrollUpdateNotification &&
         notification.scrollDelta != null) {
       final scrollDelta = _messageScrollDelta(notification, previousOffset);
       if (scrollDelta < 0) {
-        _recordMessageScrollDirection(
-          conversationId,
-          _MessageUserScrollDirection.history,
-        );
-        _disableMessageAutoFollow(conversationId);
+        _recordMessageScrollDirection(_MessageUserScrollDirection.history);
+        _disableMessageAutoFollow();
       } else if (scrollDelta > 0) {
-        _recordMessageScrollDirection(
-          conversationId,
-          _MessageUserScrollDirection.bottom,
-        );
+        _recordMessageScrollDirection(_MessageUserScrollDirection.bottom);
         if (_isNearMessageBottomMetrics(notification.metrics)) {
-          _setMessageAutoFollow(conversationId, true);
+          _setMessageAutoFollow(true);
         }
       }
     } else if (notification is ScrollEndNotification) {
-      _restoreMessageAutoFollowAfterUserScrollEnd(
-        conversationId,
-        notification.metrics,
-      );
+      _restoreMessageAutoFollowAfterUserScrollEnd(notification.metrics);
     }
     return false;
   }
@@ -2755,152 +2795,70 @@ class _ChatPaneState extends State<_ChatPane> {
 
   void _handleMessagePointerSignal(
     PointerSignalEvent event,
-    String conversationId,
   ) {
-    if (event is! PointerScrollEvent ||
-        !messageScrollController.hasClients ||
-        widget.controller.currentConversation.id != conversationId) {
+    if (event is! PointerScrollEvent || !messageScrollController.hasClients) {
       return;
     }
     final position = messageScrollController.position;
     final scrollDelta = event.scrollDelta.dy;
     if (scrollDelta < 0 && position.pixels > position.minScrollExtent) {
-      _recordMessageScrollDirection(
-        conversationId,
-        _MessageUserScrollDirection.history,
-      );
-      _disableMessageAutoFollow(conversationId);
+      _recordMessageScrollDirection(_MessageUserScrollDirection.history);
+      _disableMessageAutoFollow();
     } else if (scrollDelta > 0) {
-      _recordMessageScrollDirection(
-        conversationId,
-        _MessageUserScrollDirection.bottom,
-      );
+      _recordMessageScrollDirection(_MessageUserScrollDirection.bottom);
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted ||
-            !messageScrollController.hasClients ||
-            widget.controller.currentConversation.id != conversationId) {
+        if (!mounted || !messageScrollController.hasClients) {
           return;
         }
         _restoreMessageAutoFollowAfterUserScrollEnd(
-          conversationId,
           messageScrollController.position,
         );
       });
     }
   }
 
-  void _recordMessageScrollPosition(
-    String conversationId,
-    double offset, {
-    bool pinnedToBottom = false,
-  }) {
-    widget.controller.recordMessageScrollOffset(
-      conversationId,
-      offset,
-      pinnedToBottom: pinnedToBottom,
-    );
-  }
-
-  void _saveCurrentMessageScrollOffset(String conversationId) {
-    if (!messageScrollController.hasClients) {
-      return;
-    }
-    final position = messageScrollController.position;
-    final offset = position.pixels
-        .clamp(position.minScrollExtent, position.maxScrollExtent)
-        .toDouble();
-    _recordMessageScrollPosition(
-      conversationId,
-      offset,
-      pinnedToBottom: _isNearMessageBottomMetrics(position),
-    );
+  void _recordMessageScrollPosition(double offset) {
+    lastRecordedMessageScrollOffset = offset;
   }
 
   void _recordMessageScrollDirection(
-    String conversationId,
     _MessageUserScrollDirection direction,
   ) {
-    messageUserScrollDirectionsByConversation[conversationId] = direction;
-  }
-
-  _MessageUserScrollDirection _lastMessageScrollDirection(
-    String conversationId,
-  ) {
-    return messageUserScrollDirectionsByConversation[conversationId] ??
-        _MessageUserScrollDirection.idle;
+    messageUserScrollDirection = direction;
   }
 
   void _restoreMessageAutoFollowAfterUserScrollEnd(
-    String conversationId,
     ScrollMetrics metrics,
   ) {
     if (_isAtMessageBottomMetrics(metrics) ||
-        (_lastMessageScrollDirection(conversationId) ==
-                _MessageUserScrollDirection.bottom &&
+        (messageUserScrollDirection == _MessageUserScrollDirection.bottom &&
             _isNearMessageBottomMetrics(metrics))) {
-      _recordMessageScrollDirection(
-        conversationId,
-        _MessageUserScrollDirection.idle,
-      );
-      _setMessageAutoFollow(conversationId, true);
+      _recordMessageScrollDirection(_MessageUserScrollDirection.idle);
+      _setMessageAutoFollow(true);
     }
   }
 
-  void _setMessageAutoFollow(String conversationId, bool value) {
-    final previous = _autoFollowMessages(conversationId);
-    messageAutoFollowByConversation[conversationId] = value;
-    if (previous != value &&
-        mounted &&
-        widget.controller.currentConversation.id == conversationId) {
+  void _setMessageAutoFollow(bool value) {
+    final previous = messageAutoFollow;
+    messageAutoFollow = value;
+    if (previous != value && mounted) {
       setState(() {});
     }
   }
 
-  void _disableMessageAutoFollow(String conversationId) {
+  void _disableMessageAutoFollow() {
     _cancelPendingMessageAutoScroll();
-    _setMessageAutoFollow(conversationId, false);
-  }
-
-  void _restoreMessageScrollOffset(String conversationId) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted ||
-          !messageScrollController.hasClients ||
-          widget.controller.currentConversation.id != conversationId) {
-        return;
-      }
-      final savedOffset =
-          widget.controller.messageScrollOffsetForConversation(conversationId);
-      if (widget.controller
-          .messageScrollPinnedToBottomForConversation(conversationId)) {
-        _setMessageAutoFollow(conversationId, true);
-        _scheduleMessageScrollToBottom(
-          conversationId,
-          settleFrames: _messageBottomSettleFrameCount,
-        );
-        return;
-      }
-      final position = messageScrollController.position;
-      final target = (savedOffset ?? position.minScrollExtent)
-          .clamp(position.minScrollExtent, position.maxScrollExtent)
-          .toDouble();
-      _jumpMessageScrollTo(target, conversationId);
-    });
+    _setMessageAutoFollow(false);
   }
 
   void _scrollCurrentConversationToBottom() {
-    final conversationId = widget.controller.currentConversation.id;
-    _setMessageAutoFollow(conversationId, true);
+    _setMessageAutoFollow(true);
     _scheduleMessageScrollToBottom(
-      conversationId,
       settleFrames: _messageBottomSettleFrameCount,
     );
   }
 
-  void _scheduleMessageScrollToBottom(
-    String conversationId, {
-    int settleFrames = 0,
-  }) {
-    pendingMessageScrollConversationId = conversationId;
+  void _scheduleMessageScrollToBottom({int settleFrames = 0}) {
     pendingMessageScrollVersion = messageAutoScrollVersion;
     if (settleFrames > pendingMessageScrollSettleFrames) {
       pendingMessageScrollSettleFrames = settleFrames;
@@ -2911,25 +2869,20 @@ class _ChatPaneState extends State<_ChatPane> {
     messageScrollFrameScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       messageScrollFrameScheduled = false;
-      final scheduledConversationId = pendingMessageScrollConversationId;
       final scheduledVersion = pendingMessageScrollVersion;
       final settleFrames = pendingMessageScrollSettleFrames;
-      pendingMessageScrollConversationId = null;
       pendingMessageScrollVersion = null;
       pendingMessageScrollSettleFrames = 0;
       if (!mounted ||
           !messageScrollController.hasClients ||
-          scheduledConversationId == null ||
           scheduledVersion != messageAutoScrollVersion ||
-          widget.controller.currentConversation.id != scheduledConversationId ||
-          !_autoFollowMessages(scheduledConversationId)) {
+          !messageAutoFollow) {
         return;
       }
       final target = messageScrollController.position.maxScrollExtent;
-      _jumpMessageScrollTo(target, scheduledConversationId);
-      if (settleFrames > 0 && _autoFollowMessages(scheduledConversationId)) {
+      _jumpMessageScrollTo(target);
+      if (settleFrames > 0 && messageAutoFollow) {
         _scheduleMessageScrollToBottom(
-          scheduledConversationId,
           settleFrames: settleFrames - 1,
         );
       }
@@ -2937,23 +2890,19 @@ class _ChatPaneState extends State<_ChatPane> {
   }
 
   void _cancelPendingMessageAutoScroll() {
-    pendingMessageScrollConversationId = null;
     pendingMessageScrollVersion = null;
     pendingMessageScrollSettleFrames = 0;
     messageAutoScrollVersion++;
   }
 
-  void _jumpMessageScrollTo(double target, String conversationId) {
+  void _jumpMessageScrollTo(double target) {
     isProgrammaticMessageScroll = true;
     messageScrollController.jumpTo(target);
     isProgrammaticMessageScroll = false;
-    final pinnedToBottom = _isNearMessageBottom();
     _recordMessageScrollPosition(
-      conversationId,
       messageScrollController.position.pixels,
-      pinnedToBottom: pinnedToBottom,
     );
-    _setMessageAutoFollow(conversationId, pinnedToBottom);
+    _setMessageAutoFollow(_isNearMessageBottom());
   }
 }
 
@@ -4471,13 +4420,17 @@ class _TaskAssignmentCard extends StatelessWidget {
 }
 
 class _TaskQueueBar extends StatelessWidget {
-  const _TaskQueueBar({required this.controller});
+  const _TaskQueueBar({
+    required this.controller,
+    required this.conversationId,
+  });
 
   final AppController controller;
+  final String conversationId;
 
   @override
   Widget build(BuildContext context) {
-    final tasks = controller.tasksForCurrentConversation;
+    final tasks = controller.tasksForConversation(conversationId);
     if (tasks.isEmpty) {
       return const SizedBox.shrink();
     }
@@ -5701,7 +5654,7 @@ String _modelName(AppState state, String modelId) =>
 
 String _conversationTitle(AppController controller, Conversation conversation) {
   if (conversation.memberId == null) {
-    return '群聊 · ${controller.currentTeam.name}';
+    return '群聊 · ${controller.teamForConversation(conversation.id).name}';
   }
   return '私聊 · ${conversation.title}';
 }
@@ -5724,10 +5677,11 @@ String _auditLogTimeText(DateTime value) {
 
 String _conversationMeta(AppController controller, Conversation conversation) {
   final status = _statusText(conversation.status);
+  final members = controller.membersForConversation(conversation.id);
   if (conversation.memberId == null) {
-    return '${controller.currentMembers.length} 位成员 · 第 ${conversation.currentRound} 轮 · $status';
+    return '${members.length} 位成员 · 第 ${conversation.currentRound} 轮 · $status';
   }
-  final member = controller.currentMembers.firstWhere(
+  final member = members.firstWhere(
     (item) => item.id == conversation.memberId,
   );
   return '${_roleName(controller.state, member.roleId)} · ${_modelName(controller.state, member.modelId)} · $status';
@@ -5735,7 +5689,7 @@ String _conversationMeta(AppController controller, Conversation conversation) {
 
 String _inputHint(AppController controller, Conversation conversation) {
   if (conversation.memberId == null) {
-    return '发给 ${controller.currentTeam.name}';
+    return '发给 ${controller.teamForConversation(conversation.id).name}';
   }
   return '发给 ${conversation.title}';
 }
@@ -5902,13 +5856,15 @@ List<TeamMember> _typingMembers(
       controller.state.members.firstWhere((member) => member.id == memberId),
     ];
   }
-  final runningAssignments = controller.currentTaskAssignments
+  final runningAssignments = controller
+      .taskAssignmentsForConversation(conversation.id)
       .where((assignment) => assignment.status == TaskAssignmentStatus.running)
       .toList();
   if (runningAssignments.isEmpty) {
-    final fallback = controller.currentMembers.firstWhere(
+    final members = controller.membersForConversation(conversation.id);
+    final fallback = members.firstWhere(
       (member) => !member.isSecretary,
-      orElse: () => controller.currentMembers.first,
+      orElse: () => members.first,
     );
     return streamingMemberIds.contains(fallback.id) ? const [] : [fallback];
   }

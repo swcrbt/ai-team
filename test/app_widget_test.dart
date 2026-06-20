@@ -1512,7 +1512,7 @@ void main() {
 
     final list = find.byKey(const ValueKey('chat-message-list'));
     final controller = tester.widget<ListView>(list).controller!;
-    await tester.drag(list, const Offset(0, -900));
+    await tester.drag(list, const Offset(0, 900));
     await tester.pumpAndSettle();
 
     final secretaryOffset = controller.offset;
@@ -1531,7 +1531,35 @@ void main() {
     expect(controller.offset, secretaryOffset);
   });
 
-  testWidgets('chat restores bottom intent after private content grows while away',
+  testWidgets('default secretary chat starts at bottom before group switching',
+      (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: _stateWithLongSecretaryChat(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byKey(const ValueKey('chat-message-list'));
+    final controller = tester.widget<ListView>(list).controller!;
+    expect(controller.position.maxScrollExtent, greaterThan(0));
+    expect(controller.offset, closeTo(controller.position.maxScrollExtent, 1));
+
+    await tester.tap(
+      find.byKey(const ValueKey('conversation-row-conv-team-default')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('conversation-row-conv-member-secretary')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(controller.offset, closeTo(controller.position.maxScrollExtent, 1));
+  });
+
+  testWidgets(
+      'chat restores bottom intent after private content grows while away',
       (tester) async {
     await tester.pumpWidget(
       AiTeamApp(
@@ -1587,7 +1615,8 @@ void main() {
     expect(controller.offset, closeTo(controller.position.maxScrollExtent, 1));
   });
 
-  testWidgets('chat saves current scroll position before switching conversations',
+  testWidgets(
+      'chat keeps its live scroll position while another conversation is shown',
       (tester) async {
     await tester.pumpWidget(
       AiTeamApp(
@@ -1599,17 +1628,11 @@ void main() {
 
     final list = find.byKey(const ValueKey('chat-message-list'));
     final controller = tester.widget<ListView>(list).controller!;
-    await tester.drag(list, const Offset(0, -900));
+    await tester.drag(list, const Offset(0, 900));
     await tester.pumpAndSettle();
 
-    final cachedOffset = controller.offset;
-    final currentOffset = cachedOffset + 120;
+    final currentOffset = controller.offset + 120;
     controller.jumpTo(currentOffset);
-    final homeState = tester.state<State>(find.byType(AiTeamHome));
-    (homeState as dynamic).controller.recordMessageScrollOffset(
-          'conv-member-secretary',
-          cachedOffset,
-        );
     expect(controller.offset, currentOffset);
 
     await tester.tap(
@@ -1624,7 +1647,8 @@ void main() {
     expect(controller.offset, currentOffset);
   });
 
-  testWidgets('chat restores group scroll after opening member chat from members page',
+  testWidgets(
+      'chat restores group scroll after opening member chat from members page',
       (tester) async {
     await tester.pumpWidget(
       AiTeamApp(
@@ -1641,7 +1665,7 @@ void main() {
 
     final list = find.byKey(const ValueKey('chat-message-list'));
     final controller = tester.widget<ListView>(list).controller!;
-    await tester.drag(list, const Offset(0, -900));
+    await tester.drag(list, const Offset(0, 900));
     await tester.pumpAndSettle();
     final teamOffset = controller.offset;
     expect(teamOffset, greaterThan(0));
@@ -1677,32 +1701,196 @@ void main() {
     await tester.pumpAndSettle();
 
     final list = find.byKey(const ValueKey('chat-message-list'));
-    final controller = tester.widget<ListView>(list).controller!;
-    await tester.drag(list, const Offset(0, -700));
+    final teamController = tester.widget<ListView>(list).controller!;
+    await tester.drag(list, const Offset(0, 700));
     await tester.pumpAndSettle();
-    final teamOffset = controller.offset;
+    final teamOffset = teamController.offset;
     expect(teamOffset, greaterThan(0));
 
     await tester.tap(
       find.byKey(const ValueKey('conversation-row-conv-member-secretary')),
     );
     await tester.pumpAndSettle();
-    await tester.drag(list, const Offset(0, -1100));
+    final secretaryController = tester.widget<ListView>(list).controller!;
+    await tester.drag(list, const Offset(0, 1100));
     await tester.pumpAndSettle();
-    final secretaryOffset = controller.offset;
-    expect(secretaryOffset, greaterThan(teamOffset));
+    final secretaryOffset = secretaryController.offset;
+    expect(
+      secretaryOffset,
+      lessThan(secretaryController.position.maxScrollExtent - 96),
+    );
+    expect(secretaryOffset, isNot(closeTo(teamOffset, 1)));
 
     await tester.tap(
       find.byKey(const ValueKey('conversation-row-conv-team-default')),
     );
     await tester.pumpAndSettle();
-    expect(controller.offset, teamOffset);
+    expect(teamController.offset, teamOffset);
 
     await tester.tap(
       find.byKey(const ValueKey('conversation-row-conv-member-secretary')),
     );
     await tester.pumpAndSettle();
-    expect(controller.offset, secretaryOffset);
+    expect(secretaryController.offset, secretaryOffset);
+  });
+
+  testWidgets('opened conversations keep independent chat panes and drafts',
+      (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: _stateWithLongTeamAndSecretaryChats(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final secretaryList = find.descendant(
+      of: find.byKey(
+        const ValueKey('chat-message-list-conv-member-secretary'),
+        skipOffstage: false,
+      ),
+      matching: find.byType(ListView, skipOffstage: false),
+    );
+    final teamList = find.descendant(
+      of: find.byKey(
+        const ValueKey('chat-message-list-conv-team-default'),
+        skipOffstage: false,
+      ),
+      matching: find.byType(ListView, skipOffstage: false),
+    );
+    expect(secretaryList, findsOneWidget);
+    expect(teamList, findsOneWidget);
+    expect(
+      tester.widget<ListView>(secretaryList).controller,
+      isNot(same(tester.widget<ListView>(teamList).controller)),
+    );
+
+    final visibleSecretaryInput =
+        find.byKey(const ValueKey('chat-input-conv-member-secretary'));
+    final visibleTeamInput =
+        find.byKey(const ValueKey('chat-input-conv-team-default'));
+
+    await tester.enterText(visibleSecretaryInput, '秘书草稿');
+    await tester.tap(
+      find.byKey(const ValueKey('conversation-row-conv-team-default')),
+    );
+    await tester.pump();
+    expect(find.text('秘书草稿'), findsNothing);
+
+    await tester.enterText(visibleTeamInput, '群聊草稿');
+    await tester.tap(
+      find.byKey(const ValueKey('conversation-row-conv-member-secretary')),
+    );
+    await tester.pump();
+    expect(tester.widget<TextField>(visibleSecretaryInput).controller!.text,
+        '秘书草稿');
+
+    await tester.tap(
+      find.byKey(const ValueKey('conversation-row-conv-team-default')),
+    );
+    await tester.pump();
+    expect(tester.widget<TextField>(visibleTeamInput).controller!.text, '群聊草稿');
+
+    await tester.tap(find.byTooltip('设置'));
+    await tester.pump();
+    expect(find.byKey(const ValueKey('chat-message-list')), findsNothing);
+    await tester.tap(find.byTooltip('消息'));
+    await tester.pump();
+    expect(tester.widget<TextField>(visibleTeamInput).controller!.text, '群聊草稿');
+  });
+
+  testWidgets('closing a conversation removes only its kept-alive chat pane',
+      (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: _stateWithLongTeamAndSecretaryChats(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final secretaryPane = find.byKey(
+      const ValueKey('chat-message-list-conv-member-secretary'),
+      skipOffstage: false,
+    );
+    final teamPane = find.byKey(
+      const ValueKey('chat-message-list-conv-team-default'),
+      skipOffstage: false,
+    );
+    expect(secretaryPane, findsOneWidget);
+    expect(teamPane, findsOneWidget);
+
+    final visibleSecretaryInput =
+        find.byKey(const ValueKey('chat-input-conv-member-secretary'));
+    await tester.enterText(visibleSecretaryInput, '关闭其他会话时保留的草稿');
+
+    final homeState = tester.state<State>(find.byType(AiTeamHome));
+    final appController = (homeState as dynamic).controller as AppController;
+    appController.closeConversation('conv-team-default');
+    await tester.pumpAndSettle();
+
+    expect(secretaryPane, findsOneWidget);
+    expect(teamPane, findsNothing);
+    expect(
+      tester.widget<TextField>(visibleSecretaryInput).controller!.text,
+      '关闭其他会话时保留的草稿',
+    );
+  });
+
+  testWidgets('rapid chat switches do not overwrite saved scroll positions',
+      (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: _stateWithLongTeamAndSecretaryChats(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byKey(const ValueKey('chat-message-list'));
+    final secretaryController = tester.widget<ListView>(list).controller!;
+    await tester.drag(list, const Offset(0, 1100));
+    await tester.pumpAndSettle();
+    final secretaryOffset = secretaryController.offset;
+    expect(secretaryOffset, greaterThan(0));
+    expect(
+      secretaryOffset,
+      lessThan(secretaryController.position.maxScrollExtent - 96),
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('conversation-row-conv-team-default')),
+    );
+    await tester.pumpAndSettle();
+    final teamController = tester.widget<ListView>(list).controller!;
+    await tester.drag(list, const Offset(0, 700));
+    await tester.pumpAndSettle();
+    final teamOffset = teamController.offset;
+    expect(teamOffset, greaterThan(0));
+    expect(teamOffset, isNot(closeTo(secretaryOffset, 1)));
+
+    for (var index = 0; index < 3; index++) {
+      await tester.tap(
+        find.byKey(const ValueKey('conversation-row-conv-member-secretary')),
+      );
+      await tester.pump();
+      await tester.tap(
+        find.byKey(const ValueKey('conversation-row-conv-team-default')),
+      );
+      await tester.pump();
+    }
+
+    await tester.tap(
+      find.byKey(const ValueKey('conversation-row-conv-member-secretary')),
+    );
+    await tester.pumpAndSettle();
+    expect(secretaryController.offset, closeTo(secretaryOffset, 1));
+
+    await tester.tap(
+      find.byKey(const ValueKey('conversation-row-conv-team-default')),
+    );
+    await tester.pumpAndSettle();
+    expect(teamController.offset, closeTo(teamOffset, 1));
   });
 
   testWidgets('chat shows a back to bottom button after manual scroll',
@@ -2995,8 +3183,7 @@ AppState _stateWithLongTeamAndSecretaryChats() {
             (index) => ChatMessage(
               id: 'msg-team-history-$index',
               authorName: index.isEven ? '秘书' : '前端工程师',
-              memberId:
-                  index.isEven ? 'member-secretary' : 'member-frontend',
+              memberId: index.isEven ? 'member-secretary' : 'member-frontend',
               content: '群聊历史消息 $index\n${'团队填充内容 ' * 12}',
               createdAt: DateTime(2026, 6, 14, 8).add(
                 Duration(minutes: index),
