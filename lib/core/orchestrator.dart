@@ -905,7 +905,10 @@ class TeamOrchestrator {
             (result.message.thinkingContent?.trim().isEmpty ?? true)) {
           throw const ModelGatewayException('成员未返回内容');
         }
-        summaries.add('${target.name}：${_summarize(result.message.content)}');
+        summaries.add(_formatSecretaryPrivateDispatchSuccess(
+          memberName: target.name,
+          content: result.message.content,
+        ));
         workingState = _replaceConversation(
           workingState,
           targetConversation.copyWith(
@@ -926,7 +929,7 @@ class TeamOrchestrator {
         );
       } catch (error) {
         cancellation?.throwIfCancelled();
-        summaries.add('${target.name}：调度失败：$error');
+        summaries.add('- ${target.name}：调度失败：$error');
         workingState = _replaceConversation(
           workingState,
           targetConversation.copyWith(
@@ -959,7 +962,7 @@ class TeamOrchestrator {
       memberId: secretary.id,
       content: [
         '已私聊调度成员并汇总结果：',
-        ...summaries.map((summary) => '- $summary'),
+        ...summaries,
       ].join('\n'),
       createdAt: DateTime.now(),
     );
@@ -1323,6 +1326,18 @@ String _summarize(String content) {
     return normalized;
   }
   return '${normalized.substring(0, 120)}...';
+}
+
+String _formatSecretaryPrivateDispatchSuccess({
+  required String memberName,
+  required String content,
+}) {
+  final indented = content
+      .trim()
+      .split('\n')
+      .map((line) => '  $line')
+      .join('\n');
+  return '- $memberName：\n$indented';
 }
 
 class FakeModelGateway implements ModelGateway {

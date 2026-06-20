@@ -2572,6 +2572,38 @@ void main() {
     expect(find.textContaining('测试工程师：'), findsWidgets);
   });
 
+  testWidgets('secretary private dispatch shows full long summary',
+      (tester) async {
+    final longReply = [
+      '测试结论首行：1+1 等于 2。',
+      '覆盖场景 A：整数加法。',
+      '覆盖场景 B：零值计算。',
+      '覆盖场景 C：连续执行。',
+      '覆盖场景 D：重复计算时保持稳定输出。',
+      '覆盖场景 E：把模型返回的完整正文透传给秘书汇总。',
+      '覆盖场景 F：这段内容用于超过摘要截断阈值。',
+      '尾部证据：秘书汇总必须展示这句话。',
+    ].join('\n');
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: ScriptedWidgetReplyGateway([longReply]),
+      ),
+    );
+
+    await tester.enterText(
+      find.byType(TextField).last,
+      '分配任务给测试工程师，验证长回复汇总。',
+    );
+    await tester.tap(find.byTooltip('发送'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('私聊 · 秘书'), findsOneWidget);
+    expect(find.textContaining('测试结论首行：1+1 等于 2。'), findsWidgets);
+    expect(find.textContaining('尾部证据：秘书汇总必须展示这句话。'), findsWidgets);
+    expect(find.textContaining('...'), findsNothing);
+  });
+
   testWidgets('secretary private dispatch shows waiting status for member',
       (tester) async {
     final gateway = BlockingModelGateway();
@@ -2841,6 +2873,24 @@ class RecordingModelGateway implements ModelGateway {
     modelIds.add(model.id);
     modelNames.add(model.modelName);
     return '使用 ${model.modelName} 回复';
+  }
+}
+
+class ScriptedWidgetReplyGateway implements ModelGateway {
+  ScriptedWidgetReplyGateway(this.responses);
+
+  final List<String> responses;
+  var _index = 0;
+
+  @override
+  Future<String> complete({
+    required ModelProfile model,
+    required String systemPrompt,
+    required List<ChatMessage> messages,
+    ModelRequestCancellation? cancellation,
+  }) async {
+    cancellation?.throwIfCancelled();
+    return responses[_index++];
   }
 }
 

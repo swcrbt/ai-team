@@ -954,6 +954,87 @@ void main() {
       expect(audit.metadata!['error'], contains('成员未返回内容'));
     });
 
+    test('secretary private dispatch summarizes full long member replies',
+        () async {
+      final longReply = [
+        '测试结论：1+1 等于 2。',
+        '覆盖场景 A：整数加法保持交换律。',
+        '覆盖场景 B：零值参与计算时结果稳定。',
+        '覆盖场景 C：负数参与计算时仍遵循算术规则。',
+        '覆盖场景 D：连续多次计算不会改变结果。',
+        '最终建议：保留这个完整结论作为秘书私聊汇总的尾部证据。',
+      ].join('\n');
+
+      final updated = await TeamOrchestrator(ScriptedRecordingGateway([
+        longReply,
+      ])).dispatchSecretaryPrivateMemberTask(
+        AppState.seed(),
+        conversationId: 'conv-member-secretary',
+        userText: '分配任务给测试工程师，验证长回复汇总。',
+      );
+
+      final secretaryConversation = updated.conversations.firstWhere(
+        (conversation) => conversation.id == 'conv-member-secretary',
+      );
+      final summary = secretaryConversation.messages.last.content;
+      expect(summary, contains('已私聊调度成员并汇总结果：'));
+      expect(summary, contains('- 测试工程师：'));
+      expect(summary, contains('测试结论：1+1 等于 2。'));
+      expect(summary, contains('最终建议：保留这个完整结论作为秘书私聊汇总的尾部证据。'));
+      expect(summary, isNot(contains('...')));
+    });
+
+    test('secretary private dispatch summarizes multiline members separately',
+        () async {
+      const testerReply = '测试首行\n测试尾行：完整保留';
+      const frontendReply = '前端首行\n前端尾行：完整保留';
+
+      final updated = await TeamOrchestrator(ScriptedRecordingGateway([
+        testerReply,
+        frontendReply,
+      ])).dispatchSecretaryPrivateMemberTask(
+        AppState.seed(),
+        conversationId: 'conv-member-secretary',
+        userText: '请测试工程师和前端工程师分别处理这个问题。',
+      );
+
+      final secretaryConversation = updated.conversations.firstWhere(
+        (conversation) => conversation.id == 'conv-member-secretary',
+      );
+      final summary = secretaryConversation.messages.last.content;
+      expect(summary, contains('- 测试工程师：\n  测试首行\n  测试尾行：完整保留'));
+      expect(summary, contains('- 前端工程师：\n  前端首行\n  前端尾行：完整保留'));
+    });
+
+    test('secretary private dispatch keeps successful summary full after failure',
+        () async {
+      final frontendReply = [
+        '前端执行结果首行。',
+        '中间说明：这里包含足够长的内容用于确认不会被截断。',
+        '尾部证据：失败成员不会影响成功成员完整汇总。',
+      ].join('\n');
+      final gateway = ScriptedOutcomeGateway([
+        const ModelGatewayException('测试模型不可用'),
+        frontendReply,
+      ]);
+
+      final updated = await TeamOrchestrator(gateway)
+          .dispatchSecretaryPrivateMemberTask(
+        AppState.seed(),
+        conversationId: 'conv-member-secretary',
+        userText: '请测试工程师和前端工程师分别处理这个问题。',
+      );
+
+      final secretaryConversation = updated.conversations.firstWhere(
+        (conversation) => conversation.id == 'conv-member-secretary',
+      );
+      final summary = secretaryConversation.messages.last.content;
+      expect(summary, contains('- 测试工程师：调度失败：测试模型不可用'));
+      expect(summary, contains('前端执行结果首行。'));
+      expect(summary, contains('尾部证据：失败成员不会影响成功成员完整汇总。'));
+      expect(summary, isNot(contains('...')));
+    });
+
     test('secretary private dispatch keeps response diagnostics for empty reply',
         () async {
       final updated = await TeamOrchestrator(
