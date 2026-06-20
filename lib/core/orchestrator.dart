@@ -837,6 +837,13 @@ class TeamOrchestrator {
         createdAt: now,
         isUser: true,
       ),
+      ChatMessage(
+        id: _id('msg'),
+        authorName: secretary.name,
+        memberId: secretary.id,
+        content: '已发送给${targets.map((member) => member.name).join('、')}，等待回复。',
+        createdAt: DateTime.now(),
+      ),
     ];
     var workingState = _replaceConversation(
       state,
@@ -876,6 +883,9 @@ class TeamOrchestrator {
         ),
       );
       onProgress?.call(workingState);
+      final targetModel = workingState.models.firstWhere(
+        (model) => model.id == target.modelId,
+      );
 
       try {
         final result = await _runAssignment(
@@ -889,6 +899,10 @@ class TeamOrchestrator {
           cancellation: cancellation,
           onProgress: onProgress,
         );
+        if (result.message.content.trim().isEmpty &&
+            (result.message.thinkingContent?.trim().isEmpty ?? true)) {
+          throw const ModelGatewayException('成员未返回内容');
+        }
         workingState = result.workingState;
         summaries.add('${target.name}：${_summarize(result.message.content)}');
         workingState = _replaceConversation(
@@ -906,6 +920,8 @@ class TeamOrchestrator {
           targetConversation: targetConversation,
           userText: userText,
           status: 'completed',
+          targetModel: targetModel,
+          responseChars: result.message.content.length,
         );
       } catch (error) {
         cancellation?.throwIfCancelled();
@@ -928,6 +944,9 @@ class TeamOrchestrator {
           targetConversation: targetConversation,
           userText: userText,
           status: 'failed',
+          targetModel: targetModel,
+          responseChars: 0,
+          error: error.toString(),
         );
       }
       onProgress?.call(workingState);
@@ -1053,6 +1072,9 @@ AppState _appendSecretaryPrivateDispatchAudit(
   required Conversation targetConversation,
   required String userText,
   required String status,
+  required ModelProfile targetModel,
+  required int responseChars,
+  String? error,
 }) {
   return state.copyWith(
     auditLog: [
@@ -1068,6 +1090,9 @@ AppState _appendSecretaryPrivateDispatchAudit(
           'targetConversation': targetConversation.id,
           'text': userText,
           'status': status,
+          'targetModel': targetModel.id,
+          'responseChars': responseChars,
+          if (error != null) 'error': error,
         },
         createdAt: DateTime.now(),
       ),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -808,6 +809,100 @@ void main() {
       expect(jsonEncode(audit.metadata), isNot(contains('apiKey')));
     });
 
+    test('secretary private dispatch reports waiting before member replies',
+        () async {
+      final gateway = BlockingRecordingGateway();
+      final progressStates = <AppState>[];
+
+      final future =
+          TeamOrchestrator(gateway).dispatchSecretaryPrivateMemberTask(
+        AppState.seed(),
+        conversationId: 'conv-member-secretary',
+        userText: '分配任务给测试工程师，先验算问题。',
+        onProgress: progressStates.add,
+      );
+      await gateway.started.future.timeout(const Duration(seconds: 1));
+
+      final waitingState = progressStates.lastWhere(
+        (state) => state.conversations
+            .firstWhere(
+              (conversation) => conversation.id == 'conv-member-secretary',
+            )
+            .messages
+            .any((message) => message.content.contains('等待回复')),
+      );
+      final secretaryConversation = waitingState.conversations.firstWhere(
+        (conversation) => conversation.id == 'conv-member-secretary',
+      );
+      expect(
+        secretaryConversation.messages.map((message) => message.content),
+        contains(contains('已发送给测试工程师，等待回复')),
+      );
+
+      gateway.finish('测试结果');
+      await future;
+    });
+
+    test('secretary private dispatch exposes member model failures', () async {
+      final updated = await TeamOrchestrator(AlwaysFailingGateway())
+          .dispatchSecretaryPrivateMemberTask(
+        AppState.seed(),
+        conversationId: 'conv-member-secretary',
+        userText: '分配任务给测试工程师，验证异常路径。',
+      );
+
+      final secretaryConversation = updated.conversations.firstWhere(
+        (conversation) => conversation.id == 'conv-member-secretary',
+      );
+      final testerConversation = updated.conversations.firstWhere(
+        (conversation) => conversation.id == 'conv-member-tester',
+      );
+      expect(
+        secretaryConversation.messages.last.content,
+        contains('调度失败'),
+      );
+      expect(testerConversation.messages.last.content, contains('任务失败'));
+      expect(
+          testerConversation.messages.last.content, contains('forced failure'));
+
+      final audit = updated.auditLog.lastWhere(
+        (entry) => entry.action == 'secretary_private_member_dispatch',
+      );
+      expect(audit.metadata!['status'], 'failed');
+      expect(audit.metadata!['targetModel'], 'model-local');
+      expect(audit.metadata!['error'], contains('forced failure'));
+      expect(audit.metadata!['responseChars'], 0);
+      expect(jsonEncode(audit.metadata), isNot(contains('apiKey')));
+    });
+
+    test('secretary private dispatch treats empty member replies as failure',
+        () async {
+      final updated = await TeamOrchestrator(ScriptedRecordingGateway(['']))
+          .dispatchSecretaryPrivateMemberTask(
+        AppState.seed(),
+        conversationId: 'conv-member-secretary',
+        userText: '分配任务给测试工程师，检查空回复。',
+      );
+
+      final secretaryConversation = updated.conversations.firstWhere(
+        (conversation) => conversation.id == 'conv-member-secretary',
+      );
+      final testerConversation = updated.conversations.firstWhere(
+        (conversation) => conversation.id == 'conv-member-tester',
+      );
+      expect(
+        secretaryConversation.messages.last.content,
+        contains('成员未返回内容'),
+      );
+      expect(testerConversation.messages.last.content, contains('成员未返回内容'));
+      final audit = updated.auditLog.lastWhere(
+        (entry) => entry.action == 'secretary_private_member_dispatch',
+      );
+      expect(audit.metadata!['status'], 'failed');
+      expect(audit.metadata!['responseChars'], 0);
+      expect(audit.metadata!['error'], contains('成员未返回内容'));
+    });
+
     test('secretary private dispatch handles multiple mentioned members',
         () async {
       final gateway = ScriptedRecordingGateway(['测试结果', '前端结果']);
@@ -843,6 +938,35 @@ void main() {
             )
             .map((entry) => entry.metadata!['targetMember']),
         ['member-tester', 'member-frontend'],
+      );
+    });
+
+    test('secretary private dispatch continues when one member fails',
+        () async {
+      final gateway = ScriptedOutcomeGateway([
+        const ModelGatewayException('测试模型不可用'),
+        '前端完成',
+      ]);
+
+      final updated =
+          await TeamOrchestrator(gateway).dispatchSecretaryPrivateMemberTask(
+        AppState.seed(),
+        conversationId: 'conv-member-secretary',
+        userText: '请测试工程师和前端工程师分别处理这个问题。',
+      );
+
+      final secretaryConversation = updated.conversations.firstWhere(
+        (conversation) => conversation.id == 'conv-member-secretary',
+      );
+      expect(secretaryConversation.messages.last.content, contains('测试模型不可用'));
+      expect(secretaryConversation.messages.last.content, contains('前端完成'));
+      expect(
+        updated.auditLog
+            .where(
+              (entry) => entry.action == 'secretary_private_member_dispatch',
+            )
+            .map((entry) => entry.metadata!['status']),
+        ['failed', 'completed'],
       );
     });
 
@@ -1027,6 +1151,54 @@ class ScriptedRecordingGateway implements ModelGateway {
     ));
     cancellation?.throwIfCancelled();
     return responses[_index++];
+  }
+}
+
+class BlockingRecordingGateway implements ModelGateway {
+  final Completer<void> started = Completer<void>();
+  final Completer<String> _reply = Completer<String>();
+
+  void finish(String value) {
+    if (!_reply.isCompleted) {
+      _reply.complete(value);
+    }
+  }
+
+  @override
+  Future<String> complete({
+    required ModelProfile model,
+    required String systemPrompt,
+    required List<ChatMessage> messages,
+    ModelRequestCancellation? cancellation,
+  }) async {
+    if (!started.isCompleted) {
+      started.complete();
+    }
+    final value = await _reply.future;
+    cancellation?.throwIfCancelled();
+    return value;
+  }
+}
+
+class ScriptedOutcomeGateway implements ModelGateway {
+  ScriptedOutcomeGateway(this.outcomes);
+
+  final List<Object> outcomes;
+  var _index = 0;
+
+  @override
+  Future<String> complete({
+    required ModelProfile model,
+    required String systemPrompt,
+    required List<ChatMessage> messages,
+    ModelRequestCancellation? cancellation,
+  }) async {
+    cancellation?.throwIfCancelled();
+    final outcome = outcomes[_index++];
+    if (outcome is ModelGatewayException) {
+      throw outcome;
+    }
+    return outcome as String;
   }
 }
 

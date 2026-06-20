@@ -2569,6 +2569,31 @@ void main() {
     expect(find.textContaining('测试工程师：'), findsWidgets);
   });
 
+  testWidgets('secretary private dispatch shows waiting status for member',
+      (tester) async {
+    final gateway = BlockingModelGateway();
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: gateway,
+      ),
+    );
+
+    await tester.enterText(
+      find.byType(TextField).last,
+      '分配任务给测试工程师，先验算问题。',
+    );
+    await tester.tap(find.byTooltip('发送'));
+    await gateway.started.future.timeout(const Duration(seconds: 1));
+    await tester.pump();
+
+    expect(find.textContaining('私聊 · 秘书'), findsOneWidget);
+    expect(find.textContaining('已发送给测试工程师，等待回复'), findsWidgets);
+
+    await tester.tap(find.byTooltip('停止生成'));
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('send button stops an in-flight chat dispatch', (tester) async {
     final gateway = BlockingModelGateway();
     await tester.pumpWidget(
