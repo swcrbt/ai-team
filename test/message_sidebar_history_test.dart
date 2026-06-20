@@ -343,6 +343,126 @@ void main() {
     expect(find.text('测试工程师'), findsWidgets);
     expect(find.textContaining('群聊 · 默认开发团队'), findsOneWidget);
   });
+
+  testWidgets('message sidebar keeps scroll after private and group switches',
+      (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: _stateWithLongConversationSidebar(),
+        modelGateway: _NoopModelGateway(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final list = find.byKey(const ValueKey('conversation-list'));
+    const targetGroupRow =
+        ValueKey('conversation-row-conv-team-sidebar-target');
+    const targetPrivateRow =
+        ValueKey('conversation-row-conv-team-sidebar-target-member-sidebar');
+
+    await tester.scrollUntilVisible(
+      find.byKey(targetGroupRow),
+      120,
+      scrollable: find.descendant(
+        of: list,
+        matching: find.byType(Scrollable),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final listView = tester.widget<ListView>(list);
+    expect(listView.controller, isNotNull);
+    final scrollController = listView.controller!;
+    final scrolledOffset = scrollController.offset;
+    expect(scrolledOffset, greaterThan(0));
+
+    await tester.tap(find.byKey(targetGroupRow));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(targetPrivateRow));
+    await tester.pumpAndSettle();
+
+    final restoredListView = tester.widget<ListView>(list);
+    expect(restoredListView.controller!.offset, scrolledOffset);
+  });
+}
+
+AppState _stateWithLongConversationSidebar() {
+  final seed = AppState.seed();
+  const targetMember = TeamMember(
+    id: 'member-sidebar',
+    name: '侧栏私聊成员',
+    roleId: 'role-frontend',
+    modelId: 'model-main',
+  );
+  final targetTeam = Team(
+    id: 'team-sidebar-target',
+    name: '侧栏定位团队',
+    memberIds: ['member-secretary', targetMember.id],
+    secretaryMemberId: 'member-secretary',
+  );
+  final fillerTeams = List.generate(
+    18,
+    (index) => Team(
+      id: 'team-sidebar-filler-$index',
+      name: '侧栏填充团队 $index',
+      memberIds: const ['member-secretary'],
+      secretaryMemberId: 'member-secretary',
+    ),
+  );
+  final fillerConversations = [
+    for (final team in fillerTeams)
+      Conversation(
+        id: 'conv-${team.id}',
+        title: '团队会话',
+        teamId: team.id,
+        messages: [
+          ChatMessage(
+            id: 'msg-${team.id}',
+            authorName: '秘书',
+            memberId: 'member-secretary',
+            content: '侧栏填充消息',
+            createdAt: DateTime(2026, 6, 20),
+          ),
+        ],
+      ),
+  ];
+  return seed.copyWith(
+    members: [...seed.members, targetMember],
+    teams: [...fillerTeams, targetTeam, ...seed.teams],
+    conversations: [
+      ...fillerConversations,
+      Conversation(
+        id: 'conv-team-sidebar-target',
+        title: '团队会话',
+        teamId: targetTeam.id,
+        messages: [
+          ChatMessage(
+            id: 'msg-team-sidebar-target',
+            authorName: '秘书',
+            memberId: 'member-secretary',
+            content: '目标群聊消息',
+            createdAt: DateTime(2026, 6, 20, 9),
+          ),
+        ],
+      ),
+      Conversation(
+        id: 'conv-team-sidebar-target-member-sidebar',
+        title: targetMember.name,
+        teamId: targetTeam.id,
+        memberId: targetMember.id,
+        messages: [
+          ChatMessage(
+            id: 'msg-team-sidebar-target-member-sidebar',
+            authorName: targetMember.name,
+            memberId: targetMember.id,
+            content: '目标私聊消息',
+            createdAt: DateTime(2026, 6, 20, 9, 1),
+          ),
+        ],
+      ),
+      ...seed.conversations,
+    ],
+  );
 }
 
 class _NoopModelGateway implements ModelGateway {

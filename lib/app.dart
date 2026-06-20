@@ -261,6 +261,7 @@ class AppController extends ChangeNotifier {
   final Set<String> pinnedConversationIds = <String>{};
   final List<String> pinnedConversationOrderIds = <String>[];
   final _messageScrollOffsetsByConversation = <String, double>{};
+  double _conversationListScrollOffset = 0;
   final TeamOrchestrator orchestrator;
   final StateChanged? onStateChanged;
   final FileDialogService fileDialogs;
@@ -373,6 +374,12 @@ class AppController extends ChangeNotifier {
   List<TeamMember> get currentMembers => state.members
       .where((member) => currentTeam.memberIds.contains(member.id))
       .toList();
+
+  double get conversationListScrollOffset => _conversationListScrollOffset;
+
+  void recordConversationListScrollOffset(double offset) {
+    _conversationListScrollOffset = offset;
+  }
 
   double? messageScrollOffsetForConversation(String conversationId) {
     return _messageScrollOffsetsByConversation[conversationId];
@@ -2027,7 +2034,7 @@ class _SidebarButton extends StatelessWidget {
   }
 }
 
-class _ConversationList extends StatelessWidget {
+class _ConversationList extends StatefulWidget {
   const _ConversationList({
     required this.controller,
     required this.selectedView,
@@ -2039,7 +2046,31 @@ class _ConversationList extends StatelessWidget {
   final ValueChanged<String> onSelectConversation;
 
   @override
+  State<_ConversationList> createState() => _ConversationListState();
+}
+
+class _ConversationListState extends State<_ConversationList> {
+  late final ScrollController conversationScrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    conversationScrollController = ScrollController(
+      initialScrollOffset: widget.controller.conversationListScrollOffset,
+      keepScrollOffset: false,
+    );
+  }
+
+  @override
+  void dispose() {
+    _saveConversationListScrollOffset();
+    conversationScrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final visibleConversations = widget.controller.visibleConversations;
     return ColoredBox(
       color: const Color(0xFFF7F8FB),
       child: Column(
@@ -2075,47 +2106,88 @@ class _ConversationList extends StatelessWidget {
                 const SizedBox(width: 10),
                 IconButton.filledTonal(
                   tooltip: '新增',
-                  onPressed: () => _showMemberDialog(context, controller),
+                  onPressed: () =>
+                      _showMemberDialog(context, widget.controller),
                   icon: const Icon(Icons.add_rounded),
                 ),
               ],
             ),
           ),
           Expanded(
-            child: ListView.separated(
-              key: const ValueKey('conversation-list'),
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              itemCount: controller.visibleConversations.length,
-              separatorBuilder: (context, index) => const Divider(
-                height: 1,
-                indent: 72,
-                color: Color(0xFFE5E7EB),
+            child: NotificationListener<ScrollNotification>(
+              onNotification: _handleConversationListScrollNotification,
+              child: ListView.separated(
+                key: const ValueKey('conversation-list'),
+                controller: conversationScrollController,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                itemCount: visibleConversations.length,
+                separatorBuilder: (context, index) => const Divider(
+                  height: 1,
+                  indent: 72,
+                  color: Color(0xFFE5E7EB),
+                ),
+                itemBuilder: (context, index) {
+                  final conversation = visibleConversations[index];
+                  return _RailTile(
+                    key: ValueKey('conversation-row-${conversation.id}'),
+                    icon: _conversationListIcon(
+                      widget.controller,
+                      conversation,
+                    ),
+                    title: _conversationListTitle(
+                      widget.controller,
+                      conversation,
+                    ),
+                    subtitle: _conversationListSubtitle(
+                      widget.controller,
+                      conversation,
+                    ),
+                    badge: _conversationListBadge(
+                      widget.controller,
+                      conversation,
+                    ),
+                    selected: widget.selectedView == _MainView.chat &&
+                        widget.controller.selectedConversationId ==
+                            conversation.id,
+                    pinned:
+                        widget.controller.isConversationPinned(conversation.id),
+                    onTap: () => widget.onSelectConversation(conversation.id),
+                    onContextMenu: (position) => _showConversationContextMenu(
+                      context,
+                      position,
+                      widget.controller,
+                      conversation.id,
+                    ),
+                  );
+                },
               ),
-              itemBuilder: (context, index) {
-                final conversation = controller.visibleConversations[index];
-                return _RailTile(
-                  key: ValueKey('conversation-row-${conversation.id}'),
-                  icon: _conversationListIcon(controller, conversation),
-                  title: _conversationListTitle(controller, conversation),
-                  subtitle: _conversationListSubtitle(controller, conversation),
-                  badge: _conversationListBadge(controller, conversation),
-                  selected: selectedView == _MainView.chat &&
-                      controller.selectedConversationId == conversation.id,
-                  pinned: controller.isConversationPinned(conversation.id),
-                  onTap: () => onSelectConversation(conversation.id),
-                  onContextMenu: (position) => _showConversationContextMenu(
-                    context,
-                    position,
-                    controller,
-                    conversation.id,
-                  ),
-                );
-              },
             ),
           ),
         ],
       ),
     );
+  }
+
+  bool _handleConversationListScrollNotification(
+    ScrollNotification notification,
+  ) {
+    if (notification.metrics.axis == Axis.vertical) {
+      widget.controller.recordConversationListScrollOffset(
+        notification.metrics.pixels,
+      );
+    }
+    return false;
+  }
+
+  void _saveConversationListScrollOffset() {
+    if (!conversationScrollController.hasClients) {
+      return;
+    }
+    final position = conversationScrollController.position;
+    final offset = position.pixels
+        .clamp(position.minScrollExtent, position.maxScrollExtent)
+        .toDouble();
+    widget.controller.recordConversationListScrollOffset(offset);
   }
 }
 
