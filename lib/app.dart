@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter/services.dart';
 
 import 'core/domain.dart';
@@ -3063,7 +3064,10 @@ class _MessageBubbleState extends State<_MessageBubble> {
               ),
             )
           else
-            SelectableText(message.content),
+            _MessageBody(
+              key: ValueKey('message-body-${message.id}'),
+              message: message,
+            ),
         ],
       ),
     );
@@ -3194,6 +3198,91 @@ class _MessageBubbleState extends State<_MessageBubble> {
         setState(() => copied = false);
       }
     });
+  }
+}
+
+class _MessageBody extends StatelessWidget {
+  const _MessageBody({super.key, required this.message});
+
+  final ChatMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    if (message.isUser || message.authorName == '系统') {
+      return SelectableText(message.content);
+    }
+    final theme = Theme.of(context);
+    final bodyStyle = theme.textTheme.bodyMedium?.copyWith(
+      color: const Color(0xFF1A1B21),
+      height: 1.45,
+    );
+    return MarkdownBody(
+      data: message.content,
+      selectable: true,
+      imageBuilder: (uri, title, alt) => Text(
+        alt?.trim().isNotEmpty == true ? alt! : uri.toString(),
+        style: bodyStyle?.copyWith(
+          color: Colors.grey.shade600,
+          fontStyle: FontStyle.italic,
+        ),
+      ),
+      styleSheet: MarkdownStyleSheet.fromTheme(theme).copyWith(
+        p: bodyStyle,
+        a: bodyStyle?.copyWith(
+          color: theme.colorScheme.primary,
+          decoration: TextDecoration.underline,
+        ),
+        code: bodyStyle?.copyWith(
+          fontFamily: 'monospace',
+          fontSize: 13,
+          backgroundColor: const Color(0xFFF3F4F6),
+        ),
+        h1: bodyStyle?.copyWith(
+          fontSize: 22,
+          fontWeight: FontWeight.w700,
+        ),
+        h2: bodyStyle?.copyWith(
+          fontSize: 19,
+          fontWeight: FontWeight.w700,
+        ),
+        h3: bodyStyle?.copyWith(
+          fontSize: 17,
+          fontWeight: FontWeight.w700,
+        ),
+        h4: bodyStyle?.copyWith(
+          fontSize: 15,
+          fontWeight: FontWeight.w700,
+        ),
+        h5: bodyStyle?.copyWith(fontWeight: FontWeight.w700),
+        h6: bodyStyle?.copyWith(fontWeight: FontWeight.w700),
+        blockSpacing: 10,
+        listIndent: 22,
+        tableHead: bodyStyle?.copyWith(fontWeight: FontWeight.w700),
+        tableBody: bodyStyle,
+        tableBorder: TableBorder.all(color: const Color(0xFFD1D5DB)),
+        tableCellsPadding:
+            const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        tableHeadCellsDecoration: const BoxDecoration(color: Color(0xFFF3F4F6)),
+        blockquote: bodyStyle?.copyWith(color: Colors.grey.shade700),
+        blockquotePadding: const EdgeInsets.fromLTRB(12, 8, 10, 8),
+        blockquoteDecoration: const BoxDecoration(
+          color: Color(0xFFF8FAFC),
+          border: Border(
+            left: BorderSide(color: Color(0xFFCBD5E1), width: 3),
+          ),
+        ),
+        codeblockPadding: const EdgeInsets.all(12),
+        codeblockDecoration: BoxDecoration(
+          color: const Color(0xFFF3F4F6),
+          borderRadius: BorderRadius.circular(4),
+        ),
+        horizontalRuleDecoration: const BoxDecoration(
+          border: Border(
+            top: BorderSide(color: Color(0xFFE5E7EB)),
+          ),
+        ),
+      ),
+    );
   }
 }
 

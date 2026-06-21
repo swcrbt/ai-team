@@ -1166,6 +1166,161 @@ void main() {
     expect(find.text('供应商返回的真实 reasoning 内容'), findsOneWidget);
   });
 
+  testWidgets('model replies render markdown while user messages stay plain',
+      (tester) async {
+    final seed = AppState.seed();
+    final conversation = seed.conversations.firstWhere(
+      (item) => item.id == 'conv-member-secretary',
+    );
+    const userContent = '**用户输入保持原样**';
+    const systemContent = '**系统提示保持原样**';
+    const modelContent = '''
+## 快速判断
+
+这是 **重点结论**。
+
+- 第一项
+- 第二项
+
+> 引用内容
+
+---
+
+| 可能性 | 分析 |
+| --- | --- |
+| 测试输入 | 正常响应 |
+
+`inlineCode`
+
+[安全链接](https://example.com)
+
+```dart
+print("safe");
+```
+
+![远程图片](https://example.com/image.png)
+''';
+    final state = seed.copyWith(
+      conversations: [
+        conversation.copyWith(
+          messages: [
+            ChatMessage(
+              id: 'msg-user-markdown',
+              authorName: '我',
+              content: userContent,
+              createdAt: DateTime(2026, 6, 21, 9),
+              isUser: true,
+            ),
+            ChatMessage(
+              id: 'msg-model-markdown',
+              authorName: '秘书',
+              memberId: 'member-secretary',
+              content: modelContent,
+              createdAt: DateTime(2026, 6, 21, 9, 1),
+            ),
+            ChatMessage(
+              id: 'msg-system-markdown',
+              authorName: '系统',
+              content: systemContent,
+              createdAt: DateTime(2026, 6, 21, 9, 2),
+            ),
+          ],
+        ),
+        ...seed.conversations.where(
+          (item) => item.id != conversation.id,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: state,
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    final userBody =
+        find.byKey(const ValueKey('message-body-msg-user-markdown'));
+    final modelBody =
+        find.byKey(const ValueKey('message-body-msg-model-markdown'));
+    final systemBody = find.byKey(
+      const ValueKey('message-body-msg-system-markdown'),
+      skipOffstage: false,
+    );
+
+    expect(
+      find.descendant(
+        of: userBody,
+        matching: find.widgetWithText(SelectableText, userContent),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: systemBody,
+        matching: find.widgetWithText(
+          SelectableText,
+          systemContent,
+          skipOffstage: false,
+        ),
+        skipOffstage: false,
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: modelBody,
+        matching: find.widgetWithText(SelectableText, modelContent),
+      ),
+      findsNothing,
+    );
+    for (final renderedText in [
+      '快速判断',
+      '重点结论',
+      '第一项',
+      '引用内容',
+      '可能性',
+      '正常响应',
+      'inlineCode',
+      '安全链接',
+      'print("safe");',
+      '远程图片',
+    ]) {
+      expect(
+        find.descendant(
+          of: modelBody,
+          matching: find.textContaining(renderedText, findRichText: true),
+        ),
+        findsWidgets,
+      );
+    }
+    expect(
+      find.descendant(of: modelBody, matching: find.byType(Image)),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: modelBody,
+        matching: find.textContaining('##', findRichText: true),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: modelBody,
+        matching: find.textContaining('**', findRichText: true),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: userBody,
+        matching: find.textContaining('**'),
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('streaming thinking auto-expands then folds after completion',
       (tester) async {
     final seed = AppState.seed();
@@ -3018,9 +3173,12 @@ void main() {
 
     expect(find.text('已分配给测试工程师，等待回复中'), findsNothing);
     expect(
-      find.widgetWithText(
-        SelectableText,
-        '已私聊调度成员并汇总结果：\n- 测试工程师：\n  单消息汇总结果',
+      find.descendant(
+        of: find.byKey(const ValueKey('chat-message-list')),
+        matching: find.textContaining(
+          '单消息汇总结果',
+          findRichText: true,
+        ),
       ),
       findsOneWidget,
     );
