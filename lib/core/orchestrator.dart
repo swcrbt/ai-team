@@ -829,6 +829,14 @@ class TeamOrchestrator {
     }
 
     final now = DateTime.now();
+    final waitingMessage = ChatMessage(
+      id: _id('msg'),
+      authorName: secretary.name,
+      memberId: secretary.id,
+      content: '已分配给${targets.map((member) => member.name).join('、')}，等待回复中',
+      createdAt: DateTime.now(),
+      generationStatus: ChatMessageGenerationStatus.streaming,
+    );
     final sourceMessages = [
       ...sourceConversation.messages,
       ChatMessage(
@@ -838,13 +846,7 @@ class TeamOrchestrator {
         createdAt: now,
         isUser: true,
       ),
-      ChatMessage(
-        id: _id('msg'),
-        authorName: secretary.name,
-        memberId: secretary.id,
-        content: '已发送给${targets.map((member) => member.name).join('、')}，等待回复。',
-        createdAt: DateTime.now(),
-      ),
+      waitingMessage,
     ];
     var workingState = _replaceConversation(
       state,
@@ -956,17 +958,14 @@ class TeamOrchestrator {
       onProgress?.call(workingState);
     }
 
-    final summaryMessage = ChatMessage(
-      id: _id('msg'),
-      authorName: secretary.name,
-      memberId: secretary.id,
+    final summaryMessage = waitingMessage.copyWith(
       content: [
         '已私聊调度成员并汇总结果：',
         ...summaries,
       ].join('\n'),
-      createdAt: DateTime.now(),
+      generationStatus: ChatMessageGenerationStatus.complete,
     );
-    sourceMessages.add(summaryMessage);
+    _replaceMessageInList(sourceMessages, summaryMessage);
     workingState = _replaceConversation(
       workingState,
       sourceConversation.copyWith(

@@ -2985,10 +2985,46 @@ void main() {
     await tester.pump();
 
     expect(find.textContaining('私聊 · 秘书'), findsOneWidget);
-    expect(find.textContaining('已发送给测试工程师，等待回复'), findsWidgets);
+    expect(find.text('已分配给测试工程师，等待回复中'), findsOneWidget);
+    expect(find.textContaining('秘书 正在输入中'), findsNothing);
 
     await tester.tap(find.byTooltip('停止生成'));
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('secretary private dispatch replaces waiting bubble with summary',
+      (tester) async {
+    final gateway = CompletingBlockingModelGateway();
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: gateway,
+      ),
+    );
+
+    await tester.enterText(
+      find.byType(TextField).last,
+      '分配任务给测试工程师，验证单消息汇总。',
+    );
+    await tester.tap(find.byTooltip('发送'));
+    await gateway.started.future.timeout(const Duration(seconds: 1));
+    await tester.pump();
+
+    expect(find.text('已分配给测试工程师，等待回复中'), findsOneWidget);
+    expect(find.textContaining('秘书 正在输入中'), findsNothing);
+
+    gateway.finish('单消息汇总结果');
+    await tester.pumpAndSettle();
+
+    expect(find.text('已分配给测试工程师，等待回复中'), findsNothing);
+    expect(
+      find.widgetWithText(
+        SelectableText,
+        '已私聊调度成员并汇总结果：\n- 测试工程师：\n  单消息汇总结果',
+      ),
+      findsOneWidget,
+    );
+    expect(find.textContaining('秘书 正在输入中'), findsNothing);
   });
 
   testWidgets('send button stops an in-flight chat dispatch', (tester) async {
@@ -3240,6 +3276,32 @@ class BlockingModelGateway implements ModelGateway {
     await cancellation!.cancelled;
     cancellation.throwIfCancelled();
     return 'unreachable';
+  }
+}
+
+class CompletingBlockingModelGateway implements ModelGateway {
+  final Completer<void> started = Completer<void>();
+  final Completer<String> _reply = Completer<String>();
+
+  void finish(String value) {
+    if (!_reply.isCompleted) {
+      _reply.complete(value);
+    }
+  }
+
+  @override
+  Future<String> complete({
+    required ModelProfile model,
+    required String systemPrompt,
+    required List<ChatMessage> messages,
+    ModelRequestCancellation? cancellation,
+  }) async {
+    if (!started.isCompleted) {
+      started.complete();
+    }
+    final reply = await _reply.future;
+    cancellation?.throwIfCancelled();
+    return reply;
   }
 }
 

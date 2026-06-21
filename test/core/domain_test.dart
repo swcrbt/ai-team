@@ -864,6 +864,9 @@ void main() {
         () async {
       final gateway = BlockingRecordingGateway();
       final progressStates = <AppState>[];
+      final initialConversation = AppState.seed().conversations.firstWhere(
+            (conversation) => conversation.id == 'conv-member-secretary',
+          );
 
       final future =
           TeamOrchestrator(gateway).dispatchSecretaryPrivateMemberTask(
@@ -885,13 +888,35 @@ void main() {
       final secretaryConversation = waitingState.conversations.firstWhere(
         (conversation) => conversation.id == 'conv-member-secretary',
       );
+      final waitingMessage = secretaryConversation.messages.last;
       expect(
-        secretaryConversation.messages.map((message) => message.content),
-        contains(contains('已发送给测试工程师，等待回复')),
+        secretaryConversation.messages,
+        hasLength(initialConversation.messages.length + 2),
+      );
+      expect(waitingMessage.authorName, '秘书');
+      expect(waitingMessage.content, '已分配给测试工程师，等待回复中');
+      expect(
+        waitingMessage.generationStatus,
+        ChatMessageGenerationStatus.streaming,
       );
 
       gateway.finish('测试结果');
-      await future;
+      final updated = await future;
+      final completedConversation = updated.conversations.firstWhere(
+        (conversation) => conversation.id == 'conv-member-secretary',
+      );
+      final completedMessage = completedConversation.messages.last;
+      expect(
+        completedConversation.messages,
+        hasLength(secretaryConversation.messages.length),
+      );
+      expect(completedMessage.id, waitingMessage.id);
+      expect(
+        completedMessage.generationStatus,
+        ChatMessageGenerationStatus.complete,
+      );
+      expect(completedMessage.content, contains('测试结果'));
+      expect(completedMessage.content, isNot(contains('等待回复中')));
     });
 
     test('secretary private dispatch exposes member model failures', () async {
@@ -908,9 +933,22 @@ void main() {
       final testerConversation = updated.conversations.firstWhere(
         (conversation) => conversation.id == 'conv-member-tester',
       );
+      final initialSecretaryConversation =
+          AppState.seed().conversations.firstWhere(
+                (conversation) => conversation.id == 'conv-member-secretary',
+              );
+      expect(
+        secretaryConversation.messages,
+        hasLength(initialSecretaryConversation.messages.length + 2),
+      );
       expect(
         secretaryConversation.messages.last.content,
         contains('调度失败'),
+      );
+      expect(
+        secretaryConversation.messages
+            .any((message) => message.content.contains('等待回复中')),
+        isFalse,
       );
       expect(testerConversation.messages.last.content, contains('任务失败'));
       expect(
@@ -1094,9 +1132,25 @@ void main() {
       final frontendConversation = updated.conversations.firstWhere(
         (conversation) => conversation.id == 'conv-member-frontend',
       );
+      final secretaryConversation = updated.conversations.firstWhere(
+        (conversation) => conversation.id == 'conv-member-secretary',
+      );
+      final initialSecretaryConversation =
+          AppState.seed().conversations.firstWhere(
+                (conversation) => conversation.id == 'conv-member-secretary',
+              );
 
       expect(testerConversation.messages.last.content, '测试结果');
       expect(frontendConversation.messages.last.content, '前端结果');
+      expect(
+        secretaryConversation.messages,
+        hasLength(initialSecretaryConversation.messages.length + 2),
+      );
+      expect(
+        secretaryConversation.messages
+            .any((message) => message.content.contains('等待回复中')),
+        isFalse,
+      );
       expect(
         gateway.calls.map((call) => call.systemPrompt).join('\n'),
         contains('成员名称: 测试工程师'),
@@ -1132,8 +1186,21 @@ void main() {
       final secretaryConversation = updated.conversations.firstWhere(
         (conversation) => conversation.id == 'conv-member-secretary',
       );
+      final initialSecretaryConversation =
+          AppState.seed().conversations.firstWhere(
+                (conversation) => conversation.id == 'conv-member-secretary',
+              );
+      expect(
+        secretaryConversation.messages,
+        hasLength(initialSecretaryConversation.messages.length + 2),
+      );
       expect(secretaryConversation.messages.last.content, contains('测试模型不可用'));
       expect(secretaryConversation.messages.last.content, contains('前端完成'));
+      expect(
+        secretaryConversation.messages
+            .any((message) => message.content.contains('等待回复中')),
+        isFalse,
+      );
       expect(
         updated.auditLog
             .where(
