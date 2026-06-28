@@ -94,6 +94,36 @@ void main() {
       expect(restored.thinkingContent, '真实 reasoning 字段内容');
     });
 
+    test('chat messages persist structured command result blocks', () {
+      final message = ChatMessage(
+        id: 'msg-command',
+        authorName: '秘书',
+        content: '我先查看一下\n根目录已使用 42G',
+        createdAt: DateTime(2026, 6, 29),
+        contentBlocks: const [
+          ChatMessageContentBlock.text('我先查看一下'),
+          ChatMessageContentBlock.commandResult(
+            CommandResultAttachment(
+              requestId: 'command-df',
+              status: CommandRequestStatus.executed,
+              workingDirectory: '/',
+              command: 'df -h /',
+              output: 'Filesystem 42Gi /',
+            ),
+          ),
+          ChatMessageContentBlock.text('根目录已使用 42G'),
+        ],
+      );
+
+      final restored = ChatMessage.fromJson(message.toJson());
+
+      expect(restored.contentBlocks, hasLength(3));
+      expect(restored.contentBlocks.first.text, '我先查看一下');
+      expect(restored.contentBlocks[1].commandResult?.command, 'df -h /');
+      expect(restored.contentBlocks[1].commandResult?.output, contains('42Gi'));
+      expect(restored.contentBlocks.last.text, '根目录已使用 42G');
+    });
+
     test('audit entries persist structured metadata', () {
       final entry = AuditEntry(
         id: 'audit-raw-response',
@@ -1679,6 +1709,7 @@ void main() {
             .toList(),
       );
       final gateway = ScriptedToolGateway(
+        firstReplyBeforeTool: '我先查看一下',
         toolCall: ModelToolCall(
           id: 'call-df-auto',
           name: 'request_command',
@@ -1708,24 +1739,29 @@ void main() {
 
       final request = updated.commandRequests.single;
       final result = gateway.toolRounds.single.results.single.content;
+      final conversation = updated.conversations.firstWhere(
+        (conversation) => conversation.id == 'conv-member-secretary',
+      );
       expect(request.decision, CommandDecision.allowed);
       expect(request.status, CommandRequestStatus.executed);
+      expect(request.messageId, isNotNull);
       expect(request.output, contains('42Gi'));
       expect(result, contains('"status":"executed"'));
       expect(result, contains('"output"'));
       expect(result, contains('42Gi'));
       expect(result, contains('"exitCode":0'));
       expect(result, contains('"requiresUserAction":false'));
+      expect(conversation.messages, hasLength(3));
+      expect(conversation.messages.last.authorName, '秘书');
+      expect(conversation.messages.last.content, contains('我先查看一下'));
+      expect(conversation.messages.last.content, contains('根目录已使用 42G'));
+      expect(conversation.messages.last.contentBlocks, hasLength(3));
+      expect(conversation.messages.last.contentBlocks.first.text, '我先查看一下');
       expect(
-        updated.conversations
-            .firstWhere(
-              (conversation) => conversation.id == 'conv-member-secretary',
-            )
-            .messages
-            .last
-            .content,
-        '根目录已使用 42G',
+        conversation.messages.last.contentBlocks[1].commandResult?.output,
+        contains('42Gi'),
       );
+      expect(conversation.messages.last.contentBlocks.last.text, '根目录已使用 42G');
     });
 
     test('member chat command tool accepts current member display name',
@@ -2000,10 +2036,12 @@ class ScriptedToolGateway implements MetadataModelGateway {
   ScriptedToolGateway({
     required this.toolCall,
     required this.finalReply,
+    this.firstReplyBeforeTool = '',
   });
 
   final ModelToolCall? toolCall;
   final String finalReply;
+  final String firstReplyBeforeTool;
   final List<ModelToolDefinition> firstTools = [];
   final List<ModelToolRound> toolRounds = [];
   String? firstSystemPrompt;
@@ -2052,11 +2090,11 @@ class ScriptedToolGateway implements MetadataModelGateway {
         );
       }
       return ModelCompletion(
-        content: '',
+        content: firstReplyBeforeTool,
         toolCalls: [toolCall],
-        diagnostics: const ModelResponseDiagnostics(
+        diagnostics: ModelResponseDiagnostics(
           streaming: false,
-          contentLength: 0,
+          contentLength: firstReplyBeforeTool.length,
           thinkingContentLength: 0,
           toolCallCount: 1,
         ),

@@ -1974,7 +1974,9 @@ class AppController extends ChangeNotifier {
   List<CommandRequest> commandRequestsForConversation(String conversationId) {
     return state.commandRequests
         .where((request) => request.conversationId == conversationId)
-        .where((request) => request.status != CommandRequestStatus.denied)
+        .where((request) =>
+            request.status == CommandRequestStatus.pending ||
+            request.status == CommandRequestStatus.approved)
         .toList();
   }
 
@@ -2000,7 +2002,9 @@ class AppController extends ChangeNotifier {
         request =
             state.commandRequests.firstWhere((item) => item.id == requestId);
       }
-      final executed = await executeCommandRequest(request.id, runner: runner);
+      final commandRunner = runner ?? _runShellCommand;
+      final executed =
+          await executeCommandRequest(request.id, runner: commandRunner);
       final conversationId = executed.conversationId;
       if (conversationId != null && conversationId.trim().isNotEmpty) {
         _activeDispatchConversationId = conversationId;
@@ -2570,7 +2574,7 @@ class AppController extends ChangeNotifier {
     }
     return Process.run(
       '/bin/sh',
-      ['-lc', command],
+      ['-c', command],
       workingDirectory: workingDirectory,
       runInShell: false,
     );
@@ -4222,14 +4226,59 @@ class _MessageBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (message.contentBlocks.isNotEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final indexed in message.contentBlocks.indexed) ...[
+            if (indexed.$1 > 0) const SizedBox(height: 10),
+            switch (indexed.$2.type) {
+              ChatMessageContentBlockType.text => _MessageTextBlock(
+                  message: message,
+                  content: indexed.$2.text ?? '',
+                  diagnostics: diagnostics,
+                ),
+              ChatMessageContentBlockType.toolError => SelectableText(
+                  indexed.$2.text ?? '',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+              ChatMessageContentBlockType.commandResult =>
+                _CommandResultDisclosure(result: indexed.$2.commandResult!),
+            },
+          ],
+        ],
+      );
+    }
+    return _MessageTextBlock(
+      message: message,
+      content: message.content,
+      diagnostics: diagnostics,
+    );
+  }
+}
+
+class _MessageTextBlock extends StatelessWidget {
+  const _MessageTextBlock({
+    required this.message,
+    required this.content,
+    this.diagnostics,
+  });
+
+  final ChatMessage message;
+  final String content;
+  final ChatScrollDiagnostics? diagnostics;
+
+  @override
+  Widget build(BuildContext context) {
     if (message.isUser || message.authorName == '系统') {
-      return SelectableText(message.content);
+      return SelectableText(content);
     }
     if (message.generationStatus == ChatMessageGenerationStatus.streaming) {
       return _StreamingPartitionedText(
         key: ValueKey('streaming-message-body-${message.id}'),
         partitionKey: message.id,
-        content: message.content,
+        content: content,
         diagnostics: diagnostics,
       );
     }
@@ -4240,7 +4289,7 @@ class _MessageBody extends StatelessWidget {
     );
     diagnostics?.markdownBodyBuildCount++;
     return MarkdownBody(
-      data: message.content,
+      data: content,
       selectable: true,
       imageBuilder: (uri, title, alt) => Text(
         alt?.trim().isNotEmpty == true ? alt! : uri.toString(),
@@ -4304,6 +4353,51 @@ class _MessageBody extends StatelessWidget {
             top: BorderSide(color: Color(0xFFE5E7EB)),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _CommandResultDisclosure extends StatelessWidget {
+  const _CommandResultDisclosure({required this.result});
+
+  final CommandResultAttachment result;
+
+  @override
+  Widget build(BuildContext context) {
+    final output = result.output.trim();
+    return Material(
+      color: const Color(0xFFF8FAFC),
+      shape: RoundedRectangleBorder(
+        side: const BorderSide(color: Color(0xFFE5E7EB)),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 12),
+        childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        initiallyExpanded: false,
+        title: const Text(
+          '命令执行结果',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        subtitle: Text(
+          '${result.status.name} · ${result.command}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: SelectableText(
+              [
+                result.workingDirectory,
+                '\$ ${result.command}',
+                if (output.isNotEmpty) output else '<empty>',
+              ].join('\n'),
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            ),
+          ),
+        ],
       ),
     );
   }

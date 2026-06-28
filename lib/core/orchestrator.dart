@@ -20,10 +20,12 @@ class TeamOrchestrator {
   TeamOrchestrator(
     this.gateway, {
     CommandRunner? commandRunner,
-  }) : commandRunner = commandRunner ?? _defaultCommandRunner;
+  }) : _commandRunner = commandRunner;
 
   final ModelGateway gateway;
-  final CommandRunner commandRunner;
+  final CommandRunner? _commandRunner;
+
+  CommandRunner get commandRunner => _commandRunner ?? _defaultCommandRunner;
 
   Future<AppState> dispatchQueuedTask(
     AppState state, {
@@ -532,6 +534,7 @@ class TeamOrchestrator {
     void Function(AppState state)? onProgress,
     StreamingMessageDraftHandler? onStreamingDraft,
     bool enableTools = true,
+    String? continueMessageId,
   }) async {
     final startedAt = DateTime.now();
     var nextState = workingState;
@@ -550,6 +553,12 @@ class TeamOrchestrator {
     final toolRounds = <ModelToolRound>[];
     var disableTools = false;
     ChatMessage? activeStreamingMessage;
+    ChatMessage? visibleToolMessage = continueMessageId == null
+        ? null
+        : messages
+            .where((message) => message.id == continueMessageId)
+            .cast<ChatMessage?>()
+            .firstWhere((message) => message != null, orElse: () => null);
 
     void publish(
       ChatMessage message, {
@@ -585,17 +594,27 @@ class TeamOrchestrator {
         final contentBuffer = StringBuffer();
         final thinkingBuffer = StringBuffer();
         ChatMessage? current;
+        final baseBlocksForRequest = visibleToolMessage?.contentBlocks ??
+            const <ChatMessageContentBlock>[];
         if (model.streaming) {
-          current = ChatMessage(
-            id: _id('msg'),
-            authorName: authorName,
-            memberId: memberId,
-            content: '',
-            createdAt: requestStartedAt,
-            generationStatus: ChatMessageGenerationStatus.streaming,
-            generationDurationMs: 0,
-          );
-          messages.add(current);
+          current = visibleToolMessage?.copyWith(
+                generationStatus: ChatMessageGenerationStatus.streaming,
+                generationDurationMs: 0,
+              ) ??
+              ChatMessage(
+                id: _id('msg'),
+                authorName: authorName,
+                memberId: memberId,
+                content: '',
+                createdAt: requestStartedAt,
+                generationStatus: ChatMessageGenerationStatus.streaming,
+                generationDurationMs: 0,
+              );
+          if (visibleToolMessage == null) {
+            messages.add(current);
+          } else {
+            _replaceMessageInList(messages, current);
+          }
           activeStreamingMessage = current;
           publish(current, force: true);
         }
@@ -644,18 +663,36 @@ class TeamOrchestrator {
                   final elapsedMs = DateTime.now()
                       .difference(requestStartedAt)
                       .inMilliseconds;
-                  current = existing.copyWith(
-                    content: contentBuffer.toString(),
+                  final streamedContent = contentBuffer.toString();
+                  final streamedBlocks = baseBlocksForRequest.isEmpty
+                      ? null
+                      : _appendTextBlock(
+                          baseBlocksForRequest,
+                          streamedContent,
+                        );
+                  current = (streamedBlocks == null
+                          ? existing.copyWith(content: streamedContent)
+                          : _messageWithBlocks(
+                              existing,
+                              streamedBlocks,
+                              generationStatus:
+                                  ChatMessageGenerationStatus.streaming,
+                            ))
+                      .copyWith(
                     thinkingContent:
                         _normalizeOptionalText(thinkingBuffer.toString()),
                     generationStatus: ChatMessageGenerationStatus.streaming,
                     generationDurationMs: elapsedMs,
                   );
                   activeStreamingMessage = current;
+                  final publishedMessage = current;
+                  if (publishedMessage == null) {
+                    return;
+                  }
                   if (onStreamingDraft == null) {
-                    publish(current!, force: wasEmpty);
+                    publish(publishedMessage, force: wasEmpty);
                   } else {
-                    publish(current!, draft: true);
+                    publish(publishedMessage, draft: true);
                   }
                 }
               : null,
@@ -666,19 +703,38 @@ class TeamOrchestrator {
         );
         cancellation?.throwIfCancelled();
         if (completion.toolCalls.isNotEmpty) {
-          final existing = current;
-          if (existing != null) {
-            messages.removeWhere((message) => message.id == existing.id);
-            activeStreamingMessage = null;
-            nextState = _replaceConversation(
-              nextState,
-              conversation.copyWith(
-                messages: [...messages],
-                status: ConversationStatus.running,
-              ),
+          final toolText = completion.content.trim().isNotEmpty
+              ? completion.content
+              : contentBuffer.toString();
+          final existing = current ?? visibleToolMessage;
+          final initialBlocks = existing?.contentBlocks.isNotEmpty == true
+              ? existing!.contentBlocks
+              : _appendTextBlock(
+                  visibleToolMessage?.contentBlocks ??
+                      const <ChatMessageContentBlock>[],
+                  toolText,
+                );
+          if (existing == null) {
+            visibleToolMessage = ChatMessage(
+              id: _id('msg'),
+              authorName: authorName,
+              memberId: memberId,
+              content: _contentFromBlocks(initialBlocks),
+              contentBlocks: initialBlocks,
+              createdAt: DateTime.now(),
+              generationStatus: ChatMessageGenerationStatus.streaming,
             );
-            onProgress?.call(nextState);
+            messages.add(visibleToolMessage);
+          } else {
+            visibleToolMessage = _messageWithBlocks(
+              existing,
+              initialBlocks,
+              generationStatus: ChatMessageGenerationStatus.streaming,
+            );
+            _replaceMessageInList(messages, visibleToolMessage);
           }
+          activeStreamingMessage = visibleToolMessage;
+          publish(visibleToolMessage, force: true);
           if (roundIndex >= _maxModelToolRounds - 1) {
             toolRounds.add(
               ModelToolRound(
@@ -697,6 +753,17 @@ class TeamOrchestrator {
                     .toList(),
               ),
             );
+            visibleToolMessage = _messageWithBlocks(
+              visibleToolMessage,
+              [
+                ...visibleToolMessage.contentBlocks,
+                const ChatMessageContentBlock.toolError(
+                  '工具调用超过最大轮数 $_maxModelToolRounds',
+                ),
+              ],
+              generationStatus: ChatMessageGenerationStatus.streaming,
+            );
+            publish(visibleToolMessage, force: true);
             disableTools = true;
             continue;
           }
@@ -704,12 +771,25 @@ class TeamOrchestrator {
             state: nextState,
             conversationId: conversation.id,
             memberId: memberId,
+            messageId: visibleToolMessage.id,
             calls: completion.toolCalls,
             commandRunner: commandRunner,
             cancellation: cancellation,
           );
           nextState = outcome.workingState;
           toolRounds.add(outcome.round);
+          if (outcome.displayBlocks.isNotEmpty) {
+            visibleToolMessage = _messageWithBlocks(
+              visibleToolMessage,
+              [
+                ...visibleToolMessage.contentBlocks,
+                ...outcome.displayBlocks,
+              ],
+              generationStatus: ChatMessageGenerationStatus.streaming,
+            );
+            activeStreamingMessage = visibleToolMessage;
+            publish(visibleToolMessage, force: true);
+          }
           onProgress?.call(nextState);
           continue;
         }
@@ -721,26 +801,42 @@ class TeamOrchestrator {
           toolRounds: toolRounds,
         );
         final elapsedMs = DateTime.now().difference(startedAt).inMilliseconds;
-        final finalMessage = (current ??
-                ChatMessage(
-                  id: _id('msg'),
-                  authorName: authorName,
-                  memberId: memberId,
-                  content: guardedContent,
-                  thinkingContent: completion.thinkingContent,
-                  createdAt: DateTime.now(),
-                ))
-            .copyWith(
-          content: guardedContent,
-          thinkingContent: _normalizeOptionalText(
-                completion.thinkingContent ?? thinkingBuffer.toString(),
-              ) ??
-              current?.thinkingContent,
-          generationStatus: ChatMessageGenerationStatus.complete,
-          generationDurationMs: model.streaming ? elapsedMs : null,
-        );
+        final finalMessage = visibleToolMessage != null
+            ? _messageWithBlocks(
+                current ?? visibleToolMessage,
+                _appendTextBlock(baseBlocksForRequest, guardedContent),
+                generationStatus: ChatMessageGenerationStatus.complete,
+              ).copyWith(
+                thinkingContent: _normalizeOptionalText(
+                      completion.thinkingContent ?? thinkingBuffer.toString(),
+                    ) ??
+                    current?.thinkingContent,
+                generationDurationMs: model.streaming ? elapsedMs : null,
+              )
+            : (current ??
+                    ChatMessage(
+                      id: _id('msg'),
+                      authorName: authorName,
+                      memberId: memberId,
+                      content: guardedContent,
+                      thinkingContent: completion.thinkingContent,
+                      createdAt: DateTime.now(),
+                    ))
+                .copyWith(
+                content: guardedContent,
+                thinkingContent: _normalizeOptionalText(
+                      completion.thinkingContent ?? thinkingBuffer.toString(),
+                    ) ??
+                    current?.thinkingContent,
+                generationStatus: ChatMessageGenerationStatus.complete,
+                generationDurationMs: model.streaming ? elapsedMs : null,
+              );
         if (current == null) {
-          messages.add(finalMessage);
+          if (visibleToolMessage == null) {
+            messages.add(finalMessage);
+          } else {
+            _replaceMessageInList(messages, finalMessage);
+          }
         } else {
           _replaceMessageInList(messages, finalMessage);
         }
@@ -939,23 +1035,54 @@ class TeamOrchestrator {
     final model = state.models.firstWhere((item) => item.id == member.modelId);
     _ensureModelReady(member: member, model: model);
 
-    final visibleResultMessage = ChatMessage(
-      id: _id('msg'),
-      authorName: '系统',
-      content: _formatCommandResultMessage(request),
-      createdAt: DateTime.now(),
+    final resultBlock = ChatMessageContentBlock.commandResult(
+      CommandResultAttachment(
+        requestId: request.id,
+        status: request.status,
+        workingDirectory: request.workingDirectory,
+        command: request.command,
+        output: request.output ?? '',
+      ),
     );
+    final targetMessage = request.messageId == null
+        ? null
+        : conversation.messages
+            .where((message) => message.id == request.messageId)
+            .cast<ChatMessage?>()
+            .firstWhere((message) => message != null, orElse: () => null);
+    final visibleResultMessage = targetMessage == null
+        ? ChatMessage(
+            id: _id('msg'),
+            authorName: member.name,
+            memberId: member.id,
+            content: _contentFromBlocks([resultBlock]),
+            contentBlocks: [resultBlock],
+            createdAt: DateTime.now(),
+          )
+        : _messageWithBlocks(
+            targetMessage,
+            [
+              ...targetMessage.contentBlocks,
+              resultBlock,
+            ],
+            generationStatus: ChatMessageGenerationStatus.streaming,
+          );
     final modelResultMessage = ChatMessage(
       id: visibleResultMessage.id,
       authorName: '系统',
-      content: visibleResultMessage.content,
+      content: _formatCommandResultMessage(request),
       createdAt: visibleResultMessage.createdAt,
       isUser: true,
     );
-    final visibleMessages = [
-      ...conversation.messages,
-      visibleResultMessage,
-    ];
+    final visibleMessages = targetMessage == null
+        ? [
+            ...conversation.messages,
+            visibleResultMessage,
+          ]
+        : conversation.messages
+            .map((message) =>
+                message.id == targetMessage.id ? visibleResultMessage : message)
+            .toList();
     var workingState = _replaceConversation(
       state,
       conversation.copyWith(
@@ -987,6 +1114,7 @@ class TeamOrchestrator {
       onProgress: onProgress,
       onStreamingDraft: onStreamingDraft,
       enableTools: false,
+      continueMessageId: visibleResultMessage.id,
     );
     workingState = result.workingState;
     final updatedConversation = conversation.copyWith(
@@ -1394,6 +1522,56 @@ String _formatCommandResultMessage(CommandRequest request) {
   ].join('\n');
 }
 
+String _contentFromBlocks(List<ChatMessageContentBlock> blocks) {
+  return blocks
+      .map((block) {
+        return switch (block.type) {
+          ChatMessageContentBlockType.text => block.text ?? '',
+          ChatMessageContentBlockType.toolError => block.text ?? '',
+          ChatMessageContentBlockType.commandResult =>
+            _formatCommandResultBlockText(block.commandResult!),
+        };
+      })
+      .where((content) => content.trim().isNotEmpty)
+      .join('\n');
+}
+
+String _formatCommandResultBlockText(CommandResultAttachment result) {
+  final output = result.output.trim();
+  return [
+    '命令执行结果',
+    '工作目录: ${result.workingDirectory}',
+    '命令: ${result.command}',
+    '状态: ${result.status.name}',
+    if (output.isNotEmpty) '输出:\n$output' else '输出: <empty>',
+  ].join('\n');
+}
+
+List<ChatMessageContentBlock> _appendTextBlock(
+  List<ChatMessageContentBlock> blocks,
+  String text,
+) {
+  if (text.trim().isEmpty) {
+    return blocks;
+  }
+  return [
+    ...blocks,
+    ChatMessageContentBlock.text(text),
+  ];
+}
+
+ChatMessage _messageWithBlocks(
+  ChatMessage message,
+  List<ChatMessageContentBlock> blocks, {
+  ChatMessageGenerationStatus? generationStatus,
+}) {
+  return message.copyWith(
+    content: _contentFromBlocks(blocks),
+    contentBlocks: blocks,
+    generationStatus: generationStatus,
+  );
+}
+
 Future<ProcessResult> _defaultCommandRunner(
   String command,
   String workingDirectory,
@@ -1408,7 +1586,7 @@ Future<ProcessResult> _defaultCommandRunner(
   }
   return Process.run(
     '/bin/sh',
-    ['-lc', command],
+    ['-c', command],
     workingDirectory: workingDirectory,
     runInShell: false,
   );
@@ -1418,27 +1596,32 @@ Future<_ToolExecutionOutcome> _executeModelToolCalls({
   required AppState state,
   required String conversationId,
   required String? memberId,
+  required String? messageId,
   required List<ModelToolCall> calls,
   required CommandRunner commandRunner,
   ModelRequestCancellation? cancellation,
 }) async {
   var workingState = state;
   final results = <ModelToolResult>[];
+  final displayBlocks = <ChatMessageContentBlock>[];
   for (final call in calls) {
     final result = await _executeModelToolCall(
       state: workingState,
       conversationId: conversationId,
       activeMemberId: memberId,
+      messageId: messageId,
       call: call,
       commandRunner: commandRunner,
       cancellation: cancellation,
     );
     workingState = result.workingState;
     results.add(result.result);
+    displayBlocks.addAll(result.displayBlocks);
   }
   return _ToolExecutionOutcome(
     workingState: workingState,
     round: ModelToolRound(calls: calls, results: results),
+    displayBlocks: displayBlocks,
   );
 }
 
@@ -1446,6 +1629,7 @@ Future<_SingleToolExecutionOutcome> _executeModelToolCall({
   required AppState state,
   required String conversationId,
   required String? activeMemberId,
+  required String? messageId,
   required ModelToolCall call,
   required CommandRunner commandRunner,
   ModelRequestCancellation? cancellation,
@@ -1495,6 +1679,7 @@ Future<_SingleToolExecutionOutcome> _executeModelToolCall({
           call,
           conversationId: conversationId,
           activeMemberId: activeMemberId,
+          messageId: messageId,
           commandRunner: commandRunner,
           arguments: arguments,
         );
@@ -1559,6 +1744,7 @@ Future<_SingleToolExecutionOutcome> _requestCommandTool(
   ModelToolCall call, {
   required String conversationId,
   required String? activeMemberId,
+  required String? messageId,
   required CommandRunner commandRunner,
   required Map<String, Object?> arguments,
 }) async {
@@ -1601,6 +1787,7 @@ Future<_SingleToolExecutionOutcome> _requestCommandTool(
     conversationId: conversationId,
     memberId: member.id,
     toolCallId: call.id,
+    messageId: messageId,
   );
   var nextState = state.copyWith(
     commandRequests: [...state.commandRequests, request],
@@ -1654,6 +1841,17 @@ Future<_SingleToolExecutionOutcome> _requestCommandTool(
         'exitCode': runResult.exitCode,
         'requiresUserAction': false,
       },
+      displayBlocks: [
+        ChatMessageContentBlock.commandResult(
+          CommandResultAttachment(
+            requestId: updatedRequest.id,
+            status: updatedRequest.status,
+            workingDirectory: updatedRequest.workingDirectory,
+            command: updatedRequest.command,
+            output: updatedRequest.output ?? '',
+          ),
+        ),
+      ],
     );
   }
   return _toolSuccess(
@@ -1864,8 +2062,9 @@ bool _isHiddenWorkspacePath(String relativePath) {
 _SingleToolExecutionOutcome _toolSuccess(
   AppState state,
   ModelToolCall call,
-  Map<String, Object?> payload,
-) {
+  Map<String, Object?> payload, {
+  List<ChatMessageContentBlock> displayBlocks = const [],
+}) {
   return _SingleToolExecutionOutcome(
     workingState: state,
     result: ModelToolResult(
@@ -1873,6 +2072,7 @@ _SingleToolExecutionOutcome _toolSuccess(
       name: call.name,
       content: _toolResultJson(ok: true, payload: payload),
     ),
+    displayBlocks: displayBlocks,
   );
 }
 
@@ -2116,20 +2316,24 @@ class _ToolExecutionOutcome {
   const _ToolExecutionOutcome({
     required this.workingState,
     required this.round,
+    this.displayBlocks = const [],
   });
 
   final AppState workingState;
   final ModelToolRound round;
+  final List<ChatMessageContentBlock> displayBlocks;
 }
 
 class _SingleToolExecutionOutcome {
   const _SingleToolExecutionOutcome({
     required this.workingState,
     required this.result,
+    this.displayBlocks = const [],
   });
 
   final AppState workingState;
   final ModelToolResult result;
+  final List<ChatMessageContentBlock> displayBlocks;
 }
 
 class _CommandRunResult {

@@ -1256,6 +1256,16 @@ void main() {
   test(
       'controller executes scoped command request and continues member reply with output',
       () async {
+    final toolMessage = ChatMessage(
+      id: 'msg-tool',
+      authorName: '秘书',
+      memberId: 'member-secretary',
+      content: '我先申请执行命令',
+      createdAt: DateTime(2026, 6, 29),
+      contentBlocks: const [
+        ChatMessageContentBlock.text('我先申请执行命令'),
+      ],
+    );
     final request = CommandRequest.pending(
       id: 'command-df',
       memberName: '秘书',
@@ -1265,10 +1275,24 @@ void main() {
       conversationId: 'conv-member-secretary',
       memberId: 'member-secretary',
       toolCallId: 'call-df',
+      messageId: 'msg-tool',
     );
     final gateway = RecordingScriptedWidgetGateway(['根目录已使用 42G']);
+    final seed = AppState.seed();
+    final conversation = seed.conversations.firstWhere(
+      (conversation) => conversation.id == 'conv-member-secretary',
+    );
     final controller = AppController(
-      AppState.seed().copyWith(commandRequests: [request]),
+      seed.copyWith(
+        conversations: seed.conversations
+            .map(
+              (item) => item.id == conversation.id
+                  ? conversation.copyWith(messages: [toolMessage])
+                  : item,
+            )
+            .toList(),
+        commandRequests: [request],
+      ),
       TeamOrchestrator(gateway),
     );
     addTearDown(controller.dispose);
@@ -1285,15 +1309,20 @@ void main() {
     );
 
     final executed = controller.state.commandRequests.single;
-    final conversation = controller.conversationById('conv-member-secretary');
+    final updatedConversation =
+        controller.conversationById('conv-member-secretary');
+    final updatedMessage = updatedConversation.messages.single;
     expect(executed.status, CommandRequestStatus.executed);
     expect(executed.output, contains('42Gi'));
-    expect(
-      conversation.messages.map((message) => message.content),
-      contains(contains('命令执行结果')),
-    );
-    expect(conversation.messages.last.authorName, '秘书');
-    expect(conversation.messages.last.content, '根目录已使用 42G');
+    expect(updatedConversation.messages, hasLength(1));
+    expect(updatedMessage.authorName, '秘书');
+    expect(updatedMessage.content, contains('我先申请执行命令'));
+    expect(updatedMessage.content, contains('根目录已使用 42G'));
+    expect(updatedMessage.contentBlocks, hasLength(3));
+    expect(updatedMessage.contentBlocks.first.text, '我先申请执行命令');
+    expect(updatedMessage.contentBlocks[1].commandResult?.output,
+        contains('42Gi'));
+    expect(updatedMessage.contentBlocks.last.text, '根目录已使用 42G');
     expect(gateway.calls, 1);
     expect(
       gateway.recordedMessages.single.map((message) => message.content).join(
@@ -1508,7 +1537,7 @@ void main() {
     );
 
     expect(find.text('待确认命令'), findsOneWidget);
-    expect(find.textContaining('df -h /'), findsOneWidget);
+    expect(find.textContaining('df -h /'), findsWidgets);
     expect(find.textContaining('/'), findsWidgets);
     expect(find.widgetWithText(FilledButton, '批准并执行'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, '拒绝'), findsOneWidget);
@@ -1540,10 +1569,80 @@ void main() {
 
     expect(find.text('待确认命令'), findsNothing);
     expect(find.text('已允许命令'), findsOneWidget);
-    expect(find.textContaining('df -h /'), findsOneWidget);
+    expect(find.textContaining('df -h /'), findsWidgets);
     expect(find.widgetWithText(FilledButton, '执行'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, '批准并执行'), findsNothing);
     expect(find.widgetWithText(OutlinedButton, '拒绝'), findsNothing);
+  });
+
+  testWidgets(
+      'chat message renders command result collapsed in the same bubble',
+      (tester) async {
+    final message = ChatMessage(
+      id: 'msg-command-result',
+      authorName: '秘书',
+      memberId: 'member-secretary',
+      content: '我先查看一下\n根目录已使用 42G',
+      createdAt: DateTime(2026, 6, 29),
+      contentBlocks: const [
+        ChatMessageContentBlock.text('我先查看一下'),
+        ChatMessageContentBlock.commandResult(
+          CommandResultAttachment(
+            requestId: 'command-df',
+            status: CommandRequestStatus.executed,
+            workingDirectory: '/',
+            command: 'df -h /',
+            output: 'Filesystem 42Gi /',
+          ),
+        ),
+        ChatMessageContentBlock.text('根目录已使用 42G'),
+      ],
+    );
+    final request = CommandRequest.pending(
+      id: 'command-df',
+      memberName: '秘书',
+      command: 'df -h /',
+      workingDirectory: '/',
+      decision: CommandDecision.allowed,
+      conversationId: 'conv-member-secretary',
+      memberId: 'member-secretary',
+      toolCallId: 'call-df',
+      messageId: 'msg-command-result',
+    ).copyWith(
+        status: CommandRequestStatus.executed, output: 'Filesystem 42Gi /');
+    final seed = AppState.seed();
+    final conversation = seed.conversations.firstWhere(
+      (conversation) => conversation.id == 'conv-member-secretary',
+    );
+    final state = seed.copyWith(
+      conversations: seed.conversations
+          .map(
+            (item) => item.id == conversation.id
+                ? conversation.copyWith(messages: [message])
+                : item,
+          )
+          .toList(),
+      commandRequests: [request],
+    );
+
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: state,
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    expect(find.text('我先查看一下'), findsOneWidget);
+    expect(find.text('根目录已使用 42G'), findsOneWidget);
+    expect(find.text('命令执行结果'), findsOneWidget);
+    expect(find.textContaining('Filesystem 42Gi'), findsNothing);
+    expect(find.text('命令已执行'), findsNothing);
+
+    await tester.tap(find.text('命令执行结果'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('df -h /'), findsWidgets);
+    expect(find.textContaining('Filesystem 42Gi'), findsOneWidget);
   });
 
   testWidgets('legacy unscoped pending commands remain visible in settings',

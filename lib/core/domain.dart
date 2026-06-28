@@ -264,6 +264,7 @@ class CommandRequest {
     this.conversationId,
     this.memberId,
     this.toolCallId,
+    this.messageId,
   });
 
   factory CommandRequest.pending({
@@ -275,6 +276,7 @@ class CommandRequest {
     String? conversationId,
     String? memberId,
     String? toolCallId,
+    String? messageId,
   }) {
     return CommandRequest(
       id: id,
@@ -291,6 +293,7 @@ class CommandRequest {
       conversationId: conversationId,
       memberId: memberId,
       toolCallId: toolCallId,
+      messageId: messageId,
     );
   }
 
@@ -305,10 +308,12 @@ class CommandRequest {
   final String? conversationId;
   final String? memberId;
   final String? toolCallId;
+  final String? messageId;
 
   CommandRequest copyWith({
     CommandRequestStatus? status,
     String? output,
+    String? messageId,
   }) {
     return CommandRequest(
       id: id,
@@ -322,6 +327,7 @@ class CommandRequest {
       conversationId: conversationId,
       memberId: memberId,
       toolCallId: toolCallId,
+      messageId: messageId ?? this.messageId,
     );
   }
 
@@ -337,6 +343,7 @@ class CommandRequest {
         'conversationId': conversationId,
         'memberId': memberId,
         'toolCallId': toolCallId,
+        'messageId': messageId,
       };
 
   factory CommandRequest.fromJson(Map<String, Object?> json) => CommandRequest(
@@ -351,7 +358,86 @@ class CommandRequest {
         conversationId: json['conversationId'] as String?,
         memberId: json['memberId'] as String?,
         toolCallId: json['toolCallId'] as String?,
+        messageId: json['messageId'] as String?,
       );
+}
+
+enum ChatMessageContentBlockType { text, commandResult, toolError }
+
+class CommandResultAttachment {
+  const CommandResultAttachment({
+    required this.requestId,
+    required this.status,
+    required this.workingDirectory,
+    required this.command,
+    required this.output,
+  });
+
+  final String requestId;
+  final CommandRequestStatus status;
+  final String workingDirectory;
+  final String command;
+  final String output;
+
+  Map<String, Object?> toJson() => {
+        'requestId': requestId,
+        'status': status.name,
+        'workingDirectory': workingDirectory,
+        'command': command,
+        'output': output,
+      };
+
+  factory CommandResultAttachment.fromJson(Map<String, Object?> json) =>
+      CommandResultAttachment(
+        requestId: json['requestId'] as String,
+        status: CommandRequestStatus.values.byName(json['status'] as String),
+        workingDirectory: json['workingDirectory'] as String,
+        command: json['command'] as String,
+        output: json['output'] as String? ?? '',
+      );
+}
+
+class ChatMessageContentBlock {
+  const ChatMessageContentBlock.text(this.text)
+      : type = ChatMessageContentBlockType.text,
+        commandResult = null;
+
+  const ChatMessageContentBlock.toolError(this.text)
+      : type = ChatMessageContentBlockType.toolError,
+        commandResult = null;
+
+  const ChatMessageContentBlock.commandResult(CommandResultAttachment result)
+      : type = ChatMessageContentBlockType.commandResult,
+        text = null,
+        commandResult = result;
+
+  final ChatMessageContentBlockType type;
+  final String? text;
+  final CommandResultAttachment? commandResult;
+
+  Map<String, Object?> toJson() => {
+        'type': type.name,
+        if (text != null) 'text': text,
+        if (commandResult != null) 'commandResult': commandResult!.toJson(),
+      };
+
+  factory ChatMessageContentBlock.fromJson(Map<String, Object?> json) {
+    final type = ChatMessageContentBlockType.values.byName(
+      json['type'] as String? ?? ChatMessageContentBlockType.text.name,
+    );
+    return switch (type) {
+      ChatMessageContentBlockType.text =>
+        ChatMessageContentBlock.text(json['text'] as String? ?? ''),
+      ChatMessageContentBlockType.toolError =>
+        ChatMessageContentBlock.toolError(json['text'] as String? ?? ''),
+      ChatMessageContentBlockType.commandResult =>
+        ChatMessageContentBlock.commandResult(
+          CommandResultAttachment.fromJson(
+            json['commandResult'] as Map<String, Object?>,
+          ),
+        ),
+    };
+  }
 }
 
 class ModelProfile {
@@ -653,6 +739,7 @@ class ChatMessage {
     this.memberId,
     this.isUser = false,
     this.taskIds = const [],
+    this.contentBlocks = const [],
   });
 
   final String id;
@@ -665,12 +752,14 @@ class ChatMessage {
   final String? memberId;
   final bool isUser;
   final List<String> taskIds;
+  final List<ChatMessageContentBlock> contentBlocks;
 
   ChatMessage copyWith({
     String? content,
     String? thinkingContent,
     ChatMessageGenerationStatus? generationStatus,
     int? generationDurationMs,
+    List<ChatMessageContentBlock>? contentBlocks,
   }) {
     return ChatMessage(
       id: id,
@@ -683,6 +772,7 @@ class ChatMessage {
       memberId: memberId,
       isUser: isUser,
       taskIds: taskIds,
+      contentBlocks: contentBlocks ?? this.contentBlocks,
     );
   }
 
@@ -697,6 +787,7 @@ class ChatMessage {
         'memberId': memberId,
         'isUser': isUser,
         'taskIds': taskIds,
+        'contentBlocks': contentBlocks.map((block) => block.toJson()).toList(),
       };
 
   factory ChatMessage.fromJson(Map<String, Object?> json) => ChatMessage(
@@ -713,6 +804,12 @@ class ChatMessage {
         memberId: json['memberId'] as String?,
         isUser: (json['isUser'] as bool?) ?? false,
         taskIds: List<String>.from(json['taskIds'] as List? ?? const []),
+        contentBlocks: (json['contentBlocks'] as List? ?? const [])
+            .map(
+              (item) => ChatMessageContentBlock.fromJson(
+                  item as Map<String, Object?>),
+            )
+            .toList(),
       );
 }
 
