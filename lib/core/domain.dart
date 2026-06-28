@@ -197,7 +197,8 @@ class CommandPolicy {
     }
 
     final commandAllowed = allowedCommands.any(
-      (allowed) => _matchesCommandPrefix(normalized, allowed),
+      (allowed) =>
+          allowed.trim() == '*' || _matchesCommandPrefix(normalized, allowed),
     );
     if (!commandAllowed) {
       return CommandDecision.denied;
@@ -260,6 +261,9 @@ class CommandRequest {
     required this.status,
     required this.createdAt,
     this.output,
+    this.conversationId,
+    this.memberId,
+    this.toolCallId,
   });
 
   factory CommandRequest.pending({
@@ -268,6 +272,9 @@ class CommandRequest {
     required String command,
     required String workingDirectory,
     required CommandDecision decision,
+    String? conversationId,
+    String? memberId,
+    String? toolCallId,
   }) {
     return CommandRequest(
       id: id,
@@ -275,10 +282,15 @@ class CommandRequest {
       command: command,
       workingDirectory: workingDirectory,
       decision: decision,
-      status: decision == CommandDecision.denied
-          ? CommandRequestStatus.denied
-          : CommandRequestStatus.pending,
+      status: switch (decision) {
+        CommandDecision.allowed => CommandRequestStatus.approved,
+        CommandDecision.requiresConfirmation => CommandRequestStatus.pending,
+        CommandDecision.denied => CommandRequestStatus.denied,
+      },
       createdAt: DateTime.now(),
+      conversationId: conversationId,
+      memberId: memberId,
+      toolCallId: toolCallId,
     );
   }
 
@@ -290,6 +302,9 @@ class CommandRequest {
   final CommandRequestStatus status;
   final DateTime createdAt;
   final String? output;
+  final String? conversationId;
+  final String? memberId;
+  final String? toolCallId;
 
   CommandRequest copyWith({
     CommandRequestStatus? status,
@@ -304,6 +319,9 @@ class CommandRequest {
       status: status ?? this.status,
       createdAt: createdAt,
       output: output ?? this.output,
+      conversationId: conversationId,
+      memberId: memberId,
+      toolCallId: toolCallId,
     );
   }
 
@@ -316,6 +334,9 @@ class CommandRequest {
         'status': status.name,
         'createdAt': createdAt.toIso8601String(),
         'output': output,
+        'conversationId': conversationId,
+        'memberId': memberId,
+        'toolCallId': toolCallId,
       };
 
   factory CommandRequest.fromJson(Map<String, Object?> json) => CommandRequest(
@@ -327,6 +348,9 @@ class CommandRequest {
         status: CommandRequestStatus.values.byName(json['status'] as String),
         createdAt: DateTime.parse(json['createdAt'] as String),
         output: json['output'] as String?,
+        conversationId: json['conversationId'] as String?,
+        memberId: json['memberId'] as String?,
+        toolCallId: json['toolCallId'] as String?,
       );
 }
 
@@ -786,6 +810,7 @@ class Conversation {
   final ConversationStatus status;
 
   Conversation copyWith({
+    String? title,
     List<ChatMessage>? messages,
     String? memberId,
     int? currentRound,
@@ -793,7 +818,7 @@ class Conversation {
   }) {
     return Conversation(
       id: id,
-      title: title,
+      title: title ?? this.title,
       teamId: teamId,
       memberId: memberId ?? this.memberId,
       messages: messages ?? this.messages,

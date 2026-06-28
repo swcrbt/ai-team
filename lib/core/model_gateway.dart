@@ -20,6 +20,9 @@ abstract class MetadataModelGateway implements ModelGateway {
     required List<ChatMessage> messages,
     ModelRequestCancellation? cancellation,
     ModelStreamDeltaHandler? onDelta,
+    List<ModelToolDefinition> tools = const [],
+    ModelToolChoice toolChoice = ModelToolChoice.auto,
+    List<ModelToolRound> toolRounds = const [],
   });
 }
 
@@ -39,15 +42,90 @@ class ModelStreamDelta {
       (thinkingDelta == null || thinkingDelta!.isEmpty);
 }
 
+enum ModelToolChoice { auto, none, required }
+
+class ModelToolDefinition {
+  const ModelToolDefinition({
+    required this.name,
+    required this.description,
+    required this.parameters,
+  });
+
+  final String name;
+  final String description;
+  final Map<String, Object?> parameters;
+
+  Map<String, Object?> toJson() => {
+        'type': 'function',
+        'function': {
+          'name': name,
+          'description': description,
+          'parameters': parameters,
+        },
+      };
+}
+
+class ModelToolCall {
+  const ModelToolCall({
+    required this.id,
+    required this.name,
+    required this.arguments,
+  });
+
+  final String id;
+  final String name;
+  final String arguments;
+
+  Map<String, Object?> toChatJson() => {
+        'id': id,
+        'type': 'function',
+        'function': {
+          'name': name,
+          'arguments': arguments,
+        },
+      };
+}
+
+class ModelToolResult {
+  const ModelToolResult({
+    required this.toolCallId,
+    required this.name,
+    required this.content,
+  });
+
+  final String toolCallId;
+  final String name;
+  final String content;
+
+  Map<String, Object?> toChatJson() => {
+        'role': 'tool',
+        'tool_call_id': toolCallId,
+        'name': name,
+        'content': content,
+      };
+}
+
+class ModelToolRound {
+  const ModelToolRound({
+    required this.calls,
+    required this.results,
+  });
+
+  final List<ModelToolCall> calls;
+  final List<ModelToolResult> results;
+}
+
 class ModelCompletion {
   const ModelCompletion({
     required this.content,
     this.thinkingContent,
+    this.toolCalls = const [],
     this.diagnostics,
   });
 
   final String content;
   final String? thinkingContent;
+  final List<ModelToolCall> toolCalls;
   final ModelResponseDiagnostics? diagnostics;
 }
 
@@ -59,8 +137,11 @@ class ModelResponseDiagnostics {
     this.thinkingFieldKeys = const [],
     this.contentDeltaCount = 0,
     this.thinkingDeltaCount = 0,
+    this.toolCallCount = 0,
+    this.rawToolCalls = const [],
     this.rawResponse,
     this.requestBody,
+    this.requestUrl,
   });
 
   final bool streaming;
@@ -69,8 +150,11 @@ class ModelResponseDiagnostics {
   final List<String> thinkingFieldKeys;
   final int contentDeltaCount;
   final int thinkingDeltaCount;
+  final int toolCallCount;
+  final List<Map<String, Object?>> rawToolCalls;
   final String? rawResponse;
   final Map<String, Object?>? requestBody;
+  final String? requestUrl;
 
   bool get sawThinkingField => thinkingFieldKeys.isNotEmpty;
 
@@ -81,8 +165,11 @@ class ModelResponseDiagnostics {
         'thinkingFieldKeys': thinkingFieldKeys,
         'contentDeltaCount': contentDeltaCount,
         'thinkingDeltaCount': thinkingDeltaCount,
+        'toolCallCount': toolCallCount,
+        'rawToolCalls': rawToolCalls,
         'rawResponse': rawResponse,
         'requestBody': requestBody,
+        'requestUrl': requestUrl,
       };
 }
 
@@ -113,6 +200,9 @@ Future<ModelCompletion> completeModelWithMetadata(
   required List<ChatMessage> messages,
   ModelRequestCancellation? cancellation,
   ModelStreamDeltaHandler? onDelta,
+  List<ModelToolDefinition> tools = const [],
+  ModelToolChoice toolChoice = ModelToolChoice.auto,
+  List<ModelToolRound> toolRounds = const [],
 }) async {
   if (gateway is MetadataModelGateway) {
     return gateway.completeWithMetadata(
@@ -121,7 +211,13 @@ Future<ModelCompletion> completeModelWithMetadata(
       messages: messages,
       cancellation: cancellation,
       onDelta: onDelta,
+      tools: tools,
+      toolChoice: toolChoice,
+      toolRounds: toolRounds,
     );
+  }
+  if (tools.isNotEmpty || toolRounds.isNotEmpty) {
+    throw const ModelGatewayException('当前模型网关不支持原生工具调用');
   }
   final content = await gateway.complete(
     model: model,
@@ -144,6 +240,9 @@ Map<String, Object?> buildOpenAiCompatibleRequestBody({
   required ModelProfile model,
   required String systemPrompt,
   required List<ChatMessage> messages,
+  List<ModelToolDefinition> tools = const [],
+  ModelToolChoice toolChoice = ModelToolChoice.auto,
+  List<ModelToolRound> toolRounds = const [],
 }) {
   final reasoningEffort = model.reasoningEffort == null
       ? null
@@ -158,8 +257,13 @@ Map<String, Object?> buildOpenAiCompatibleRequestBody({
             'role': message.isUser ? 'user' : 'assistant',
             'content': '${message.authorName}: ${message.content}',
           }),
+      ..._toolRoundMessages(toolRounds),
     ],
   };
+  if (tools.isNotEmpty) {
+    requestBody['tools'] = tools.map((tool) => tool.toJson()).toList();
+    requestBody['tool_choice'] = toolChoice.name;
+  }
   if (reasoningEffort == null) {
     requestBody['max_tokens'] = model.maxTokens;
   } else {
@@ -168,6 +272,23 @@ Map<String, Object?> buildOpenAiCompatibleRequestBody({
   }
   return requestBody;
 }
+
+List<Map<String, Object?>> _toolRoundMessages(List<ModelToolRound> rounds) {
+  return [
+    for (final round in rounds) ...[
+      {
+        'role': 'assistant',
+        'content': null,
+        'tool_calls': round.calls.map((call) => call.toChatJson()).toList(),
+      },
+      ...round.results.map((result) => result.toChatJson()),
+    ],
+  ];
+}
+
+Uri openAiCompatibleChatCompletionsEndpoint(ModelProfile model) => Uri.parse(
+      '${model.baseUrl.replaceFirst(RegExp(r'/$'), '')}/chat/completions',
+    );
 
 class OpenAiCompatibleGateway implements MetadataModelGateway {
   OpenAiCompatibleGateway({
@@ -205,6 +326,9 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
     required List<ChatMessage> messages,
     ModelRequestCancellation? cancellation,
     ModelStreamDeltaHandler? onDelta,
+    List<ModelToolDefinition> tools = const [],
+    ModelToolChoice toolChoice = ModelToolChoice.auto,
+    List<ModelToolRound> toolRounds = const [],
   }) async {
     Object? lastError;
     for (var attempt = 0; attempt <= maxRetries; attempt++) {
@@ -216,6 +340,9 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
           messages: messages,
           cancellation: cancellation,
           onDelta: onDelta,
+          tools: tools,
+          toolChoice: toolChoice,
+          toolRounds: toolRounds,
         );
       } on ModelGatewayException catch (error) {
         lastError = error;
@@ -246,11 +373,13 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
     required List<ChatMessage> messages,
     ModelRequestCancellation? cancellation,
     ModelStreamDeltaHandler? onDelta,
+    List<ModelToolDefinition> tools = const [],
+    ModelToolChoice toolChoice = ModelToolChoice.auto,
+    List<ModelToolRound> toolRounds = const [],
   }) async {
-    final endpoint = Uri.parse(
-      '${model.baseUrl.replaceFirst(RegExp(r'/$'), '')}/chat/completions',
-    );
-    final request = await _httpClient.postUrl(endpoint);
+    final endpoint = openAiCompatibleChatCompletionsEndpoint(model);
+    final requestUrl = endpoint.toString();
+    final request = await _openRequest(endpoint, cancellation);
     request.headers.contentType = ContentType.json;
     request.headers
         .set(HttpHeaders.authorizationHeader, 'Bearer ${model.apiKey}');
@@ -258,6 +387,9 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
       model: model,
       systemPrompt: systemPrompt,
       messages: messages,
+      tools: tools,
+      toolChoice: toolChoice,
+      toolRounds: toolRounds,
     );
     request.write(jsonEncode(requestBody));
     cancellation?.throwIfCancelled();
@@ -265,6 +397,13 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
     cancellation?.throwIfCancelled();
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final body = await utf8.decodeStream(response);
+      if (response.statusCode == HttpStatus.badRequest &&
+          requestBody.containsKey('tools')) {
+        throw ModelGatewayException(
+          '当前模型/接口不支持原生工具调用: $body',
+          isRetryable: false,
+        );
+      }
       throw ModelGatewayException(
         '模型请求失败 ${response.statusCode}: $body',
         isRetryable: response.statusCode >= 500,
@@ -274,6 +413,7 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
       return _parseStreamingContent(
         response,
         requestBody: requestBody,
+        requestUrl: requestUrl,
         cancellation: cancellation,
         onDelta: onDelta,
       );
@@ -290,16 +430,21 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
       keysSeen: thinkingFieldKeys,
     );
     final content = message['content'] as String? ?? '';
+    final toolCalls = _parseToolCalls(message['tool_calls']);
     return ModelCompletion(
       content: content,
       thinkingContent: thinkingContent,
+      toolCalls: toolCalls,
       diagnostics: ModelResponseDiagnostics(
         streaming: false,
         contentLength: content.length,
         thinkingContentLength: thinkingContent?.length ?? 0,
         thinkingFieldKeys: thinkingFieldKeys.toList(growable: false),
+        toolCallCount: toolCalls.length,
+        rawToolCalls: _rawToolCalls(message['tool_calls']),
         rawResponse: body,
         requestBody: requestBody,
+        requestUrl: requestUrl,
       ),
     );
   }
@@ -307,6 +452,7 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
   Future<ModelCompletion> _parseStreamingContent(
     HttpClientResponse response, {
     required Map<String, Object?> requestBody,
+    required String requestUrl,
     ModelRequestCancellation? cancellation,
     ModelStreamDeltaHandler? onDelta,
   }) async {
@@ -314,60 +460,70 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
     final thinkingBuffer = StringBuffer();
     final rawBuffer = StringBuffer();
     final thinkingFieldKeys = <String>{};
+    final toolCallBuilders = <int, _StreamingToolCallBuilder>{};
     var contentDeltaCount = 0;
     var thinkingDeltaCount = 0;
     final lines = response.transform(utf8.decoder).transform(
           const LineSplitter(),
         );
-    await for (final line in lines) {
-      cancellation?.throwIfCancelled();
-      rawBuffer
-        ..write(line)
-        ..write('\n');
-      final trimmed = line.trim();
-      if (trimmed.isEmpty || !trimmed.startsWith('data:')) {
-        continue;
-      }
-      final data = trimmed.substring('data:'.length).trim();
-      if (data == '[DONE]') {
-        break;
-      }
-      final decoded = jsonDecode(data) as Map<String, Object?>;
-      final choices = decoded['choices'] as List;
-      for (final item in choices) {
-        final choice = item as Map<String, Object?>;
-        final delta = choice['delta'] as Map<String, Object?>?;
-        final content = delta?['content'];
-        String? contentDelta;
-        if (content is String) {
-          buffer.write(content);
-          contentDelta = content;
-          contentDeltaCount++;
+    final iterator = StreamIterator<String>(lines);
+    try {
+      while (await _moveNextStreamingLine(iterator, cancellation)) {
+        final line = iterator.current;
+        cancellation?.throwIfCancelled();
+        rawBuffer
+          ..write(line)
+          ..write('\n');
+        final trimmed = line.trim();
+        if (trimmed.isEmpty || !trimmed.startsWith('data:')) {
+          continue;
         }
-        final thinkingDelta = _firstStringValue(
-          delta,
-          const ['reasoning_content', 'reasoning', 'thinking'],
-          keysSeen: thinkingFieldKeys,
-        );
-        if (thinkingDelta != null) {
-          thinkingBuffer.write(thinkingDelta);
-          thinkingDeltaCount++;
+        final data = trimmed.substring('data:'.length).trim();
+        if (data == '[DONE]') {
+          break;
         }
-        final streamDelta = ModelStreamDelta(
-          contentDelta: contentDelta,
-          thinkingDelta: thinkingDelta,
-        );
-        if (!streamDelta.isEmpty) {
-          onDelta?.call(streamDelta);
+        final decoded = jsonDecode(data) as Map<String, Object?>;
+        final choices = decoded['choices'] as List;
+        for (final item in choices) {
+          final choice = item as Map<String, Object?>;
+          final delta = choice['delta'] as Map<String, Object?>?;
+          final content = delta?['content'];
+          String? contentDelta;
+          if (content is String) {
+            buffer.write(content);
+            contentDelta = content;
+            contentDeltaCount++;
+          }
+          final thinkingDelta = _firstStringValue(
+            delta,
+            const ['reasoning_content', 'reasoning', 'thinking'],
+            keysSeen: thinkingFieldKeys,
+          );
+          if (thinkingDelta != null) {
+            thinkingBuffer.write(thinkingDelta);
+            thinkingDeltaCount++;
+          }
+          _appendStreamingToolCalls(delta?['tool_calls'], toolCallBuilders);
+          final streamDelta = ModelStreamDelta(
+            contentDelta: contentDelta,
+            thinkingDelta: thinkingDelta,
+          );
+          if (!streamDelta.isEmpty) {
+            onDelta?.call(streamDelta);
+          }
         }
       }
+    } finally {
+      await iterator.cancel();
     }
     final thinkingContent = thinkingBuffer.toString();
     final content = buffer.toString();
     final normalizedThinkingContent = _normalizeOptionalText(thinkingContent);
+    final toolCalls = _completeStreamingToolCalls(toolCallBuilders);
     return ModelCompletion(
       content: content,
       thinkingContent: normalizedThinkingContent,
+      toolCalls: toolCalls,
       diagnostics: ModelResponseDiagnostics(
         streaming: true,
         contentLength: content.length,
@@ -375,8 +531,11 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
         thinkingFieldKeys: thinkingFieldKeys.toList(growable: false),
         contentDeltaCount: contentDeltaCount,
         thinkingDeltaCount: thinkingDeltaCount,
+        toolCallCount: toolCalls.length,
+        rawToolCalls: toolCalls.map((call) => call.toChatJson()).toList(),
         rawResponse: rawBuffer.toString(),
         requestBody: requestBody,
+        requestUrl: requestUrl,
       ),
     );
   }
@@ -385,17 +544,173 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
     HttpClientRequest request,
     ModelRequestCancellation? cancellation,
   ) {
-    final response = request.close().timeout(requestTimeout);
+    final response = request.close().timeout(requestTimeout).catchError((
+      Object error,
+    ) {
+      cancellation?.throwIfCancelled();
+      throw error;
+    });
     if (cancellation == null) {
       return response;
     }
     return Future.any<HttpClientResponse>([
       response,
-      cancellation.cancelled.then<HttpClientResponse>(
+      cancellation.cancelled.then<HttpClientResponse>((_) {
+        request.abort(const ModelGatewayException('模型请求已取消'));
+        throw const ModelGatewayException('模型请求已取消');
+      }),
+    ]);
+  }
+
+  Future<HttpClientRequest> _openRequest(
+    Uri endpoint,
+    ModelRequestCancellation? cancellation,
+  ) {
+    final request = _httpClient.postUrl(endpoint);
+    if (cancellation == null) {
+      return request;
+    }
+    unawaited(
+      request.then<void>(
+        (value) {
+          if (cancellation.isCancelled) {
+            value.abort(const ModelGatewayException('模型请求已取消'));
+          }
+        },
+        onError: (_) {},
+      ),
+    );
+    final guardedRequest = request.catchError((Object error) {
+      cancellation.throwIfCancelled();
+      throw error;
+    });
+    return Future.any<HttpClientRequest>([
+      guardedRequest,
+      cancellation.cancelled.then<HttpClientRequest>(
         (_) => throw const ModelGatewayException('模型请求已取消'),
       ),
     ]);
   }
+}
+
+Future<bool> _moveNextStreamingLine(
+  StreamIterator<String> iterator,
+  ModelRequestCancellation? cancellation,
+) {
+  if (cancellation == null) {
+    return iterator.moveNext();
+  }
+  return Future.any<bool>([
+    iterator.moveNext(),
+    cancellation.cancelled.then<bool>(
+      (_) => throw const ModelGatewayException('模型请求已取消'),
+    ),
+  ]);
+}
+
+List<ModelToolCall> _parseToolCalls(Object? value) {
+  if (value is! List) {
+    return const [];
+  }
+  final calls = <ModelToolCall>[];
+  for (final item in value) {
+    if (item is! Map) {
+      continue;
+    }
+    final json = Map<String, Object?>.from(item);
+    final function = json['function'];
+    if (function is! Map) {
+      continue;
+    }
+    final functionJson = Map<String, Object?>.from(function);
+    final id = json['id'];
+    final name = functionJson['name'];
+    final arguments = functionJson['arguments'];
+    if (id is String && name is String) {
+      calls.add(
+        ModelToolCall(
+          id: id,
+          name: name,
+          arguments: arguments is String ? arguments : '',
+        ),
+      );
+    }
+  }
+  return calls;
+}
+
+List<Map<String, Object?>> _rawToolCalls(Object? value) {
+  if (value is! List) {
+    return const [];
+  }
+  return [
+    for (final item in value)
+      if (item is Map) Map<String, Object?>.from(item),
+  ];
+}
+
+void _appendStreamingToolCalls(
+  Object? value,
+  Map<int, _StreamingToolCallBuilder> builders,
+) {
+  if (value is! List) {
+    return;
+  }
+  for (final item in value) {
+    if (item is! Map) {
+      continue;
+    }
+    final json = Map<String, Object?>.from(item);
+    final indexValue = json['index'];
+    if (indexValue is! num) {
+      continue;
+    }
+    final index = indexValue.toInt();
+    final builder = builders.putIfAbsent(
+      index,
+      () => _StreamingToolCallBuilder(),
+    );
+    final id = json['id'];
+    if (id is String && id.isNotEmpty) {
+      builder.id = id;
+    }
+    final function = json['function'];
+    if (function is Map) {
+      final functionJson = Map<String, Object?>.from(function);
+      final name = functionJson['name'];
+      if (name is String && name.isNotEmpty) {
+        builder.name = name;
+      }
+      final arguments = functionJson['arguments'];
+      if (arguments is String) {
+        builder.arguments.write(arguments);
+      }
+    }
+  }
+}
+
+List<ModelToolCall> _completeStreamingToolCalls(
+  Map<int, _StreamingToolCallBuilder> builders,
+) {
+  final indexes = builders.keys.toList()..sort();
+  return [
+    for (final index in indexes)
+      if (builders[index]!.isComplete) builders[index]!.build(),
+  ];
+}
+
+class _StreamingToolCallBuilder {
+  String? id;
+  String? name;
+  final StringBuffer arguments = StringBuffer();
+
+  bool get isComplete => id != null && name != null;
+
+  ModelToolCall build() => ModelToolCall(
+        id: id!,
+        name: name!,
+        arguments: arguments.toString(),
+      );
 }
 
 String? _firstStringValue(

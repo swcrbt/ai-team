@@ -28,6 +28,21 @@ void main() {
         apiKey: 'test-secret',
       );
 
+  test('builds the chat completions endpoint without duplicate slashes', () {
+    expect(
+      openAiCompatibleChatCompletionsEndpoint(
+        model().copyWith(baseUrl: 'https://api.openai.com/v1'),
+      ).toString(),
+      'https://api.openai.com/v1/chat/completions',
+    );
+    expect(
+      openAiCompatibleChatCompletionsEndpoint(
+        model().copyWith(baseUrl: 'https://api.openai.com/v1/'),
+      ).toString(),
+      'https://api.openai.com/v1/chat/completions',
+    );
+  });
+
   test('sends OpenAI compatible payload and parses assistant content',
       () async {
     unawaited(serve(server, (request) async {
@@ -71,6 +86,130 @@ void main() {
 
     expect(content, 'hello from model');
     expect(requests, hasLength(1));
+  });
+
+  test('sends tool definitions and parses non-streaming tool calls', () async {
+    late Map<String, Object?> sentBody;
+    unawaited(serve(server, (request) async {
+      requests.add(request);
+      sentBody =
+          jsonDecode(await utf8.decodeStream(request)) as Map<String, Object?>;
+      request.response
+        ..headers.contentType = ContentType.json
+        ..write(jsonEncode({
+          'choices': [
+            {
+              'message': {
+                'content': null,
+                'tool_calls': [
+                  {
+                    'id': 'call-read',
+                    'type': 'function',
+                    'function': {
+                      'name': 'read_workspace_file',
+                      'arguments':
+                          '{"workspaceId":"workspace-1","relativePath":"README.md"}',
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        }));
+      await request.response.close();
+    }));
+    final gateway = OpenAiCompatibleGateway();
+
+    final completion = await gateway.completeWithMetadata(
+      model: model().copyWith(streaming: false),
+      systemPrompt: 'system',
+      messages: const [],
+      tools: const [
+        ModelToolDefinition(
+          name: 'read_workspace_file',
+          description: 'Read a workspace file.',
+          parameters: {
+            'type': 'object',
+            'properties': {
+              'workspaceId': {'type': 'string'},
+              'relativePath': {'type': 'string'},
+            },
+            'required': ['workspaceId', 'relativePath'],
+          },
+        ),
+      ],
+    );
+
+    expect(sentBody['tool_choice'], 'auto');
+    final tools = sentBody['tools'] as List<Object?>;
+    expect(tools, hasLength(1));
+    expect(
+      tools.single,
+      containsPair('type', 'function'),
+    );
+    expect(jsonEncode(tools), contains('read_workspace_file'));
+    expect(completion.content, isEmpty);
+    expect(completion.toolCalls, hasLength(1));
+    expect(completion.toolCalls.single.id, 'call-read');
+    expect(completion.toolCalls.single.name, 'read_workspace_file');
+    expect(
+      completion.toolCalls.single.arguments,
+      '{"workspaceId":"workspace-1","relativePath":"README.md"}',
+    );
+    expect(completion.diagnostics!.toolCallCount, 1);
+    expect(jsonEncode(completion.diagnostics!.toJson()),
+        isNot(contains('test-secret')));
+  });
+
+  test('sends assistant tool calls and tool result messages', () async {
+    late Map<String, Object?> sentBody;
+    unawaited(serve(server, (request) async {
+      requests.add(request);
+      sentBody =
+          jsonDecode(await utf8.decodeStream(request)) as Map<String, Object?>;
+      request.response
+        ..headers.contentType = ContentType.json
+        ..write(jsonEncode({
+          'choices': [
+            {
+              'message': {'content': 'final'}
+            }
+          ],
+        }));
+      await request.response.close();
+    }));
+    final gateway = OpenAiCompatibleGateway();
+
+    await gateway.completeWithMetadata(
+      model: model().copyWith(streaming: false),
+      systemPrompt: 'system',
+      messages: const [],
+      toolRounds: const [
+        ModelToolRound(
+          calls: [
+            ModelToolCall(
+              id: 'call-read',
+              name: 'read_workspace_file',
+              arguments: '{"workspaceId":"workspace-1"}',
+            ),
+          ],
+          results: [
+            ModelToolResult(
+              toolCallId: 'call-read',
+              name: 'read_workspace_file',
+              content: '{"ok":true,"content":"hello"}',
+            ),
+          ],
+        ),
+      ],
+    );
+
+    final messages = sentBody['messages'] as List<Object?>;
+    expect(messages[messages.length - 2], containsPair('role', 'assistant'));
+    expect(jsonEncode(messages[messages.length - 2]), contains('tool_calls'));
+    expect(messages.last, containsPair('role', 'tool'));
+    expect(messages.last, containsPair('tool_call_id', 'call-read'));
+    expect(messages.last, containsPair('content', '{"ok":true,"content":"hello"}'));
   });
 
   test('parses real reasoning content from non-streaming responses', () async {
@@ -179,8 +318,18 @@ void main() {
     expect(sentBody, isNot(contains('reasoning_effort')));
     expect(sentBody, isNot(contains('max_completion_tokens')));
     expect(completion.diagnostics!.requestBody, sentBody);
+    expect(
+      completion.diagnostics!.requestUrl,
+      'http://${server.address.host}:${server.port}/v1/chat/completions',
+    );
     expect(completion.diagnostics!.toJson()['requestBody'], sentBody);
+    expect(
+      completion.diagnostics!.toJson()['requestUrl'],
+      'http://${server.address.host}:${server.port}/v1/chat/completions',
+    );
     expect(jsonEncode(completion.diagnostics!.requestBody),
+        isNot(contains('test-secret')));
+    expect(jsonEncode(completion.diagnostics!.toJson()),
         isNot(contains('test-secret')));
   });
 
@@ -326,6 +475,41 @@ void main() {
     expect(requests, hasLength(1));
   });
 
+  test('parses streaming tool call deltas split across chunks', () async {
+    unawaited(serve(server, (request) async {
+      requests.add(request);
+      await utf8.decodeStream(request);
+      request.response.headers.contentType =
+          ContentType('text', 'event-stream', charset: 'utf-8');
+      request.response
+        ..write(
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-list","type":"function","function":{"name":"list_workspace_files","arguments":"{\\"workspaceId\\":"}}]}}]}\n\n',
+        )
+        ..write(
+          'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\"workspace-1\\"}"}}]}}]}\n\n',
+        )
+        ..write('data: [DONE]\n\n');
+      await request.response.close();
+    }));
+    final gateway = OpenAiCompatibleGateway();
+
+    final completion = await gateway.completeWithMetadata(
+      model: model().copyWith(streaming: true),
+      systemPrompt: 'system',
+      messages: const [],
+    );
+
+    expect(completion.content, isEmpty);
+    expect(completion.toolCalls, hasLength(1));
+    expect(completion.toolCalls.single.id, 'call-list');
+    expect(completion.toolCalls.single.name, 'list_workspace_files');
+    expect(
+      completion.toolCalls.single.arguments,
+      '{"workspaceId":"workspace-1"}',
+    );
+    expect(completion.diagnostics!.toolCallCount, 1);
+  });
+
   test('reports streaming reasoning and content deltas before completion',
       () async {
     unawaited(serve(server, (request) async {
@@ -404,6 +588,54 @@ void main() {
 
     await expectLater(
       future,
+      throwsA(isA<ModelGatewayException>()
+          .having((error) => error.message, 'message', contains('已取消'))),
+    );
+  });
+
+  test('cancels while waiting for the next streaming event', () async {
+    final streamOpened = Completer<void>();
+    final releaseResponse = Completer<void>();
+    addTearDown(() {
+      if (!releaseResponse.isCompleted) {
+        releaseResponse.complete();
+      }
+    });
+    unawaited(serve(server, (request) async {
+      requests.add(request);
+      await utf8.decodeStream(request);
+      request.response
+        ..statusCode = HttpStatus.ok
+        ..headers.contentType =
+            ContentType('text', 'event-stream', charset: 'utf-8');
+      request.response.write(
+        'data: {"choices":[{"delta":{"content":"partial"}}]}\n\n',
+      );
+      await request.response.flush();
+      if (!streamOpened.isCompleted) {
+        streamOpened.complete();
+      }
+      await releaseResponse.future;
+      await request.response.close();
+    }));
+    final gateway = OpenAiCompatibleGateway(
+      requestTimeout: const Duration(seconds: 5),
+      maxRetries: 0,
+    );
+    final cancellation = ModelRequestCancellation();
+    final future = gateway.completeWithMetadata(
+      model: model().copyWith(streaming: true),
+      systemPrompt: 'system',
+      messages: const [],
+      cancellation: cancellation,
+    );
+
+    await streamOpened.future.timeout(const Duration(seconds: 1));
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    cancellation.cancel();
+
+    await expectLater(
+      future.timeout(const Duration(milliseconds: 250)),
       throwsA(isA<ModelGatewayException>()
           .having((error) => error.message, 'message', contains('已取消'))),
     );

@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
@@ -16,6 +17,139 @@ import 'core/orchestrator.dart';
 import 'core/patching.dart';
 
 typedef StateChanged = FutureOr<void> Function(AppState state);
+
+class ChatScrollDiagnostics {
+  var contentUpdateCount = 0;
+  var scrollScheduleCount = 0;
+  var actualJumpCount = 0;
+  var nearBottomFlipCount = 0;
+  var streamingBodyBuildCount = 0;
+  var streamingThinkingBuildCount = 0;
+  var streamingStableSegmentCommitCount = 0;
+  var streamingTailUpdateCount = 0;
+  var markdownBodyBuildCount = 0;
+  var globalCommitCount = 0;
+  var globalNotifyCount = 0;
+  var persistenceWriteCount = 0;
+  var appBuildCount = 0;
+  var chatPaneBuildCount = 0;
+  var streamingDraftUpdateCount = 0;
+  final messageBubbleBuildCounts = <String, int>{};
+  final jumpSamples = <ChatScrollJumpSample>[];
+
+  void reset() {
+    contentUpdateCount = 0;
+    scrollScheduleCount = 0;
+    actualJumpCount = 0;
+    nearBottomFlipCount = 0;
+    streamingBodyBuildCount = 0;
+    streamingThinkingBuildCount = 0;
+    streamingStableSegmentCommitCount = 0;
+    streamingTailUpdateCount = 0;
+    markdownBodyBuildCount = 0;
+    globalCommitCount = 0;
+    globalNotifyCount = 0;
+    persistenceWriteCount = 0;
+    appBuildCount = 0;
+    chatPaneBuildCount = 0;
+    streamingDraftUpdateCount = 0;
+    messageBubbleBuildCounts.clear();
+    jumpSamples.clear();
+  }
+}
+
+class ChatScrollJumpSample {
+  const ChatScrollJumpSample({
+    required this.beforePixels,
+    required this.beforeMaxScrollExtent,
+    required this.target,
+    required this.afterPixels,
+    required this.afterMaxScrollExtent,
+  });
+
+  final double beforePixels;
+  final double beforeMaxScrollExtent;
+  final double target;
+  final double afterPixels;
+  final double afterMaxScrollExtent;
+}
+
+class StreamingTextPartitionUpdate {
+  const StreamingTextPartitionUpdate({
+    required this.reset,
+    required this.newStableSegments,
+    required this.tailChanged,
+  });
+
+  final bool reset;
+  final List<String> newStableSegments;
+  final bool tailChanged;
+}
+
+class StreamingTextPartition {
+  final stableSegments = <String>[];
+  var lastContent = '';
+  var stableCommittedLength = 0;
+  var liveTail = '';
+
+  StreamingTextPartitionUpdate apply(String content, {bool reset = false}) {
+    var didReset = false;
+    if (reset || !content.startsWith(lastContent)) {
+      _reset();
+      didReset = true;
+    }
+    if (content.length < stableCommittedLength) {
+      _reset();
+      didReset = true;
+    }
+
+    final newStableSegments = <String>[];
+    final stableBoundary = content.lastIndexOf('\n') + 1;
+    if (stableBoundary < stableCommittedLength) {
+      _reset();
+      didReset = true;
+    }
+    if (stableBoundary > stableCommittedLength) {
+      final stableText = content.substring(
+        stableCommittedLength,
+        stableBoundary,
+      );
+      stableSegments.add(stableText);
+      newStableSegments.add(stableText);
+      stableCommittedLength = stableBoundary;
+    }
+
+    final nextTail = content.substring(stableCommittedLength);
+    final tailChanged = nextTail != liveTail;
+    if (tailChanged) {
+      liveTail = nextTail;
+    }
+    lastContent = content;
+
+    return StreamingTextPartitionUpdate(
+      reset: didReset,
+      newStableSegments: newStableSegments,
+      tailChanged: tailChanged,
+    );
+  }
+
+  void _reset() {
+    stableSegments.clear();
+    stableCommittedLength = 0;
+    liveTail = '';
+    lastContent = '';
+  }
+}
+
+class ChatStreamingDraft {
+  const ChatStreamingDraft({
+    required this.conversationId,
+    required this.message,
+  });
+
+  final String conversationId;
+  final ChatMessage message;
+}
 
 const _reasoningEffortOffValue = '';
 const _reasoningEffortValues = [
@@ -43,12 +177,14 @@ class AiTeamApp extends StatelessWidget {
     required this.modelGateway,
     this.onStateChanged,
     this.fileDialogs = const SystemFileDialogService(),
+    this.chatScrollDiagnostics,
   });
 
   final AppState initialState;
   final ModelGateway modelGateway;
   final StateChanged? onStateChanged;
   final FileDialogService fileDialogs;
+  final ChatScrollDiagnostics? chatScrollDiagnostics;
 
   @override
   Widget build(BuildContext context) {
@@ -68,6 +204,7 @@ class AiTeamApp extends StatelessWidget {
         modelGateway: modelGateway,
         onStateChanged: onStateChanged,
         fileDialogs: fileDialogs,
+        chatScrollDiagnostics: chatScrollDiagnostics,
       ),
     );
   }
@@ -80,12 +217,14 @@ class AiTeamHome extends StatefulWidget {
     required this.modelGateway,
     this.onStateChanged,
     this.fileDialogs = const SystemFileDialogService(),
+    this.chatScrollDiagnostics,
   });
 
   final AppState initialState;
   final ModelGateway modelGateway;
   final StateChanged? onStateChanged;
   final FileDialogService fileDialogs;
+  final ChatScrollDiagnostics? chatScrollDiagnostics;
 
   @override
   State<AiTeamHome> createState() => _AiTeamHomeState();
@@ -104,6 +243,7 @@ class _AiTeamHomeState extends State<AiTeamHome> {
       TeamOrchestrator(widget.modelGateway),
       onStateChanged: widget.onStateChanged,
       fileDialogs: widget.fileDialogs,
+      diagnostics: widget.chatScrollDiagnostics,
     );
   }
 
@@ -123,6 +263,7 @@ class _AiTeamHomeState extends State<AiTeamHome> {
     return AnimatedBuilder(
       animation: controller,
       builder: (context, _) {
+        widget.chatScrollDiagnostics?.appBuildCount++;
         return Scaffold(
           body: SafeArea(
             child: LayoutBuilder(
@@ -169,8 +310,8 @@ class _AiTeamHomeState extends State<AiTeamHome> {
   }
 
   Widget _buildChatWorkspace(double conversationListWidth) {
-    final conversations = controller.visibleConversations;
-    final visibleConversationIds = conversations
+    final paneConversations = controller.openConversationPanes;
+    final visibleConversationIds = paneConversations
         .map(
           (conversation) => conversation.id,
         )
@@ -178,7 +319,7 @@ class _AiTeamHomeState extends State<AiTeamHome> {
     chatPaneKeys.removeWhere(
       (conversationId, key) => !visibleConversationIds.contains(conversationId),
     );
-    final selectedIndex = conversations.indexWhere(
+    final selectedIndex = paneConversations.indexWhere(
       (conversation) => conversation.id == controller.selectedConversationId,
     );
     return Row(
@@ -198,7 +339,7 @@ class _AiTeamHomeState extends State<AiTeamHome> {
         Expanded(
           child: IndexedStack(
             index: selectedIndex < 0 ? 0 : selectedIndex,
-            children: conversations
+            children: paneConversations
                 .map(
                   (conversation) => _ChatPane(
                     key: chatPaneKeys.putIfAbsent(
@@ -209,6 +350,7 @@ class _AiTeamHomeState extends State<AiTeamHome> {
                     ),
                     controller: controller,
                     conversationId: conversation.id,
+                    diagnostics: widget.chatScrollDiagnostics,
                   ),
                 )
                 .toList(),
@@ -258,6 +400,7 @@ class AppController extends ChangeNotifier {
     this.onStateChanged,
     this.fileDialogs = const SystemFileDialogService(),
     JsonLocalStore? exportStore,
+    this.diagnostics,
   })  : state = initialState,
         exportStore = exportStore ?? JsonLocalStore.defaultStore(),
         selectedConversationId = _initialConversationId(initialState) {
@@ -283,6 +426,7 @@ class AppController extends ChangeNotifier {
   final StateChanged? onStateChanged;
   final FileDialogService fileDialogs;
   final JsonLocalStore exportStore;
+  final ChatScrollDiagnostics? diagnostics;
   bool isDispatching = false;
   String? error;
   String? _runningTaskId;
@@ -290,6 +434,60 @@ class AppController extends ChangeNotifier {
   String? _activeDispatchConversationId;
   ConversationStatus? _requestedCancellationStatus;
   Future<void> _persistenceQueue = Future<void>.value();
+  final Map<String, ValueNotifier<ChatStreamingDraft?>>
+      _streamingDraftNotifiers = {};
+  final Map<String, Set<String>> _streamingDraftMessageIdsByConversation = {};
+
+  @override
+  void dispose() {
+    for (final notifier in _streamingDraftNotifiers.values) {
+      notifier.dispose();
+    }
+    _streamingDraftNotifiers.clear();
+    _streamingDraftMessageIdsByConversation.clear();
+    super.dispose();
+  }
+
+  ValueListenable<ChatStreamingDraft?> streamingDraftListenable(
+    String messageId,
+  ) {
+    return _streamingDraftNotifiers.putIfAbsent(
+      messageId,
+      () => ValueNotifier<ChatStreamingDraft?>(null),
+    );
+  }
+
+  void _handleStreamingDraft({
+    required String conversationId,
+    required ChatMessage message,
+  }) {
+    diagnostics?.streamingDraftUpdateCount++;
+    _streamingDraftMessageIdsByConversation
+        .putIfAbsent(conversationId, () => <String>{})
+        .add(message.id);
+    final notifier = _streamingDraftNotifiers.putIfAbsent(
+      message.id,
+      () => ValueNotifier<ChatStreamingDraft?>(null),
+    );
+    notifier.value = ChatStreamingDraft(
+      conversationId: conversationId,
+      message: message,
+    );
+  }
+
+  void _clearStreamingDraftsForConversation(String conversationId) {
+    final messageIds =
+        _streamingDraftMessageIdsByConversation.remove(conversationId);
+    if (messageIds == null) {
+      return;
+    }
+    for (final messageId in messageIds) {
+      final notifier = _streamingDraftNotifiers[messageId];
+      if (notifier?.value != null) {
+        notifier!.value = null;
+      }
+    }
+  }
 
   Team get currentTeam {
     final activeId = activeTeamId;
@@ -382,8 +580,8 @@ class AppController extends ChangeNotifier {
     return isDispatching && _activeDispatchConversationId == conversationId;
   }
 
-  Conversation get teamConversation => state.conversations.firstWhere(
-        (item) => item.teamId == currentTeam.id && item.memberId == null,
+  Conversation get teamConversation => _activeConversationForObject(
+        _teamConversationFor(currentTeam.id),
       );
 
   List<Conversation> get visibleConversations {
@@ -392,25 +590,44 @@ class AppController extends ChangeNotifier {
       for (final conversation in state.conversations)
         conversation.id: conversation,
     };
-    final visibleIds = [
-      ...pinnedConversationOrderIds.where(
-        (id) {
-          final conversation = conversationsById[id];
-          return pinnedConversationIds.contains(id) &&
-              conversation != null &&
-              _shouldShowConversation(conversation);
-        },
-      ),
-      ...conversationOrderIds.where(
-        (id) {
-          final conversation = conversationsById[id];
-          return !pinnedConversationIds.contains(id) &&
-              conversation != null &&
-              _shouldShowConversation(conversation);
-        },
-      ),
-    ];
-    return visibleIds.map((id) => conversationsById[id]!).toList();
+    final visible = <Conversation>[];
+    final visibleObjectKeys = <String>{};
+    for (final id in _conversationIdsInDisplayOrder()) {
+      final conversation = conversationsById[id];
+      if (conversation == null || !_shouldShowConversation(conversation)) {
+        continue;
+      }
+      final objectKey = _conversationObjectKey(conversation);
+      if (visibleObjectKeys.add(objectKey)) {
+        visible.add(conversation);
+      }
+    }
+    return visible;
+  }
+
+  List<Conversation> get openConversationPanes {
+    _syncConversationOrder();
+    final conversationsById = {
+      for (final conversation in state.conversations)
+        conversation.id: conversation,
+    };
+    final paneIds = <String>{};
+    for (final conversation in visibleConversations) {
+      paneIds.add(conversation.id);
+    }
+    paneIds.add(selectedConversationId);
+    for (final id in _conversationIdsInDisplayOrder(selectedFirst: true)) {
+      if (openedConversationIds.contains(id)) {
+        paneIds.add(id);
+      }
+    }
+    return paneIds
+        .map((id) => conversationsById[id])
+        .whereType<Conversation>()
+        .where((conversation) => !hiddenConversationIds.contains(
+              conversation.id,
+            ))
+        .toList();
   }
 
   bool _shouldShowConversation(Conversation conversation) {
@@ -437,28 +654,24 @@ class AppController extends ChangeNotifier {
   }
 
   Conversation conversationForMember(String memberId) {
-    return state.conversations.firstWhere(
+    final source = state.conversations.firstWhere(
       (item) => item.teamId == currentTeam.id && item.memberId == memberId,
       orElse: () => throw StateError('成员会话不存在: $memberId'),
     );
+    return _activeConversationForObject(source);
   }
 
   void selectConversation(String conversationId) {
-    selectedConversationId = conversationId;
-    hiddenConversationIds.remove(conversationId);
-    final conversation = state.conversations.firstWhere(
-      (item) => item.id == conversationId,
-    );
-    activeTeamId = conversation.teamId;
+    _activateConversation(conversationId);
     notifyListeners();
   }
 
   void startTeamChat(String teamId) {
     final team = _requireTeam(teamId);
-    activeTeamId = team.id;
-    selectedConversationId = _teamConversationFor(team.id).id;
-    hiddenConversationIds.remove(selectedConversationId);
-    _moveConversationToFront(selectedConversationId);
+    final conversation = _activeConversationForObject(
+      _teamConversationFor(team.id),
+    );
+    _activateConversation(conversation.id);
     notifyListeners();
   }
 
@@ -482,16 +695,214 @@ class AppController extends ChangeNotifier {
         ),
       );
     }
-    selectedConversationId = conversation.id;
-    openedConversationIds.add(conversation.id);
-    hiddenConversationIds.remove(conversation.id);
-    activeTeamId = conversation.teamId;
-    _moveConversationToFront(conversation.id);
+    conversation = _activeConversationForObject(conversation);
+    _activateConversation(conversation.id);
     notifyListeners();
+  }
+
+  Conversation createConversationLikeCurrent() {
+    final source = _conversationById(selectedConversationId);
+    if (source.messages.isEmpty) {
+      _activateConversation(source.id);
+      notifyListeners();
+      return source;
+    }
+    final existingEmptySession = _emptyConversationForObject(source);
+    if (existingEmptySession != null) {
+      _activateConversation(existingEmptySession.id);
+      notifyListeners();
+      return existingEmptySession;
+    }
+    final conversation = _createEmptyConversationForObject(source);
+    _commit(
+      state.copyWith(
+        conversations: [
+          ...state.conversations,
+          conversation,
+        ],
+      ),
+    );
+    _activateConversation(conversation.id);
+    notifyListeners();
+    return conversation;
+  }
+
+  void deleteConversationSession(String conversationId) {
+    final conversation = _conversationByIdOrNull(conversationId);
+    if (conversation == null) {
+      return;
+    }
+
+    final deletingCurrent = selectedConversationId == conversationId;
+    Conversation? fallbackConversation;
+    Conversation? createdFallbackConversation;
+    if (deletingCurrent) {
+      fallbackConversation = _fallbackConversationAfterDeleting(conversation);
+      if (fallbackConversation == null) {
+        createdFallbackConversation = _createEmptyConversationForObject(
+          conversation,
+        );
+        fallbackConversation = createdFallbackConversation;
+      }
+      selectedConversationId = fallbackConversation.id;
+      activeTeamId = fallbackConversation.teamId;
+      openedConversationIds.add(fallbackConversation.id);
+      hiddenConversationIds.remove(fallbackConversation.id);
+    }
+
+    _clearStreamingDraftsForConversation(conversationId);
+    openedConversationIds.remove(conversationId);
+    hiddenConversationIds.remove(conversationId);
+    pinnedConversationIds.remove(conversationId);
+    pinnedConversationOrderIds.remove(conversationId);
+    conversationOrderIds.remove(conversationId);
+
+    final nextConversations = [
+      for (final item in state.conversations)
+        if (item.id != conversationId) item,
+      if (createdFallbackConversation != null) createdFallbackConversation,
+    ];
+    _commit(
+      state.copyWith(
+        conversations: nextConversations,
+        queuedTasks: state.queuedTasks
+            .where((task) => task.conversationId != conversationId)
+            .toList(),
+        taskAssignments: state.taskAssignments
+            .where((assignment) => assignment.conversationId != conversationId)
+            .toList(),
+      ),
+    );
+
+    if (deletingCurrent && fallbackConversation != null) {
+      _activateConversation(fallbackConversation.id);
+      notifyListeners();
+    }
   }
 
   bool isConversationPinned(String conversationId) {
     return pinnedConversationIds.contains(conversationId);
+  }
+
+  List<Conversation> get conversationHistory {
+    _syncConversationOrder();
+    final conversationsById = {
+      for (final conversation in state.conversations)
+        conversation.id: conversation,
+    };
+    final current = _conversationById(selectedConversationId);
+    return _conversationIdsInDisplayOrder(selectedFirst: true)
+        .map((id) => conversationsById[id])
+        .whereType<Conversation>()
+        .where((conversation) => _isSameConversationObject(
+              conversation,
+              current,
+            ))
+        .toList();
+  }
+
+  void _activateConversation(String conversationId) {
+    final conversation = _conversationById(conversationId);
+    selectedConversationId = conversation.id;
+    openedConversationIds.add(conversation.id);
+    _unhideConversationObject(conversation);
+    activeTeamId = conversation.teamId;
+    _moveConversationToFront(conversation.id);
+  }
+
+  Conversation _activeConversationForObject(Conversation source) {
+    final conversationsById = {
+      for (final conversation in state.conversations)
+        conversation.id: conversation,
+    };
+    for (final id in _conversationIdsInDisplayOrder(selectedFirst: true)) {
+      final conversation = conversationsById[id];
+      if (conversation != null &&
+          _isSameConversationObject(conversation, source)) {
+        return conversation;
+      }
+    }
+    return source;
+  }
+
+  Conversation? _emptyConversationForObject(Conversation source) {
+    final conversationsById = {
+      for (final conversation in state.conversations)
+        conversation.id: conversation,
+    };
+    for (final id in _conversationIdsInDisplayOrder(selectedFirst: true)) {
+      final conversation = conversationsById[id];
+      if (conversation != null &&
+          _isSameConversationObject(conversation, source) &&
+          conversation.messages.isEmpty) {
+        return conversation;
+      }
+    }
+    return null;
+  }
+
+  Conversation? _fallbackConversationAfterDeleting(Conversation deleted) {
+    final conversationsById = {
+      for (final conversation in state.conversations)
+        conversation.id: conversation,
+    };
+    final sameObjectConversations = <Conversation>[];
+    for (final id in _conversationIdsInDisplayOrder()) {
+      final conversation = conversationsById[id];
+      if (conversation != null &&
+          conversation.id != deleted.id &&
+          _isSameConversationObject(conversation, deleted)) {
+        sameObjectConversations.add(conversation);
+      }
+    }
+    for (final conversation in sameObjectConversations) {
+      if (conversation.messages.isNotEmpty) {
+        return conversation;
+      }
+    }
+    if (sameObjectConversations.isEmpty) {
+      return null;
+    }
+    return sameObjectConversations.first;
+  }
+
+  Conversation _createEmptyConversationForObject(Conversation source) {
+    final timestamp = DateTime.now().microsecondsSinceEpoch;
+    return Conversation(
+      id: source.memberId == null
+          ? 'conv-${source.teamId}-$timestamp'
+          : 'conv-${source.teamId}-${source.memberId}-$timestamp',
+      title: '',
+      teamId: source.teamId,
+      memberId: source.memberId,
+      messages: const [],
+    );
+  }
+
+  String _conversationObjectKey(Conversation conversation) {
+    final memberId = conversation.memberId;
+    if (memberId == null) {
+      return 'team:${conversation.teamId}';
+    }
+    return 'member:${conversation.teamId}:$memberId';
+  }
+
+  bool _isSameConversationObject(
+    Conversation left,
+    Conversation right,
+  ) {
+    return _conversationObjectKey(left) == _conversationObjectKey(right);
+  }
+
+  void _unhideConversationObject(Conversation source) {
+    hiddenConversationIds.removeWhere((id) {
+      final conversation = _conversationByIdOrNull(id);
+      return conversation != null &&
+          _isSameConversationObject(
+            conversation,
+            source,
+          );
+    });
   }
 
   void togglePinnedConversation(String conversationId) {
@@ -510,28 +921,30 @@ class AppController extends ChangeNotifier {
   }
 
   void closeConversation(String conversationId) {
-    if (!state.conversations
-        .any((conversation) => conversation.id == conversationId)) {
+    final conversation = _conversationByIdOrNull(conversationId);
+    if (conversation == null) {
       return;
     }
-    final visibleConversationIds = state.conversations
-        .where(
-            (conversation) => !hiddenConversationIds.contains(conversation.id))
-        .map((conversation) => conversation.id)
-        .toList();
-    if (visibleConversationIds.length <= 1 &&
-        visibleConversationIds.contains(conversationId)) {
+    final visibleObjectKeys = visibleConversations
+        .map((conversation) => _conversationObjectKey(conversation))
+        .toSet();
+    final objectKey = _conversationObjectKey(conversation);
+    if (visibleObjectKeys.length <= 1 &&
+        visibleObjectKeys.contains(objectKey)) {
       return;
     }
-    hiddenConversationIds.add(conversationId);
-    if (selectedConversationId == conversationId ||
+    for (final item in state.conversations) {
+      if (_isSameConversationObject(item, conversation)) {
+        hiddenConversationIds.add(item.id);
+        openedConversationIds.remove(item.id);
+      }
+    }
+    final selectedConversation =
+        _conversationByIdOrNull(selectedConversationId);
+    if (selectedConversation == null ||
         hiddenConversationIds.contains(selectedConversationId)) {
-      final nextConversation = state.conversations.firstWhere(
-        (conversation) => !hiddenConversationIds.contains(conversation.id),
-        orElse: () => state.conversations.first,
-      );
-      selectedConversationId = nextConversation.id;
-      activeTeamId = nextConversation.teamId;
+      final nextConversation = visibleConversations.first;
+      _activateConversation(nextConversation.id);
     }
     notifyListeners();
   }
@@ -728,6 +1141,7 @@ class AppController extends ChangeNotifier {
         taskId: next.id,
         cancellation: cancellation,
         onProgress: _commit,
+        onStreamingDraft: _handleStreamingDraft,
       );
       if (!cancellation.isCancelled) {
         _commit(updated);
@@ -755,6 +1169,7 @@ class AppController extends ChangeNotifier {
         _activeCancellation = null;
       }
       isDispatching = false;
+      _clearStreamingDraftsForConversation(next.conversationId);
       notifyListeners();
     }
   }
@@ -802,17 +1217,21 @@ class AppController extends ChangeNotifier {
     _activeCancellation = cancellation;
     _activeDispatchConversationId = conversationId;
     _requestedCancellationStatus = null;
-    notifyListeners();
+    _notifyListeners();
     try {
       final conversation = _conversationById(conversationId);
+      final shouldGenerateTitle =
+          _shouldGenerateConversationTitleAfterFirstUserMessage(conversation);
       if (conversation.memberId == null) {
         _commit(
           await orchestrator.dispatchTeamTask(
             state,
             teamId: conversation.teamId,
+            conversationId: conversation.id,
             userText: trimmed,
             cancellation: cancellation,
             onProgress: _commit,
+            onStreamingDraft: _handleStreamingDraft,
           ),
         );
       } else if (orchestrator
@@ -829,6 +1248,7 @@ class AppController extends ChangeNotifier {
             userText: trimmed,
             cancellation: cancellation,
             onProgress: _commit,
+            onStreamingDraft: _handleStreamingDraft,
           ),
         );
       } else {
@@ -839,7 +1259,14 @@ class AppController extends ChangeNotifier {
             userText: trimmed,
             cancellation: cancellation,
             onProgress: _commit,
+            onStreamingDraft: _handleStreamingDraft,
           ),
+        );
+      }
+      if (shouldGenerateTitle) {
+        await _generateConversationTitle(
+          conversationId: conversationId,
+          firstUserMessage: trimmed,
         );
       }
     } catch (exception) {
@@ -880,8 +1307,74 @@ class AppController extends ChangeNotifier {
         _activeDispatchConversationId = null;
       }
       _requestedCancellationStatus = null;
-      notifyListeners();
+      _clearStreamingDraftsForConversation(conversationId);
+      _notifyListeners();
     }
+  }
+
+  bool _shouldGenerateConversationTitleAfterFirstUserMessage(
+    Conversation conversation,
+  ) {
+    return conversation.title.trim().isEmpty &&
+        !conversation.messages.any((message) => message.isUser);
+  }
+
+  Future<void> _generateConversationTitle({
+    required String conversationId,
+    required String firstUserMessage,
+  }) async {
+    final conversation = _conversationById(conversationId);
+    final titleMember = _titleMemberForConversation(conversation);
+    final role = _requireRole(titleMember.roleId);
+    final model = _requireModel(titleMember.modelId);
+    try {
+      final generated = await orchestrator.gateway.complete(
+        model: model,
+        systemPrompt: role.renderSystemPrompt(
+          memberName: titleMember.name,
+          teamName: _requireTeam(conversation.teamId).name,
+        ),
+        messages: [
+          ChatMessage(
+            id: 'msg-title-source-${DateTime.now().microsecondsSinceEpoch}',
+            authorName: '我',
+            content: '请为这段聊天生成一个 3-8 个字的会话标题，只返回标题：$firstUserMessage',
+            createdAt: DateTime.now(),
+            isUser: true,
+          ),
+        ],
+      );
+      final normalizedTitle = _normalizeGeneratedConversationTitle(
+        generated,
+        conversation: _conversationById(conversationId),
+        firstUserMessage: firstUserMessage,
+      );
+      if (normalizedTitle == null) {
+        return;
+      }
+      final latestConversation = _conversationById(conversationId);
+      _commit(
+        state.copyWith(
+          conversations: state.conversations
+              .map(
+                (item) => item.id == conversationId
+                    ? latestConversation.copyWith(title: normalizedTitle)
+                    : item,
+              )
+              .toList(),
+        ),
+      );
+    } catch (_) {
+      return;
+    }
+  }
+
+  TeamMember _titleMemberForConversation(Conversation conversation) {
+    if (conversation.memberId != null) {
+      return _requireMember(conversation.memberId!);
+    }
+    final team = _requireTeam(conversation.teamId);
+    return _requireMember(team.secretaryMemberId);
   }
 
   void pauseConversation() {
@@ -1478,6 +1971,74 @@ class AppController extends ChangeNotifier {
     return updated;
   }
 
+  List<CommandRequest> commandRequestsForConversation(String conversationId) {
+    return state.commandRequests
+        .where((request) => request.conversationId == conversationId)
+        .where((request) => request.status != CommandRequestStatus.denied)
+        .toList();
+  }
+
+  Future<void> approveExecuteCommandRequestAndContinue(
+    String requestId, {
+    Future<ProcessResult> Function(String command, String workingDirectory)?
+        runner,
+  }) async {
+    if (isDispatching) {
+      return;
+    }
+    isDispatching = true;
+    error = null;
+    final cancellation = ModelRequestCancellation();
+    _activeCancellation = cancellation;
+    _requestedCancellationStatus = null;
+    _notifyListeners();
+    try {
+      var request =
+          state.commandRequests.firstWhere((item) => item.id == requestId);
+      if (request.status == CommandRequestStatus.pending) {
+        updateCommandRequestStatus(requestId, CommandRequestStatus.approved);
+        request =
+            state.commandRequests.firstWhere((item) => item.id == requestId);
+      }
+      final executed = await executeCommandRequest(request.id, runner: runner);
+      final conversationId = executed.conversationId;
+      if (conversationId != null && conversationId.trim().isNotEmpty) {
+        _activeDispatchConversationId = conversationId;
+        _commit(
+          await orchestrator.continueMemberChatAfterCommandResult(
+            state,
+            conversationId: conversationId,
+            request: executed,
+            cancellation: cancellation,
+            onProgress: _commit,
+            onStreamingDraft: _handleStreamingDraft,
+          ),
+        );
+      }
+    } catch (exception) {
+      if (cancellation.isCancelled) {
+        final conversationId = _activeDispatchConversationId;
+        if (conversationId != null) {
+          _commitCancelledDispatch(
+            conversationId,
+            _requestedCancellationStatus ?? ConversationStatus.stopped,
+          );
+        }
+        return;
+      }
+      error = exception.toString();
+      _notifyListeners();
+    } finally {
+      isDispatching = false;
+      if (identical(_activeCancellation, cancellation)) {
+        _activeCancellation = null;
+      }
+      _activeDispatchConversationId = null;
+      _requestedCancellationStatus = null;
+      _notifyListeners();
+    }
+  }
+
   Future<void> applyPatch(PatchProposal proposal) async {
     final index =
         state.patchProposals.indexWhere((item) => item.id == proposal.id);
@@ -1550,6 +2111,15 @@ class AppController extends ChangeNotifier {
       (conversation) => conversation.id == conversationId,
       orElse: () => throw StateError('会话不存在: $conversationId'),
     );
+  }
+
+  Conversation? _conversationByIdOrNull(String conversationId) {
+    for (final conversation in state.conversations) {
+      if (conversation.id == conversationId) {
+        return conversation;
+      }
+    }
+    return null;
   }
 
   QueuedTask? _taskByIdOrNull(String taskId) {
@@ -1646,15 +2216,16 @@ class AppController extends ChangeNotifier {
         ? '任务已暂停，继续后可以重新发起下一轮协作。'
         : '任务已停止，本轮未完成的模型请求已取消。';
     final conversation = _conversationById(conversationId);
+    final now = DateTime.now();
     final updated = conversation.copyWith(
       status: status,
       messages: [
-        ...conversation.messages,
+        ..._stopStreamingMessages(conversation.messages, now),
         ChatMessage(
-          id: 'msg-${DateTime.now().microsecondsSinceEpoch}',
+          id: 'msg-${now.microsecondsSinceEpoch}',
           authorName: '系统',
           content: content,
-          createdAt: DateTime.now(),
+          createdAt: now,
         ),
       ],
     );
@@ -1682,6 +2253,24 @@ class AppController extends ChangeNotifier {
         ],
       ),
     );
+  }
+
+  List<ChatMessage> _stopStreamingMessages(
+    List<ChatMessage> messages,
+    DateTime stoppedAt,
+  ) {
+    return messages
+        .map(
+          (message) => message.generationStatus ==
+                  ChatMessageGenerationStatus.streaming
+              ? message.copyWith(
+                  generationStatus: ChatMessageGenerationStatus.stopped,
+                  generationDurationMs: message.generationDurationMs ??
+                      stoppedAt.difference(message.createdAt).inMilliseconds,
+                )
+              : message,
+        )
+        .toList();
   }
 
   List<TaskAssignment> _cancelOpenAssignments(
@@ -1742,12 +2331,18 @@ class AppController extends ChangeNotifier {
   }
 
   void _commit(AppState nextState) {
+    diagnostics?.globalCommitCount++;
     state = nextState;
     _syncConversationOrder();
     if (!state.conversations.any((item) => item.id == selectedConversationId)) {
       selectedConversationId = _initialConversationId(state);
     }
     _persistState(state);
+    _notifyListeners();
+  }
+
+  void _notifyListeners() {
+    diagnostics?.globalNotifyCount++;
     notifyListeners();
   }
 
@@ -1758,6 +2353,7 @@ class AppController extends ChangeNotifier {
     if (handler == null) {
       return;
     }
+    diagnostics?.persistenceWriteCount++;
     final save = _persistenceQueue.then(
       (_) => Future<void>.sync(() => handler(snapshot)),
     );
@@ -1782,6 +2378,30 @@ class AppController extends ChangeNotifier {
         conversationOrderIds.add(id);
       }
     }
+  }
+
+  List<String> _conversationIdsInDisplayOrder({bool selectedFirst = false}) {
+    _syncConversationOrder();
+    final existingIdSet =
+        state.conversations.map((conversation) => conversation.id).toSet();
+    final ids = <String>{};
+    if (selectedFirst && existingIdSet.contains(selectedConversationId)) {
+      ids.add(selectedConversationId);
+    }
+    ids.addAll(
+      pinnedConversationOrderIds.where(
+        (id) =>
+            existingIdSet.contains(id) && pinnedConversationIds.contains(id),
+      ),
+    );
+    ids.addAll(
+      conversationOrderIds.where(
+        (id) =>
+            existingIdSet.contains(id) && !pinnedConversationIds.contains(id),
+      ),
+    );
+    ids.addAll(existingIdSet);
+    return ids.toList();
   }
 
   void _moveConversationToFront(String conversationId) {
@@ -2410,27 +3030,25 @@ class _ChatPane extends StatefulWidget {
     super.key,
     required this.controller,
     required this.conversationId,
+    this.diagnostics,
   });
 
   final AppController controller;
   final String conversationId;
+  final ChatScrollDiagnostics? diagnostics;
 
   @override
   State<_ChatPane> createState() => _ChatPaneState();
 }
 
-enum _MessageUserScrollDirection { idle, history, bottom }
-
 class _ChatPaneState extends State<_ChatPane> {
-  static const _autoScrollBottomThreshold = 96.0;
-  static const _messageBottomReachedTolerance = 1.0;
+  static const _messageBottomThreshold = 24.0;
+  static const _messageScrollJumpTolerance = 0.5;
   static const _messageBottomSettleFrameCount = 3;
 
   final textController = TextEditingController();
   final messageScrollController = ScrollController();
-  bool messageAutoFollow = true;
-  _MessageUserScrollDirection messageUserScrollDirection =
-      _MessageUserScrollDirection.idle;
+  bool messageIsNearBottom = true;
   int lastMessageListItemCount = -1;
   String? lastMessageId;
   int lastMessageContentLength = -1;
@@ -2439,12 +3057,17 @@ class _ChatPaneState extends State<_ChatPane> {
   bool messageScrollFrameScheduled = false;
   int? pendingMessageScrollVersion;
   int pendingMessageScrollSettleFrames = 0;
+  bool pendingMessageScrollForce = false;
   int messageAutoScrollVersion = 0;
   bool isProgrammaticMessageScroll = false;
   double? lastRecordedMessageScrollOffset;
+  String? activeStreamingDraftMessageId;
+  ValueListenable<ChatStreamingDraft?>? activeStreamingDraftListenable;
+  VoidCallback? activeStreamingDraftListener;
 
   @override
   void dispose() {
+    _clearActiveStreamingDraftSubscription();
     textController.dispose();
     messageScrollController.dispose();
     super.dispose();
@@ -2452,6 +3075,7 @@ class _ChatPaneState extends State<_ChatPane> {
 
   @override
   Widget build(BuildContext context) {
+    widget.diagnostics?.chatPaneBuildCount++;
     final conversation =
         widget.controller.conversationById(widget.conversationId);
     final typingMembers = _typingMembers(widget.controller, conversation);
@@ -2461,8 +3085,11 @@ class _ChatPaneState extends State<_ChatPane> {
                 .where((patch) => patch.status == PatchStatus.pending)
                 .toList()
             : const <PatchProposal>[];
+    final commandRequests =
+        widget.controller.commandRequestsForConversation(conversation.id);
     final messageListItemCount = conversation.messages.length +
         typingMembers.length +
+        commandRequests.length +
         pendingPatches.length;
     final currentLastMessage =
         conversation.messages.isEmpty ? null : conversation.messages.last;
@@ -2480,18 +3107,30 @@ class _ChatPaneState extends State<_ChatPane> {
         currentLastMessageContentLength != lastMessageContentLength ||
             currentLastMessageThinkingLength != lastMessageThinkingLength ||
             currentLastMessageGenerationStatus != lastMessageGenerationStatus;
+    final lastMessageStatusChanged =
+        currentLastMessageGenerationStatus != lastMessageGenerationStatus;
     lastMessageListItemCount = messageListItemCount;
     lastMessageId = currentLastMessageId;
     lastMessageContentLength = currentLastMessageContentLength;
     lastMessageThinkingLength = currentLastMessageThinkingLength;
     lastMessageGenerationStatus = currentLastMessageGenerationStatus;
+    _syncActiveStreamingDraftSubscription(
+      conversation.id,
+      currentLastMessage,
+    );
+    if (lastMessageBodyChanged) {
+      widget.diagnostics?.contentUpdateCount++;
+    }
     if ((messageStructureChanged || lastMessageBodyChanged) &&
-        messageAutoFollow) {
+        messageIsNearBottom) {
+      final needsSettle = currentLastMessageGenerationStatus !=
+              ChatMessageGenerationStatus.streaming &&
+          (messageStructureChanged || lastMessageStatusChanged);
       _scheduleMessageScrollToBottom(
-        settleFrames: _messageBottomSettleFrameCount,
+        settleFrames: needsSettle ? _messageBottomSettleFrameCount : 0,
       );
     }
-    final showBackToBottomButton = !messageAutoFollow;
+    final showBackToBottomButton = !messageIsNearBottom;
     return Column(
       children: [
         Container(
@@ -2542,6 +3181,65 @@ class _ChatPaneState extends State<_ChatPane> {
                   ],
                 ),
               ),
+              PopupMenuButton<String>(
+                tooltip: '会话操作',
+                icon: const Icon(Icons.expand_more_rounded),
+                onSelected: _handleConversationMenuAction,
+                itemBuilder: (menuContext) => [
+                  const PopupMenuItem(
+                    value: 'new',
+                    child: Row(
+                      children: [
+                        Icon(Icons.add_comment_rounded, size: 18),
+                        SizedBox(width: 10),
+                        Text('新增会话'),
+                      ],
+                    ),
+                  ),
+                  const PopupMenuDivider(),
+                  const PopupMenuItem(
+                    enabled: false,
+                    child: Text('历史会话'),
+                  ),
+                  for (final item in widget.controller.conversationHistory)
+                    PopupMenuItem(
+                      value: 'select:${item.id}',
+                      child: Row(
+                        children: [
+                          Icon(
+                            item.memberId == null
+                                ? Icons.forum_rounded
+                                : Icons.person_rounded,
+                            size: 18,
+                          ),
+                          const SizedBox(width: 10),
+                          Flexible(
+                            child: Text(
+                              _conversationMenuTitle(
+                                widget.controller,
+                                item,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          IconButton(
+                            tooltip: '删除会话',
+                            iconSize: 18,
+                            visualDensity: VisualDensity.compact,
+                            onPressed: () => unawaited(
+                              _confirmDeleteConversationSession(
+                                menuContext,
+                                item,
+                              ),
+                            ),
+                            icon: const Icon(Icons.delete_outline_rounded),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
             ],
           ),
         ),
@@ -2557,38 +3255,70 @@ class _ChatPaneState extends State<_ChatPane> {
                   child: NotificationListener<ScrollNotification>(
                     onNotification: (notification) =>
                         _handleMessageScrollNotification(notification),
-                    child: KeyedSubtree(
-                      key: ValueKey(
-                        'chat-message-list-${conversation.id}',
+                    child: NotificationListener<ScrollMetricsNotification>(
+                      onNotification: (notification) =>
+                          _handleMessageScrollMetricsNotification(
+                        notification,
                       ),
-                      child: ListView.builder(
-                        key: const ValueKey('chat-message-list'),
-                        controller: messageScrollController,
-                        padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
-                        itemCount: messageListItemCount,
-                        itemBuilder: (context, index) {
-                          if (index < conversation.messages.length) {
-                            return _MessageBubble(
-                              message: conversation.messages[index],
-                              showAuthorName: conversation.memberId == null,
+                      child: KeyedSubtree(
+                        key: ValueKey(
+                          'chat-message-list-${conversation.id}',
+                        ),
+                        child: ListView.builder(
+                          key: const ValueKey('chat-message-list'),
+                          controller: messageScrollController,
+                          padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
+                          itemCount: messageListItemCount,
+                          itemBuilder: (context, index) {
+                            if (index < conversation.messages.length) {
+                              return _MessageBubble(
+                                message: conversation.messages[index],
+                                conversationId: conversation.id,
+                                showAuthorName: conversation.memberId == null,
+                                draftListenable:
+                                    widget.controller.streamingDraftListenable(
+                                  conversation.messages[index].id,
+                                ),
+                                diagnostics: widget.diagnostics,
+                              );
+                            }
+                            final typingIndex =
+                                index - conversation.messages.length;
+                            if (typingIndex < typingMembers.length) {
+                              return _TypingIndicator(
+                                member: typingMembers[typingIndex],
+                              );
+                            }
+                            final commandIndex =
+                                typingIndex - typingMembers.length;
+                            if (commandIndex < commandRequests.length) {
+                              final request = commandRequests[commandIndex];
+                              return _ChatCommandRequestCard(
+                                request: request,
+                                onApproveExecute: () => unawaited(
+                                  widget.controller
+                                      .approveExecuteCommandRequestAndContinue(
+                                    request.id,
+                                  ),
+                                ),
+                                onReject: () => widget.controller
+                                    .updateCommandRequestStatus(
+                                  request.id,
+                                  CommandRequestStatus.denied,
+                                ),
+                              );
+                            }
+                            final patch = pendingPatches[
+                                commandIndex - commandRequests.length];
+                            return _ChatPatchConfirmationCard(
+                              patch: patch,
+                              onApply: () =>
+                                  widget.controller.applyPatch(patch),
+                              onReject: () =>
+                                  widget.controller.rejectPatch(patch),
                             );
-                          }
-                          final typingIndex =
-                              index - conversation.messages.length;
-                          if (typingIndex < typingMembers.length) {
-                            return _TypingIndicator(
-                              member: typingMembers[typingIndex],
-                            );
-                          }
-                          final patch = pendingPatches[
-                              typingIndex - typingMembers.length];
-                          return _ChatPatchConfirmationCard(
-                            patch: patch,
-                            onApply: () => widget.controller.applyPatch(patch),
-                            onReject: () =>
-                                widget.controller.rejectPatch(patch),
-                          );
-                        },
+                          },
+                        ),
                       ),
                     ),
                   ),
@@ -2630,6 +3360,7 @@ class _ChatPaneState extends State<_ChatPane> {
               borderRadius: BorderRadius.circular(4),
             ),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Expanded(
                   child: Focus(
@@ -2637,47 +3368,32 @@ class _ChatPaneState extends State<_ChatPane> {
                     child: TextField(
                       key: ValueKey('chat-input-${conversation.id}'),
                       controller: textController,
-                      minLines: 1,
+                      minLines: 3,
                       maxLines: 4,
                       decoration: InputDecoration(
                         hintText: _inputHint(widget.controller, conversation),
                         border: InputBorder.none,
                         isDense: true,
                         contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 13,
+                          horizontal: 16,
+                          vertical: 16,
                         ),
                       ),
                       onSubmitted: (_) => _submit(),
                     ),
                   ),
                 ),
-                const IconButton(
-                  tooltip: '表情',
-                  onPressed: null,
-                  icon: Icon(Icons.mood_rounded),
-                ),
-                const IconButton(
-                  tooltip: '提及',
-                  onPressed: null,
-                  icon: Icon(Icons.alternate_email_rounded),
-                ),
-                IconButton.filled(
-                  tooltip: widget.controller.isDispatching ? '停止生成' : '发送',
-                  onPressed: widget.controller
-                          .isConversationDispatching(conversation.id)
-                      ? () => widget.controller
-                          .stopConversationById(conversation.id)
-                      : widget.controller.isDispatching
-                          ? null
-                          : _submit,
-                  icon: Icon(
-                    widget.controller.isConversationDispatching(conversation.id)
-                        ? Icons.stop_rounded
-                        : Icons.send_rounded,
+                Padding(
+                  padding: const EdgeInsets.only(right: 8, bottom: 8),
+                  child: _SplitSendButton(
+                    isDispatching: widget.controller.isDispatching,
+                    isConversationDispatching: widget.controller
+                        .isConversationDispatching(conversation.id),
+                    onSend: _submit,
+                    onStop: () =>
+                        widget.controller.stopConversationById(conversation.id),
                   ),
                 ),
-                const SizedBox(width: 6),
               ],
             ),
           ),
@@ -2690,6 +3406,46 @@ class _ChatPaneState extends State<_ChatPane> {
     final text = textController.text;
     textController.clear();
     await widget.controller.dispatchConversation(widget.conversationId, text);
+  }
+
+  void _handleConversationMenuAction(String value) {
+    if (value == 'new') {
+      widget.controller.createConversationLikeCurrent();
+      return;
+    }
+    const prefix = 'select:';
+    if (value.startsWith(prefix)) {
+      widget.controller.selectConversation(value.substring(prefix.length));
+    }
+  }
+
+  Future<void> _confirmDeleteConversationSession(
+    BuildContext menuContext,
+    Conversation conversation,
+  ) async {
+    Navigator.of(menuContext).pop();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('确认删除该会话？'),
+        content: Text(
+          '删除后将永久移除“${_conversationMenuTitle(widget.controller, conversation)}”及其消息。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed ?? false) {
+      widget.controller.deleteConversationSession(conversation.id);
+    }
   }
 
   KeyEventResult _handleInputKeyEvent(FocusNode node, KeyEvent event) {
@@ -2743,13 +3499,7 @@ class _ChatPaneState extends State<_ChatPane> {
   }
 
   bool _isNearMessageBottomMetrics(ScrollMetrics metrics) {
-    return metrics.maxScrollExtent - metrics.pixels <=
-        _autoScrollBottomThreshold;
-  }
-
-  bool _isAtMessageBottomMetrics(ScrollMetrics metrics) {
-    return metrics.maxScrollExtent - metrics.pixels <=
-        _messageBottomReachedTolerance;
+    return metrics.maxScrollExtent - metrics.pixels <= _messageBottomThreshold;
   }
 
   bool _handleMessageScrollNotification(
@@ -2759,39 +3509,37 @@ class _ChatPaneState extends State<_ChatPane> {
         isProgrammaticMessageScroll) {
       return false;
     }
-    final previousOffset = lastRecordedMessageScrollOffset;
     _recordMessageScrollPosition(
       notification.metrics.pixels,
     );
-    if (notification is ScrollUpdateNotification &&
-        notification.scrollDelta != null) {
-      final scrollDelta = _messageScrollDelta(notification, previousOffset);
-      if (scrollDelta < 0) {
-        _recordMessageScrollDirection(_MessageUserScrollDirection.history);
-        _disableMessageAutoFollow();
-      } else if (scrollDelta > 0) {
-        _recordMessageScrollDirection(_MessageUserScrollDirection.bottom);
-        if (_isNearMessageBottomMetrics(notification.metrics)) {
-          _setMessageAutoFollow(true);
-        }
-      }
-    } else if (notification is ScrollEndNotification) {
-      _restoreMessageAutoFollowAfterUserScrollEnd(notification.metrics);
-    }
+    _syncMessageNearBottom(notification.metrics);
     return false;
   }
 
-  double _messageScrollDelta(
-    ScrollUpdateNotification notification,
-    double? previousOffset,
+  bool _handleMessageScrollMetricsNotification(
+    ScrollMetricsNotification notification,
   ) {
-    if (previousOffset != null) {
-      final delta = notification.metrics.pixels - previousOffset;
-      if (delta != 0) {
-        return delta;
-      }
+    if (notification.metrics.axis != Axis.vertical ||
+        isProgrammaticMessageScroll) {
+      return false;
     }
-    return notification.scrollDelta ?? 0;
+    _recordMessageScrollPosition(notification.metrics.pixels);
+    _syncMessageNearBottom(
+      notification.metrics,
+      canCancelPendingScroll: false,
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !messageScrollController.hasClients) {
+        return;
+      }
+      final position = messageScrollController.position;
+      _recordMessageScrollPosition(position.pixels);
+      _syncMessageNearBottom(
+        position,
+        canCancelPendingScroll: false,
+      );
+    });
+    return false;
   }
 
   void _handleMessagePointerSignal(
@@ -2800,70 +3548,115 @@ class _ChatPaneState extends State<_ChatPane> {
     if (event is! PointerScrollEvent || !messageScrollController.hasClients) {
       return;
     }
-    final position = messageScrollController.position;
-    final scrollDelta = event.scrollDelta.dy;
-    if (scrollDelta < 0 && position.pixels > position.minScrollExtent) {
-      _recordMessageScrollDirection(_MessageUserScrollDirection.history);
-      _disableMessageAutoFollow();
-    } else if (scrollDelta > 0) {
-      _recordMessageScrollDirection(_MessageUserScrollDirection.bottom);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !messageScrollController.hasClients) {
-          return;
-        }
-        _restoreMessageAutoFollowAfterUserScrollEnd(
-          messageScrollController.position,
-        );
-      });
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !messageScrollController.hasClients) {
+        return;
+      }
+      _syncMessageNearBottom(messageScrollController.position);
+    });
   }
 
   void _recordMessageScrollPosition(double offset) {
     lastRecordedMessageScrollOffset = offset;
   }
 
-  void _recordMessageScrollDirection(
-    _MessageUserScrollDirection direction,
-  ) {
-    messageUserScrollDirection = direction;
+  void _syncMessageNearBottom(
+    ScrollMetrics metrics, {
+    bool canCancelPendingScroll = true,
+  }) {
+    _setMessageIsNearBottom(
+      _isNearMessageBottomMetrics(metrics),
+      canCancelPendingScroll: canCancelPendingScroll,
+    );
   }
 
-  void _restoreMessageAutoFollowAfterUserScrollEnd(
-    ScrollMetrics metrics,
-  ) {
-    if (_isAtMessageBottomMetrics(metrics) ||
-        (messageUserScrollDirection == _MessageUserScrollDirection.bottom &&
-            _isNearMessageBottomMetrics(metrics))) {
-      _recordMessageScrollDirection(_MessageUserScrollDirection.idle);
-      _setMessageAutoFollow(true);
+  void _setMessageIsNearBottom(
+    bool value, {
+    bool canCancelPendingScroll = true,
+  }) {
+    final previous = messageIsNearBottom;
+    if (previous &&
+        !value &&
+        !canCancelPendingScroll &&
+        (messageScrollFrameScheduled || pendingMessageScrollVersion != null)) {
+      return;
     }
-  }
-
-  void _setMessageAutoFollow(bool value) {
-    final previous = messageAutoFollow;
-    messageAutoFollow = value;
+    messageIsNearBottom = value;
+    if (previous && !value && canCancelPendingScroll) {
+      _cancelPendingMessageScrollToBottom();
+    }
     if (previous != value && mounted) {
+      widget.diagnostics?.nearBottomFlipCount++;
       setState(() {});
     }
   }
 
-  void _disableMessageAutoFollow() {
-    _cancelPendingMessageAutoScroll();
-    _setMessageAutoFollow(false);
-  }
-
   void _scrollCurrentConversationToBottom() {
-    _setMessageAutoFollow(true);
     _scheduleMessageScrollToBottom(
       settleFrames: _messageBottomSettleFrameCount,
+      force: true,
     );
   }
 
-  void _scheduleMessageScrollToBottom({int settleFrames = 0}) {
+  void _syncActiveStreamingDraftSubscription(
+    String conversationId,
+    ChatMessage? message,
+  ) {
+    final nextMessageId =
+        message?.generationStatus == ChatMessageGenerationStatus.streaming
+            ? message!.id
+            : null;
+    if (nextMessageId == activeStreamingDraftMessageId) {
+      return;
+    }
+    _clearActiveStreamingDraftSubscription();
+    if (nextMessageId == null) {
+      return;
+    }
+    final listenable = widget.controller.streamingDraftListenable(
+      nextMessageId,
+    );
+    late final VoidCallback listener;
+    listener = () {
+      final draft = listenable.value;
+      if (!mounted ||
+          draft == null ||
+          draft.conversationId != conversationId ||
+          draft.message.id != nextMessageId) {
+        return;
+      }
+      widget.diagnostics?.contentUpdateCount++;
+      if (messageIsNearBottom) {
+        _scheduleMessageScrollToBottom();
+      }
+    };
+    listenable.addListener(listener);
+    activeStreamingDraftMessageId = nextMessageId;
+    activeStreamingDraftListenable = listenable;
+    activeStreamingDraftListener = listener;
+  }
+
+  void _clearActiveStreamingDraftSubscription() {
+    final listenable = activeStreamingDraftListenable;
+    final listener = activeStreamingDraftListener;
+    if (listenable != null && listener != null) {
+      listenable.removeListener(listener);
+    }
+    activeStreamingDraftMessageId = null;
+    activeStreamingDraftListenable = null;
+    activeStreamingDraftListener = null;
+  }
+
+  void _scheduleMessageScrollToBottom({
+    int settleFrames = 0,
+    bool force = false,
+  }) {
+    widget.diagnostics?.scrollScheduleCount++;
     pendingMessageScrollVersion = messageAutoScrollVersion;
     if (settleFrames > pendingMessageScrollSettleFrames) {
       pendingMessageScrollSettleFrames = settleFrames;
     }
+    pendingMessageScrollForce = pendingMessageScrollForce || force;
     if (messageScrollFrameScheduled) {
       return;
     }
@@ -2872,17 +3665,21 @@ class _ChatPaneState extends State<_ChatPane> {
       messageScrollFrameScheduled = false;
       final scheduledVersion = pendingMessageScrollVersion;
       final settleFrames = pendingMessageScrollSettleFrames;
+      final force = pendingMessageScrollForce;
       pendingMessageScrollVersion = null;
       pendingMessageScrollSettleFrames = 0;
+      pendingMessageScrollForce = false;
       if (!mounted ||
           !messageScrollController.hasClients ||
-          scheduledVersion != messageAutoScrollVersion ||
-          !messageAutoFollow) {
+          scheduledVersion != messageAutoScrollVersion) {
+        return;
+      }
+      if (!force && !messageIsNearBottom && settleFrames > 0) {
         return;
       }
       final target = messageScrollController.position.maxScrollExtent;
       _jumpMessageScrollTo(target);
-      if (settleFrames > 0 && messageAutoFollow) {
+      if (settleFrames > 0 && (force || messageIsNearBottom)) {
         _scheduleMessageScrollToBottom(
           settleFrames: settleFrames - 1,
         );
@@ -2890,20 +3687,182 @@ class _ChatPaneState extends State<_ChatPane> {
     });
   }
 
-  void _cancelPendingMessageAutoScroll() {
+  void _cancelPendingMessageScrollToBottom() {
     pendingMessageScrollVersion = null;
     pendingMessageScrollSettleFrames = 0;
+    pendingMessageScrollForce = false;
     messageAutoScrollVersion++;
   }
 
   void _jumpMessageScrollTo(double target) {
+    final position = messageScrollController.position;
+    final beforePixels = position.pixels;
+    final beforeMaxScrollExtent = position.maxScrollExtent;
+    final correctionDistance = target - beforePixels;
+    if (correctionDistance.abs() <= _messageScrollJumpTolerance) {
+      _recordMessageScrollPosition(position.pixels);
+      _setMessageIsNearBottom(_isNearMessageBottom());
+      return;
+    }
     isProgrammaticMessageScroll = true;
     messageScrollController.jumpTo(target);
     isProgrammaticMessageScroll = false;
+    final afterPosition = messageScrollController.position;
+    final diagnostics = widget.diagnostics;
+    if (diagnostics != null) {
+      diagnostics.actualJumpCount++;
+      diagnostics.jumpSamples.add(
+        ChatScrollJumpSample(
+          beforePixels: beforePixels,
+          beforeMaxScrollExtent: beforeMaxScrollExtent,
+          target: target,
+          afterPixels: afterPosition.pixels,
+          afterMaxScrollExtent: afterPosition.maxScrollExtent,
+        ),
+      );
+    }
     _recordMessageScrollPosition(
       messageScrollController.position.pixels,
     );
-    _setMessageAutoFollow(_isNearMessageBottom());
+    _setMessageIsNearBottom(_isNearMessageBottom());
+  }
+}
+
+enum _SendButtonMenuAction { send, stop }
+
+class _SplitSendButton extends StatelessWidget {
+  const _SplitSendButton({
+    required this.isDispatching,
+    required this.isConversationDispatching,
+    required this.onSend,
+    required this.onStop,
+  });
+
+  final bool isDispatching;
+  final bool isConversationDispatching;
+  final VoidCallback onSend;
+  final VoidCallback onStop;
+
+  @override
+  Widget build(BuildContext context) {
+    final primaryAction = isConversationDispatching
+        ? onStop
+        : isDispatching
+            ? null
+            : onSend;
+    final menuAction = isConversationDispatching
+        ? _SendButtonMenuAction.stop
+        : isDispatching
+            ? null
+            : _SendButtonMenuAction.send;
+    final enabled = primaryAction != null;
+    final backgroundColor =
+        enabled ? const Color(0xFF0EA5E9) : const Color(0xFFB8DDF0);
+    final foregroundColor =
+        enabled ? Colors.white : Colors.white.withValues(alpha: 0.72);
+
+    return ClipRRect(
+      key: const ValueKey('chat-send-button'),
+      borderRadius: BorderRadius.circular(4),
+      child: Material(
+        color: backgroundColor,
+        child: SizedBox(
+          height: 32,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Tooltip(
+                message: isConversationDispatching ? '停止生成' : '发送',
+                child: InkWell(
+                  onTap: primaryAction,
+                  child: SizedBox(
+                    width: 66,
+                    height: 32,
+                    child: Center(
+                      child: isConversationDispatching
+                          ? Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.stop_rounded,
+                                  size: 14,
+                                  color: foregroundColor,
+                                ),
+                                const SizedBox(width: 3),
+                                Text(
+                                  '停止',
+                                  style: TextStyle(
+                                    color: foregroundColor,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : Text(
+                              '发送(S)',
+                              style: TextStyle(
+                                color: foregroundColor,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                    ),
+                  ),
+                ),
+              ),
+              Container(width: 1, height: 18, color: Colors.white24),
+              MenuAnchor(
+                alignmentOffset: const Offset(-70, 4),
+                menuChildren: [
+                  if (menuAction != null)
+                    MenuItemButton(
+                      onPressed: () {
+                        switch (menuAction) {
+                          case _SendButtonMenuAction.send:
+                            onSend();
+                          case _SendButtonMenuAction.stop:
+                            onStop();
+                        }
+                      },
+                      child: Text(
+                        menuAction == _SendButtonMenuAction.stop
+                            ? '停止生成'
+                            : '发送',
+                      ),
+                    ),
+                ],
+                builder: (context, controller, child) {
+                  return Tooltip(
+                    message: '发送选项',
+                    child: InkWell(
+                      onTap: menuAction == null
+                          ? null
+                          : () {
+                              if (controller.isOpen) {
+                                controller.close();
+                              } else {
+                                controller.open();
+                              }
+                            },
+                      child: SizedBox(
+                        width: 26,
+                        height: 32,
+                        child: Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 16,
+                          color: foregroundColor,
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -2953,11 +3912,17 @@ class _TypingIndicator extends StatelessWidget {
 class _MessageBubble extends StatefulWidget {
   const _MessageBubble({
     required this.message,
+    required this.conversationId,
     required this.showAuthorName,
+    required this.draftListenable,
+    this.diagnostics,
   });
 
   final ChatMessage message;
+  final String conversationId;
   final bool showAuthorName;
+  final ValueListenable<ChatStreamingDraft?> draftListenable;
+  final ChatScrollDiagnostics? diagnostics;
 
   @override
   State<_MessageBubble> createState() => _MessageBubbleState();
@@ -2969,6 +3934,7 @@ class _MessageBubbleState extends State<_MessageBubble> {
   bool copied = false;
   Timer? copyResetTimer;
   Timer? streamingTitleTimer;
+  ChatMessage? latestDisplayedMessage;
 
   @override
   void initState() {
@@ -3019,7 +3985,29 @@ class _MessageBubbleState extends State<_MessageBubble> {
 
   @override
   Widget build(BuildContext context) {
-    final message = widget.message;
+    return ValueListenableBuilder<ChatStreamingDraft?>(
+      valueListenable: widget.draftListenable,
+      builder: (context, draft, _) {
+        final message = draft != null &&
+                draft.conversationId == widget.conversationId &&
+                draft.message.id == widget.message.id
+            ? draft.message
+            : widget.message;
+        return _buildMessage(context, message);
+      },
+    );
+  }
+
+  Widget _buildMessage(BuildContext context, ChatMessage message) {
+    latestDisplayedMessage = message;
+    final messageBuildCounts = widget.diagnostics?.messageBubbleBuildCounts;
+    if (messageBuildCounts != null) {
+      messageBuildCounts.update(
+        widget.message.id,
+        (count) => count + 1,
+        ifAbsent: () => 1,
+      );
+    }
     final alignRight = message.isUser;
     final showAuthorName = !alignRight && widget.showAuthorName;
     final thinkingContent =
@@ -3029,6 +4017,27 @@ class _MessageBubbleState extends State<_MessageBubble> {
         : null;
     final showMessageHeader =
         !alignRight && (showAuthorName || inlineStatus != null);
+    final showReplyBubble =
+        !_isStreamingThinkingWithoutReplyContent(message, thinkingContent);
+    final thinkingSection = thinkingContent == null
+        ? null
+        : ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 680),
+            child: _MessageThinkingDisclosure(
+              partitionKey: message.id,
+              content: thinkingContent,
+              title: _thinkingTitle(message),
+              expanded: thinkingExpanded,
+              streaming: message.generationStatus ==
+                  ChatMessageGenerationStatus.streaming,
+              diagnostics: widget.diagnostics,
+              onToggle: () {
+                setState(() {
+                  thinkingExpanded = !thinkingExpanded;
+                });
+              },
+            ),
+          );
     final bubble = Container(
       constraints: const BoxConstraints(maxWidth: 680),
       padding: const EdgeInsets.all(14),
@@ -3042,19 +4051,6 @@ class _MessageBubbleState extends State<_MessageBubble> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (thinkingContent != null) ...[
-            _MessageThinkingDisclosure(
-              content: thinkingContent,
-              title: _thinkingTitle(message),
-              expanded: thinkingExpanded,
-              onToggle: () {
-                setState(() {
-                  thinkingExpanded = !thinkingExpanded;
-                });
-              },
-            ),
-            const SizedBox(height: 10),
-          ],
           if (_isAwaitingFirstModelOutput(message))
             Text(
               '正在输入中',
@@ -3067,6 +4063,7 @@ class _MessageBubbleState extends State<_MessageBubble> {
             _MessageBody(
               key: ValueKey('message-body-${message.id}'),
               message: message,
+              diagnostics: widget.diagnostics,
             ),
         ],
       ),
@@ -3136,12 +4133,19 @@ class _MessageBubbleState extends State<_MessageBubble> {
           ),
           const SizedBox(height: 4),
         ],
-        bubble,
-        const SizedBox(height: 4),
-        Align(
-          alignment: alignRight ? Alignment.centerRight : Alignment.centerLeft,
-          child: actionSlot,
-        ),
+        if (thinkingSection != null) ...[
+          thinkingSection,
+          if (showReplyBubble) const SizedBox(height: 8),
+        ],
+        if (showReplyBubble) ...[
+          bubble,
+          const SizedBox(height: 4),
+          Align(
+            alignment:
+                alignRight ? Alignment.centerRight : Alignment.centerLeft,
+            child: actionSlot,
+          ),
+        ],
       ],
     );
     return MouseRegion(
@@ -3190,7 +4194,12 @@ class _MessageBubbleState extends State<_MessageBubble> {
   }
 
   void _copyMessage() {
-    unawaited(Clipboard.setData(ClipboardData(text: widget.message.content)));
+    unawaited(
+      Clipboard.setData(
+        ClipboardData(
+            text: latestDisplayedMessage?.content ?? widget.message.content),
+      ),
+    );
     copyResetTimer?.cancel();
     setState(() => copied = true);
     copyResetTimer = Timer(const Duration(seconds: 2), () {
@@ -3202,20 +4211,34 @@ class _MessageBubbleState extends State<_MessageBubble> {
 }
 
 class _MessageBody extends StatelessWidget {
-  const _MessageBody({super.key, required this.message});
+  const _MessageBody({
+    super.key,
+    required this.message,
+    this.diagnostics,
+  });
 
   final ChatMessage message;
+  final ChatScrollDiagnostics? diagnostics;
 
   @override
   Widget build(BuildContext context) {
     if (message.isUser || message.authorName == '系统') {
       return SelectableText(message.content);
     }
+    if (message.generationStatus == ChatMessageGenerationStatus.streaming) {
+      return _StreamingPartitionedText(
+        key: ValueKey('streaming-message-body-${message.id}'),
+        partitionKey: message.id,
+        content: message.content,
+        diagnostics: diagnostics,
+      );
+    }
     final theme = Theme.of(context);
     final bodyStyle = theme.textTheme.bodyMedium?.copyWith(
       color: const Color(0xFF1A1B21),
       height: 1.45,
     );
+    diagnostics?.markdownBodyBuildCount++;
     return MarkdownBody(
       data: message.content,
       selectable: true,
@@ -3286,74 +4309,214 @@ class _MessageBody extends StatelessWidget {
   }
 }
 
+class _StreamingPartitionedText extends StatefulWidget {
+  const _StreamingPartitionedText({
+    super.key,
+    required this.partitionKey,
+    required this.content,
+    this.diagnostics,
+    this.isThinking = false,
+  });
+
+  final String partitionKey;
+  final String content;
+  final ChatScrollDiagnostics? diagnostics;
+  final bool isThinking;
+
+  @override
+  State<_StreamingPartitionedText> createState() =>
+      _StreamingPartitionedTextState();
+}
+
+class _StreamingPartitionedTextState extends State<_StreamingPartitionedText> {
+  final partition = StreamingTextPartition();
+  final stableSegments = <Widget>[];
+
+  @override
+  void initState() {
+    super.initState();
+    _applyContent(widget.content, reset: true);
+  }
+
+  @override
+  void didUpdateWidget(covariant _StreamingPartitionedText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.partitionKey != widget.partitionKey) {
+      _applyContent(widget.content, reset: true);
+      return;
+    }
+    if (oldWidget.content != widget.content) {
+      _applyContent(widget.content);
+    }
+  }
+
+  void _applyContent(String content, {bool reset = false}) {
+    final update = partition.apply(content, reset: reset);
+    if (update.reset) {
+      stableSegments.clear();
+    }
+    for (final stableText in update.newStableSegments) {
+      stableSegments.add(
+        _StableStreamingTextSegment(
+          key: ValueKey(
+            'streaming-stable-${widget.partitionKey}-${stableSegments.length}',
+          ),
+          text: stableText,
+          isThinking: widget.isThinking,
+        ),
+      );
+      widget.diagnostics?.streamingStableSegmentCommitCount++;
+    }
+    if (update.tailChanged) {
+      widget.diagnostics?.streamingTailUpdateCount++;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.isThinking) {
+      widget.diagnostics?.streamingThinkingBuildCount++;
+    } else {
+      widget.diagnostics?.streamingBodyBuildCount++;
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ...stableSegments,
+        if (partition.liveTail.isNotEmpty)
+          _StreamingLiveTailText(
+            text: partition.liveTail,
+            isThinking: widget.isThinking,
+          ),
+      ],
+    );
+  }
+}
+
+class _StableStreamingTextSegment extends StatelessWidget {
+  const _StableStreamingTextSegment({
+    super.key,
+    required this.text,
+    required this.isThinking,
+  });
+
+  final String text;
+  final bool isThinking;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(text, style: _streamingTextStyle(context, isThinking));
+  }
+}
+
+class _StreamingLiveTailText extends StatelessWidget {
+  const _StreamingLiveTailText({
+    required this.text,
+    required this.isThinking,
+  });
+
+  final String text;
+  final bool isThinking;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(text, style: _streamingTextStyle(context, isThinking));
+  }
+}
+
+TextStyle? _streamingTextStyle(BuildContext context, bool isThinking) {
+  if (isThinking) {
+    return TextStyle(
+      color: Colors.grey.shade700,
+      height: 1.45,
+    );
+  }
+  return Theme.of(context).textTheme.bodyMedium?.copyWith(
+        color: const Color(0xFF1A1B21),
+        height: 1.45,
+      );
+}
+
 class _MessageThinkingDisclosure extends StatelessWidget {
   const _MessageThinkingDisclosure({
+    required this.partitionKey,
     required this.content,
     required this.title,
     required this.expanded,
+    required this.streaming,
+    this.diagnostics,
     required this.onToggle,
   });
 
+  final String partitionKey;
   final String content;
   final String title;
   final bool expanded;
+  final bool streaming;
+  final ChatScrollDiagnostics? diagnostics;
   final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Container(
-      decoration: BoxDecoration(
-        color: const Color(0xFFF7F8FA),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            onTap: onToggle,
-            borderRadius: BorderRadius.circular(6),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    expanded
-                        ? Icons.keyboard_arrow_down_rounded
-                        : Icons.keyboard_arrow_right_rounded,
-                    size: 18,
-                    color: colors.primary,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    title,
-                    style: TextStyle(
-                      color: colors.primary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          if (expanded)
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 240),
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-                child: SelectableText(
-                  content,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        InkWell(
+          onTap: onToggle,
+          borderRadius: BorderRadius.circular(4),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
                   style: TextStyle(
-                    color: Colors.grey.shade700,
-                    height: 1.45,
+                    color: Colors.grey.shade600,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-              ),
+                const SizedBox(width: 4),
+                Icon(
+                  expanded
+                      ? Icons.keyboard_arrow_down_rounded
+                      : Icons.keyboard_arrow_right_rounded,
+                  size: 20,
+                  color: Colors.grey.shade600,
+                ),
+              ],
             ),
+          ),
+        ),
+        if (expanded) ...[
+          const SizedBox(height: 4),
+          const Divider(height: 1, thickness: 1, color: Color(0xFFE5E7EB)),
+          const SizedBox(height: 8),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 240),
+            child: SingleChildScrollView(
+              child: streaming
+                  ? _StreamingPartitionedText(
+                      key: ValueKey('streaming-thinking-$partitionKey'),
+                      partitionKey: partitionKey,
+                      content: content,
+                      diagnostics: diagnostics,
+                      isThinking: true,
+                    )
+                  : SelectableText(
+                      content,
+                      style: TextStyle(
+                        color: Colors.grey.shade700,
+                        height: 1.45,
+                      ),
+                    ),
+            ),
+          ),
         ],
-      ),
+      ],
     );
   }
 }
@@ -3791,7 +4954,10 @@ class _AuditLogRow extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 4),
-          Text(entry.detail, style: TextStyle(color: Colors.grey.shade700)),
+          Text(
+            _auditDisplayDetail(entry),
+            style: TextStyle(color: Colors.grey.shade700),
+          ),
           const SizedBox(height: 4),
           Text(
             '创建时间：${_auditLogTimeText(entry.createdAt)}',
@@ -3807,9 +4973,8 @@ void _showAuditLogDetails(BuildContext context, AuditEntry entry) {
   final metadata = entry.metadata ?? const <String, Object?>{};
   final rawResponse = metadata['rawResponse'] as String?;
   final requestBody = metadata['requestBody'];
-  final structuredEntries = metadata.entries
-      .where((item) => item.key != 'rawResponse' && item.key != 'requestBody')
-      .toList(growable: false);
+  final requestModel = _auditRequestModel(requestBody);
+  final structuredEntries = _auditStructuredEntries(metadata, requestModel);
   showDialog<void>(
     context: context,
     builder: (context) => AlertDialog(
@@ -3835,7 +5000,7 @@ void _showAuditLogDetails(BuildContext context, AuditEntry entry) {
               ),
               _AuditDetailSection(
                 title: '摘要',
-                child: SelectableText(entry.detail),
+                child: SelectableText(_auditDisplayDetail(entry)),
               ),
               if (structuredEntries.isNotEmpty)
                 _AuditDetailSection(
@@ -3893,6 +5058,83 @@ void _showAuditLogDetails(BuildContext context, AuditEntry entry) {
       ],
     ),
   );
+}
+
+String _auditDisplayDetail(AuditEntry entry) {
+  final requestModel = _auditRequestModel(entry.metadata?['requestBody']);
+  final tokens = entry.detail.split(' ');
+  final sanitizedTokens = <String>[];
+  for (final token in tokens) {
+    if (token.startsWith('model=') || token.startsWith('targetModel=')) {
+      final separator = token.indexOf('=');
+      final key = token.substring(0, separator);
+      final value = token.substring(separator + 1);
+      if (_isInternalModelProfileId(value)) {
+        if (key == 'model' && requestModel != null) {
+          sanitizedTokens.add('$key=$requestModel');
+        }
+        continue;
+      }
+    }
+    sanitizedTokens.add(token);
+  }
+  return sanitizedTokens.join(' ');
+}
+
+List<MapEntry<String, Object?>> _auditStructuredEntries(
+  Map<String, Object?> metadata,
+  String? requestModel,
+) {
+  final entries = <MapEntry<String, Object?>>[];
+  var addedRequestModel = false;
+  for (final item in metadata.entries) {
+    if (item.key == 'rawResponse' || item.key == 'requestBody') {
+      continue;
+    }
+    if (item.key == 'model') {
+      if (requestModel != null) {
+        entries.add(MapEntry(item.key, requestModel));
+        addedRequestModel = true;
+      } else if (!_isInternalModelProfileId(item.value)) {
+        entries.add(item);
+      }
+      continue;
+    }
+    if (item.key == 'modelName') {
+      entries.add(MapEntry('modelProfileName', item.value));
+      continue;
+    }
+    if (item.key.toLowerCase().contains('model') &&
+        _isInternalModelProfileId(item.value)) {
+      continue;
+    }
+    entries.add(item);
+  }
+  if (!addedRequestModel &&
+      requestModel != null &&
+      !metadata.containsKey('model')) {
+    entries.add(MapEntry('model', requestModel));
+  }
+  return entries;
+}
+
+String? _auditRequestModel(Object? requestBody) {
+  if (requestBody is Map) {
+    final model = requestBody['model'];
+    if (model is String && model.trim().isNotEmpty) {
+      return model;
+    }
+  }
+  return null;
+}
+
+bool _isInternalModelProfileId(Object? value) {
+  if (value is! String) {
+    return false;
+  }
+  return value == 'model-main' ||
+      value == 'model-local' ||
+      RegExp(r'^model-\d{10,}$').hasMatch(value);
 }
 
 class _AuditDetailSection extends StatelessWidget {
@@ -4758,6 +6000,107 @@ class _ChatPatchConfirmationCard extends StatelessWidget {
   }
 }
 
+class _ChatCommandRequestCard extends StatelessWidget {
+  const _ChatCommandRequestCard({
+    required this.request,
+    required this.onApproveExecute,
+    required this.onReject,
+  });
+
+  final CommandRequest request;
+  final VoidCallback onApproveExecute;
+  final VoidCallback onReject;
+
+  @override
+  Widget build(BuildContext context) {
+    final title = switch (request.status) {
+      CommandRequestStatus.pending => '待确认命令',
+      CommandRequestStatus.approved => '已允许命令',
+      CommandRequestStatus.executed => '命令已执行',
+      CommandRequestStatus.failed => '命令执行失败',
+      CommandRequestStatus.denied => '命令已拒绝',
+    };
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        border: Border.all(color: const Color(0xFFCBD5E1)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.terminal_rounded, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+              Text(
+                request.memberName,
+                style: TextStyle(
+                  color: Colors.grey.shade700,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          SelectableText(
+            '${request.workingDirectory}\n\$ ${request.command}',
+            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+          ),
+          if (request.status == CommandRequestStatus.pending ||
+              request.status == CommandRequestStatus.approved) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: onApproveExecute,
+                  icon: Icon(
+                    request.status == CommandRequestStatus.pending
+                        ? Icons.check_rounded
+                        : Icons.play_arrow_rounded,
+                  ),
+                  label: Text(
+                    request.status == CommandRequestStatus.pending
+                        ? '批准并执行'
+                        : '执行',
+                  ),
+                ),
+                if (request.status == CommandRequestStatus.pending)
+                  OutlinedButton.icon(
+                    onPressed: onReject,
+                    icon: const Icon(Icons.close_rounded),
+                    label: const Text('拒绝'),
+                  ),
+              ],
+            ),
+          ],
+          if (request.output != null && request.output!.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            SelectableText(
+              request.output!,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
 class _CommandRequestCard extends StatelessWidget {
   const _CommandRequestCard({
     required this.request,
@@ -5568,30 +6911,43 @@ Future<void> _showWorkspaceFilesDialog(
                       controller.listWorkspaceFiles(workspaceId: workspaceId);
                 }),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               Expanded(
-                child: FutureBuilder<List<String>>(
-                  future: filesFuture,
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState != ConnectionState.done) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (snapshot.hasError) {
-                      return _DialogError('读取文件列表失败：${snapshot.error}');
-                    }
-                    final files = snapshot.data ?? const [];
-                    if (files.isEmpty) {
-                      return const Center(child: Text('没有可显示的文件'));
-                    }
-                    return ListView.builder(
-                      itemCount: files.length,
-                      itemBuilder: (context, index) => ListTile(
-                        dense: true,
-                        leading: const Icon(Icons.description_rounded),
-                        title: SelectableText(files[index]),
-                      ),
-                    );
-                  },
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(color: const Color(0xFFDDE5F0)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: FutureBuilder<List<String>>(
+                    future: filesFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState != ConnectionState.done) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      if (snapshot.hasError) {
+                        return Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: _DialogError('读取文件列表失败：${snapshot.error}'),
+                        );
+                      }
+                      final files = snapshot.data ?? const [];
+                      if (files.isEmpty) {
+                        return const Center(child: Text('没有可显示的文件'));
+                      }
+                      return ListView.separated(
+                        itemCount: files.length,
+                        separatorBuilder: (context, index) => const Divider(
+                          height: 1,
+                          color: Color(0xFFE5E7EB),
+                        ),
+                        itemBuilder: (context, index) => ListTile(
+                          dense: true,
+                          leading: const Icon(Icons.description_rounded),
+                          title: SelectableText(files[index]),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
             ],
@@ -5649,6 +7005,7 @@ Future<void> _showCommandDialog(
                     .toList(),
                 onChanged: (value) => setDialogState(() => memberId = value!),
               ),
+              const SizedBox(height: 12),
               _DialogField(controller: workingDirectory, label: '工作目录'),
               _DialogField(controller: command, label: '命令'),
             ],
@@ -6034,9 +7391,9 @@ String _modelName(AppState state, String modelId) =>
 
 String _conversationTitle(AppController controller, Conversation conversation) {
   if (conversation.memberId == null) {
-    return '群聊 · ${controller.teamForConversation(conversation.id).name}';
+    return '群聊 · ${_conversationDisplayTitle(controller, conversation)}';
   }
-  return '私聊 · ${conversation.title}';
+  return '私聊 · ${_conversationDisplayTitle(controller, conversation)}';
 }
 
 String _messageTimeText(DateTime value) {
@@ -6071,7 +7428,7 @@ String _inputHint(AppController controller, Conversation conversation) {
   if (conversation.memberId == null) {
     return '发给 ${controller.teamForConversation(conversation.id).name}';
   }
-  return '发给 ${conversation.title}';
+  return '发给 ${_conversationSubjectTitle(controller, conversation)}';
 }
 
 String _avatarText(String name) {
@@ -6098,6 +7455,75 @@ String _conversationPreview(Conversation conversation) {
   }
   final message = conversation.messages.last;
   return '${message.authorName}: ${message.content}'.replaceAll('\n', ' ');
+}
+
+String _conversationDisplayTitle(
+  AppController controller,
+  Conversation conversation,
+) {
+  final title = _distinctConversationTitle(conversation);
+  if (title != null) {
+    return title;
+  }
+  if (conversation.messages.isEmpty) {
+    return '新会话';
+  }
+  return _conversationSubjectTitle(controller, conversation);
+}
+
+String _conversationSubjectTitle(
+  AppController controller,
+  Conversation conversation,
+) {
+  if (conversation.memberId == null) {
+    return controller.teamForConversation(conversation.id).name;
+  }
+  final member = controller.state.members.firstWhere(
+    (item) => item.id == conversation.memberId,
+  );
+  return member.name;
+}
+
+String? _distinctConversationTitle(Conversation conversation) {
+  final title = conversation.title.trim();
+  if (title.isEmpty || title == '团队会话') {
+    return null;
+  }
+  if (conversation.messages.isNotEmpty &&
+      _conversationPreview(conversation).trim() == title) {
+    return null;
+  }
+  String? firstUserMessage;
+  for (final message in conversation.messages) {
+    if (message.isUser) {
+      firstUserMessage = message.content.trim();
+      break;
+    }
+  }
+  if (firstUserMessage == title) {
+    return null;
+  }
+  return title;
+}
+
+String? _normalizeGeneratedConversationTitle(
+  String value, {
+  required Conversation conversation,
+  required String firstUserMessage,
+}) {
+  final title = value
+      .trim()
+      .split(RegExp(r'[\r\n]+'))
+      .first
+      .trim()
+      .replaceAll(RegExp(r"""^["“”'‘’]+|["“”'‘’]+$"""), '')
+      .trim();
+  if (title.isEmpty ||
+      title == firstUserMessage.trim() ||
+      title == _conversationPreview(conversation).trim()) {
+    return null;
+  }
+  return title.length > 32 ? title.substring(0, 32) : title;
 }
 
 String? _normalizedThinkingContent(ChatMessage message) {
@@ -6135,6 +7561,16 @@ bool _isAwaitingFirstModelOutput(ChatMessage message) {
       (message.thinkingContent?.trim().isEmpty ?? true);
 }
 
+bool _isStreamingThinkingWithoutReplyContent(
+  ChatMessage message,
+  String? thinkingContent,
+) {
+  return !message.isUser &&
+      message.generationStatus == ChatMessageGenerationStatus.streaming &&
+      message.content.trim().isEmpty &&
+      thinkingContent != null;
+}
+
 String _messageGenerationDurationText(ChatMessage message) {
   final milliseconds =
       message.generationStatus == ChatMessageGenerationStatus.streaming
@@ -6163,18 +7599,17 @@ String _conversationListTitle(
   AppController controller,
   Conversation conversation,
 ) {
-  if (conversation.memberId == null) {
-    return controller.state.teams
-        .firstWhere((team) => team.id == conversation.teamId)
-        .name;
-  }
-  return conversation.title;
+  return _conversationDisplayTitle(controller, conversation);
 }
 
 String _conversationListSubtitle(
   AppController controller,
   Conversation conversation,
 ) {
+  if (conversation.messages.isEmpty) {
+    final prefix = conversation.memberId == null ? '群聊' : '私聊';
+    return '$prefix · ${_conversationSubjectTitle(controller, conversation)}';
+  }
   if (conversation.memberId == null) {
     return _conversationPreview(conversation);
   }
@@ -6210,6 +7645,18 @@ String _privateConversationPreview(
     return _conversationPreview(conversation);
   }
   return _roleName(controller.state, member.roleId);
+}
+
+String _conversationMenuTitle(
+  AppController controller,
+  Conversation conversation,
+) {
+  final title = _conversationDisplayTitle(controller, conversation);
+  final subject = _conversationSubjectTitle(controller, conversation);
+  if (title == subject) {
+    return title;
+  }
+  return '$title · $subject';
 }
 
 List<TeamMember> _typingMembers(

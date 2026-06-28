@@ -194,6 +194,9 @@ void main() {
             command: 'flutter test',
             workingDirectory: '/workspace/app',
             decision: CommandDecision.requiresConfirmation,
+            conversationId: 'conv-member-tester',
+            memberId: 'member-tester',
+            toolCallId: 'call-command-1',
           ),
         ],
         patchProposals: const [
@@ -220,6 +223,12 @@ void main() {
       expect(imported.commandRequests.single.command, 'flutter test');
       expect(
           imported.commandRequests.single.status, CommandRequestStatus.pending);
+      expect(
+        imported.commandRequests.single.conversationId,
+        'conv-member-tester',
+      );
+      expect(imported.commandRequests.single.memberId, 'member-tester');
+      expect(imported.commandRequests.single.toolCallId, 'call-command-1');
       expect(imported.patchProposals.single.memberName, '前端工程师');
       expect(imported.patchProposals.single.status, PatchStatus.pending);
       expect(
@@ -237,6 +246,22 @@ void main() {
         ).taskAssignments,
         isEmpty,
       );
+    });
+
+    test('loads legacy command requests without source metadata', () {
+      final request = CommandRequest.fromJson({
+        'id': 'command-legacy',
+        'memberName': '秘书',
+        'command': 'df -h /',
+        'workingDirectory': '/',
+        'decision': 'requiresConfirmation',
+        'status': 'pending',
+        'createdAt': DateTime(2026, 6, 28).toIso8601String(),
+      });
+
+      expect(request.conversationId, isNull);
+      expect(request.memberId, isNull);
+      expect(request.toolCallId, isNull);
     });
   });
 
@@ -505,6 +530,61 @@ void main() {
         CommandDecision.requiresConfirmation,
       );
     });
+
+    test('treats wildcard command allow as safe policy wildcard only', () {
+      const policy = CommandPolicy(
+        allowedCommands: ['*'],
+        blockedCommands: ['rm'],
+        allowedDirectories: ['/workspace/app'],
+        requiresConfirmation: true,
+      );
+
+      expect(
+        policy.evaluate('df -h /', workingDirectory: '/workspace/app'),
+        CommandDecision.requiresConfirmation,
+      );
+      expect(
+        policy.evaluate('rm -rf .', workingDirectory: '/workspace/app'),
+        CommandDecision.denied,
+      );
+      expect(
+        policy.evaluate(
+          'du -xhd1 / 2>/dev/null | sort -h',
+          workingDirectory: '/workspace/app',
+        ),
+        CommandDecision.denied,
+      );
+      expect(
+        policy.evaluate('df -h /', workingDirectory: '/tmp/app'),
+        CommandDecision.denied,
+      );
+    });
+
+    test('wildcard command allow still honors confirmation flag', () {
+      const policy = CommandPolicy(
+        allowedCommands: ['*'],
+        blockedCommands: [],
+        allowedDirectories: [],
+        requiresConfirmation: false,
+      );
+
+      expect(
+        policy.evaluate('df -h /', workingDirectory: '/workspace/app'),
+        CommandDecision.allowed,
+      );
+    });
+
+    test('allowed command requests start approved instead of pending', () {
+      final request = CommandRequest.pending(
+        id: 'command-allowed',
+        memberName: '秘书',
+        command: 'df -h /',
+        workingDirectory: '/',
+        decision: CommandDecision.allowed,
+      );
+
+      expect(request.status, CommandRequestStatus.approved);
+    });
   });
 
   group('secretary orchestration', () {
@@ -605,7 +685,11 @@ void main() {
       );
 
       expect(requestLog.detail, contains('member=member-secretary'));
+      expect(requestLog.detail,
+          contains('url=https://api.openai.com/v1/chat/completions'));
       expect(requestLog.detail, isNot(contains('失败也要记录请求')));
+      expect(requestLog.metadata!['requestUrl'],
+          'https://api.openai.com/v1/chat/completions');
       expect(requestLog.metadata!['requestBody'], isA<Map>());
       expect(jsonEncode(requestLog.metadata), contains('失败也要记录请求'));
       expect(jsonEncode(requestLog.metadata), isNot(contains('test-secret')));
@@ -662,9 +746,14 @@ void main() {
       expect(updated.auditLog.indexOf(requestLog),
           lessThan(updated.auditLog.indexOf(diagnosticLog)));
       expect(requestLog.detail, contains('member=member-secretary'));
-      expect(requestLog.detail, contains('model=model-main'));
+      expect(requestLog.detail, contains('model=gpt-4.1'));
+      expect(requestLog.detail,
+          contains('url=https://api.openai.com/v1/chat/completions'));
+      expect(requestLog.detail, isNot(contains('model-main')));
       expect(requestLog.detail, contains('streaming=true'));
       expect(requestLog.detail, isNot(contains('解释实现方案')));
+      expect(requestLog.metadata!['requestUrl'],
+          'https://api.openai.com/v1/chat/completions');
       expect(requestLog.metadata!['requestBody'], isA<Map>());
       final requestBody =
           requestLog.metadata!['requestBody'] as Map<String, Object?>;
@@ -678,6 +767,8 @@ void main() {
         isNot(contains('秘书: ')),
       );
       expect(jsonEncode(requestLog.metadata), contains('解释实现方案'));
+      expect(requestLog.metadata!['model'], 'gpt-4.1');
+      expect(jsonEncode(requestLog.metadata), isNot(contains('model-main')));
       expect(jsonEncode(requestLog.metadata), isNot(contains('test-secret')));
       expect(jsonEncode(requestLog.metadata), isNot(contains('apiKey')));
       expect(
@@ -685,7 +776,10 @@ void main() {
         isNot(contains('Authorization')),
       );
       expect(diagnosticLog.detail, contains('member=member-secretary'));
-      expect(diagnosticLog.detail, contains('model=model-main'));
+      expect(diagnosticLog.detail, contains('model=gpt-4.1'));
+      expect(diagnosticLog.detail,
+          contains('url=https://api.openai.com/v1/chat/completions'));
+      expect(diagnosticLog.detail, isNot(contains('model-main')));
       expect(diagnosticLog.detail, contains('streaming=false'));
       expect(diagnosticLog.detail,
           contains('thinkingFieldKeys=reasoning_content'));
@@ -710,7 +804,10 @@ void main() {
         isNot(contains('Authorization')),
       );
       expect(diagnosticLog.metadata!['streaming'], isFalse);
-      expect(diagnosticLog.metadata!['model'], 'model-main');
+      expect(diagnosticLog.metadata!['model'], 'gpt-4.1');
+      expect(diagnosticLog.metadata!['requestUrl'],
+          'https://api.openai.com/v1/chat/completions');
+      expect(jsonEncode(diagnosticLog.metadata), isNot(contains('model-main')));
       expect(diagnosticLog.metadata!['message'], messages.last.id);
       expect(diagnosticLog.metadata!['member'], 'member-secretary');
     });
@@ -846,14 +943,13 @@ void main() {
             entry.action == 'model_request_diagnostic' &&
             entry.metadata?['member'] == 'member-tester',
       );
-      final requestBody = requestAudit.metadata!['requestBody']
-          as Map<String, Object?>;
+      final requestBody =
+          requestAudit.metadata!['requestBody'] as Map<String, Object?>;
       final messages = requestBody['messages'] as List<Object?>;
       final encodedTaskMessages = messages
-          .where((message) =>
-              (message as Map<String, Object?>)['content']
-                  .toString()
-                  .contains('任务分配：'))
+          .where((message) => (message as Map<String, Object?>)['content']
+              .toString()
+              .contains('任务分配：'))
           .cast<Map<String, Object?>>()
           .toList();
       expect(encodedTaskMessages, hasLength(1));
@@ -958,7 +1054,8 @@ void main() {
         (entry) => entry.action == 'secretary_private_member_dispatch',
       );
       expect(audit.metadata!['status'], 'failed');
-      expect(audit.metadata!['targetModel'], 'model-local');
+      expect(audit.metadata!['targetModel'], 'qwen2.5-coder');
+      expect(jsonEncode(audit.metadata), isNot(contains('model-local')));
       expect(audit.metadata!['error'], contains('forced failure'));
       expect(audit.metadata!['responseChars'], 0);
       expect(jsonEncode(audit.metadata), isNot(contains('apiKey')));
@@ -1044,7 +1141,8 @@ void main() {
       expect(summary, contains('- 前端工程师：\n  前端首行\n  前端尾行：完整保留'));
     });
 
-    test('secretary private dispatch keeps successful summary full after failure',
+    test(
+        'secretary private dispatch keeps successful summary full after failure',
         () async {
       final frontendReply = [
         '前端执行结果首行。',
@@ -1056,8 +1154,8 @@ void main() {
         frontendReply,
       ]);
 
-      final updated = await TeamOrchestrator(gateway)
-          .dispatchSecretaryPrivateMemberTask(
+      final updated =
+          await TeamOrchestrator(gateway).dispatchSecretaryPrivateMemberTask(
         AppState.seed(),
         conversationId: 'conv-member-secretary',
         userText: '请测试工程师和前端工程师分别处理这个问题。',
@@ -1073,7 +1171,8 @@ void main() {
       expect(summary, isNot(contains('...')));
     });
 
-    test('secretary private dispatch keeps response diagnostics for empty reply',
+    test(
+        'secretary private dispatch keeps response diagnostics for empty reply',
         () async {
       final updated = await TeamOrchestrator(
         ScriptedMetadataGateway(
@@ -1106,7 +1205,8 @@ void main() {
         responseAudit.metadata!['rawResponse'],
         contains('data: [DONE]'),
       );
-      expect(responseAudit.metadata!['requestBody'], containsPair('model', 'test-model'));
+      expect(responseAudit.metadata!['requestBody'],
+          containsPair('model', 'test-model'));
 
       final dispatchAudit = updated.auditLog.lastWhere(
         (entry) => entry.action == 'secretary_private_member_dispatch',
@@ -1319,6 +1419,471 @@ void main() {
   });
 
   group('patch proposals', () {
+    test('member chat executes read file tool before final reply', () async {
+      final temp = await Directory.systemTemp.createTemp('ai_team_tool_read_');
+      addTearDown(() async => temp.delete(recursive: true));
+      await File('${temp.path}/README.md').writeAsString('tool file content');
+      final state = AppState.seed().copyWith(
+        workspaces: [
+          ProjectWorkspace(
+            id: 'workspace-1',
+            name: 'Fixture',
+            path: temp.path,
+          ),
+        ],
+      );
+      final gateway = ScriptedToolGateway(
+        toolCall: const ModelToolCall(
+          id: 'call-read',
+          name: 'read_workspace_file',
+          arguments: '{"workspaceId":"workspace-1","relativePath":"README.md"}',
+        ),
+        finalReply: '读取完成',
+      );
+
+      final updated = await TeamOrchestrator(gateway).dispatchMemberChat(
+        state,
+        conversationId: 'conv-member-secretary',
+        userText: '读取 README',
+      );
+
+      expect(gateway.firstTools.map((tool) => tool.name),
+          contains('read_workspace_file'));
+      expect(gateway.toolRounds, hasLength(1));
+      expect(
+        gateway.toolRounds.single.results.single.content,
+        contains('tool file content'),
+      );
+      expect(
+        updated.conversations
+            .firstWhere(
+              (conversation) => conversation.id == 'conv-member-secretary',
+            )
+            .messages
+            .last
+            .content,
+        '读取完成',
+      );
+    });
+
+    test('member chat propose patch tool creates pending patch only', () async {
+      final temp = await Directory.systemTemp.createTemp('ai_team_tool_patch_');
+      addTearDown(() async => temp.delete(recursive: true));
+      final file = File('${temp.path}/lib.txt');
+      await file.writeAsString('old\n');
+      final state = AppState.seed().copyWith(
+        workspaces: [
+          ProjectWorkspace(
+            id: 'workspace-1',
+            name: 'Fixture',
+            path: temp.path,
+          ),
+        ],
+      );
+      final gateway = ScriptedToolGateway(
+        toolCall: const ModelToolCall(
+          id: 'call-patch',
+          name: 'propose_workspace_patch',
+          arguments:
+              '{"workspaceId":"workspace-1","relativePath":"lib.txt","proposedContent":"new\\n"}',
+        ),
+        finalReply: '已创建补丁',
+      );
+
+      final updated = await TeamOrchestrator(gateway).dispatchMemberChat(
+        state,
+        conversationId: 'conv-member-secretary',
+        userText: '修改文件',
+      );
+
+      expect(updated.patchProposals, hasLength(1));
+      expect(updated.patchProposals.single.status, PatchStatus.pending);
+      expect(updated.patchProposals.single.diff, contains('+new'));
+      expect(await file.readAsString(), 'old\n');
+      expect(
+        gateway.toolRounds.single.results.single.content,
+        contains('"status":"pending"'),
+      );
+    });
+
+    test('member chat command tool creates policy evaluated request only',
+        () async {
+      final temp =
+          await Directory.systemTemp.createTemp('ai_team_tool_command_');
+      addTearDown(() async => temp.delete(recursive: true));
+      final gateway = ScriptedToolGateway(
+        toolCall: ModelToolCall(
+          id: 'call-command',
+          name: 'request_command',
+          arguments: jsonEncode({
+            'memberId': 'member-secretary',
+            'command': 'flutter test',
+            'workingDirectory': temp.path,
+          }),
+        ),
+        finalReply: '已创建命令请求',
+      );
+
+      final updated = await TeamOrchestrator(gateway).dispatchMemberChat(
+        AppState.seed(),
+        conversationId: 'conv-member-secretary',
+        userText: '运行测试',
+      );
+
+      expect(updated.commandRequests, hasLength(1));
+      expect(
+          updated.commandRequests.single.status, CommandRequestStatus.pending);
+      expect(updated.commandRequests.single.decision,
+          CommandDecision.requiresConfirmation);
+      expect(updated.commandRequests.single.output, isNull);
+      expect(
+        gateway.toolRounds.single.results.single.content,
+        contains('"decision":"requiresConfirmation"'),
+      );
+    });
+
+    test('member chat command tool allows df through wildcard policy',
+        () async {
+      final temp =
+          await Directory.systemTemp.createTemp('ai_team_tool_command_star_');
+      addTearDown(() async => temp.delete(recursive: true));
+      final state = AppState.seed().copyWith(
+        roles: AppState.seed()
+            .roles
+            .map(
+              (role) => role.id == 'role-secretary'
+                  ? role.copyWith(
+                      commandPolicy: CommandPolicy(
+                        allowedCommands: ['*'],
+                        blockedCommands: ['rm'],
+                        allowedDirectories: [temp.path],
+                        requiresConfirmation: true,
+                      ),
+                    )
+                  : role,
+            )
+            .toList(),
+      );
+      final gateway = ScriptedToolGateway(
+        toolCall: ModelToolCall(
+          id: 'call-df',
+          name: 'request_command',
+          arguments: jsonEncode({
+            'memberId': 'member-secretary',
+            'command': 'df -h /',
+            'workingDirectory': temp.path,
+          }),
+        ),
+        finalReply: '已创建待审批命令请求',
+      );
+
+      final updated = await TeamOrchestrator(gateway).dispatchMemberChat(
+        state,
+        conversationId: 'conv-member-secretary',
+        userText: '秘书看一下磁盘占用',
+      );
+
+      expect(gateway.firstSystemPrompt, contains('allowedCommands=["*"]'));
+      expect(gateway.firstSystemPrompt, contains('request_command'));
+      expect(gateway.firstSystemPrompt, contains('无需确认时可以自动执行'));
+      expect(gateway.firstSystemPrompt, isNot(contains('命令只会进入用户确认流程')));
+      final requestCommandTool = gateway.firstTools.singleWhere(
+        (tool) => tool.name == 'request_command',
+      );
+      expect(
+        requestCommandTool.description,
+        contains('默认使用当前成员'),
+      );
+      expect(
+        requestCommandTool.parameters['required'],
+        isNot(contains('memberId')),
+      );
+      expect(updated.commandRequests, hasLength(1));
+      expect(updated.commandRequests.single.command, 'df -h /');
+      expect(
+        updated.commandRequests.single.conversationId,
+        'conv-member-secretary',
+      );
+      expect(updated.commandRequests.single.memberId, 'member-secretary');
+      expect(updated.commandRequests.single.toolCallId, 'call-df');
+      expect(
+          updated.commandRequests.single.status, CommandRequestStatus.pending);
+      expect(updated.commandRequests.single.decision,
+          CommandDecision.requiresConfirmation);
+      expect(updated.commandRequests.single.output, isNull);
+      expect(
+        gateway.toolRounds.single.results.single.content,
+        contains('"status":"pending"'),
+      );
+      expect(
+        gateway.toolRounds.single.results.single.content,
+        contains('"requiresUserAction":true'),
+      );
+    });
+
+    test('member chat command tool auto executes allowed commands', () async {
+      final temp =
+          await Directory.systemTemp.createTemp('ai_team_tool_command_auto_');
+      addTearDown(() async => temp.delete(recursive: true));
+      final state = AppState.seed().copyWith(
+        roles: AppState.seed()
+            .roles
+            .map(
+              (role) => role.id == 'role-secretary'
+                  ? role.copyWith(
+                      commandPolicy: CommandPolicy(
+                        allowedCommands: ['*'],
+                        blockedCommands: ['rm'],
+                        allowedDirectories: [temp.path],
+                        requiresConfirmation: false,
+                      ),
+                    )
+                  : role,
+            )
+            .toList(),
+      );
+      final gateway = ScriptedToolGateway(
+        toolCall: ModelToolCall(
+          id: 'call-df-auto',
+          name: 'request_command',
+          arguments: jsonEncode({
+            'memberId': 'member-secretary',
+            'command': 'df -h /',
+            'workingDirectory': temp.path,
+          }),
+        ),
+        finalReply: '根目录已使用 42G',
+      );
+
+      final updated = await TeamOrchestrator(
+        gateway,
+        commandRunner: (_, __) async => ProcessResult(
+          9,
+          0,
+          'Filesystem Size Used Avail Capacity Mounted on\n'
+              '/dev/disk3s1s1 460Gi 42Gi 100Gi 30% /',
+          '',
+        ),
+      ).dispatchMemberChat(
+        state,
+        conversationId: 'conv-member-secretary',
+        userText: '秘书看一下磁盘占用',
+      );
+
+      final request = updated.commandRequests.single;
+      final result = gateway.toolRounds.single.results.single.content;
+      expect(request.decision, CommandDecision.allowed);
+      expect(request.status, CommandRequestStatus.executed);
+      expect(request.output, contains('42Gi'));
+      expect(result, contains('"status":"executed"'));
+      expect(result, contains('"output"'));
+      expect(result, contains('42Gi'));
+      expect(result, contains('"exitCode":0'));
+      expect(result, contains('"requiresUserAction":false'));
+      expect(
+        updated.conversations
+            .firstWhere(
+              (conversation) => conversation.id == 'conv-member-secretary',
+            )
+            .messages
+            .last
+            .content,
+        '根目录已使用 42G',
+      );
+    });
+
+    test('member chat command tool accepts current member display name',
+        () async {
+      final temp =
+          await Directory.systemTemp.createTemp('ai_team_tool_command_name_');
+      addTearDown(() async => temp.delete(recursive: true));
+      final state = AppState.seed().copyWith(
+        roles: AppState.seed()
+            .roles
+            .map(
+              (role) => role.id == 'role-secretary'
+                  ? role.copyWith(
+                      commandPolicy: CommandPolicy(
+                        allowedCommands: ['*'],
+                        blockedCommands: [],
+                        allowedDirectories: [temp.path],
+                        requiresConfirmation: true,
+                      ),
+                    )
+                  : role,
+            )
+            .toList(),
+      );
+      final gateway = ScriptedToolGateway(
+        toolCall: ModelToolCall(
+          id: 'call-df-name',
+          name: 'request_command',
+          arguments: jsonEncode({
+            'memberId': '秘书',
+            'command': 'df -h /',
+            'workingDirectory': temp.path,
+          }),
+        ),
+        finalReply: '已创建待审批命令请求',
+      );
+
+      final updated = await TeamOrchestrator(gateway).dispatchMemberChat(
+        state,
+        conversationId: 'conv-member-secretary',
+        userText: '秘书看一下磁盘占用',
+      );
+
+      expect(updated.commandRequests, hasLength(1));
+      expect(updated.commandRequests.single.memberName, '秘书');
+      expect(updated.commandRequests.single.command, 'df -h /');
+      expect(
+          updated.commandRequests.single.status, CommandRequestStatus.pending);
+      expect(updated.commandRequests.single.decision,
+          CommandDecision.requiresConfirmation);
+      expect(gateway.toolRounds.single.results.single.content,
+          isNot(contains('Bad state: No element')));
+    });
+
+    test('member chat command tool defaults to active member when omitted',
+        () async {
+      final temp = await Directory.systemTemp
+          .createTemp('ai_team_tool_command_default_');
+      addTearDown(() async => temp.delete(recursive: true));
+      final state = AppState.seed().copyWith(
+        roles: AppState.seed()
+            .roles
+            .map(
+              (role) => role.id == 'role-secretary'
+                  ? role.copyWith(
+                      commandPolicy: CommandPolicy(
+                        allowedCommands: ['*'],
+                        blockedCommands: [],
+                        allowedDirectories: [temp.path],
+                        requiresConfirmation: true,
+                      ),
+                    )
+                  : role,
+            )
+            .toList(),
+      );
+      final gateway = ScriptedToolGateway(
+        toolCall: ModelToolCall(
+          id: 'call-df-default',
+          name: 'request_command',
+          arguments: jsonEncode({
+            'command': 'df -h /',
+            'workingDirectory': temp.path,
+          }),
+        ),
+        finalReply: '已创建待审批命令请求',
+      );
+
+      final updated = await TeamOrchestrator(gateway).dispatchMemberChat(
+        state,
+        conversationId: 'conv-member-secretary',
+        userText: '秘书看一下磁盘占用',
+      );
+
+      expect(updated.commandRequests, hasLength(1));
+      expect(updated.commandRequests.single.memberName, '秘书');
+      expect(updated.commandRequests.single.command, 'df -h /');
+      expect(
+          updated.commandRequests.single.status, CommandRequestStatus.pending);
+    });
+
+    test('member chat command tool rejects cross member command requests',
+        () async {
+      final temp =
+          await Directory.systemTemp.createTemp('ai_team_tool_command_cross_');
+      addTearDown(() async => temp.delete(recursive: true));
+      final gateway = ScriptedToolGateway(
+        toolCall: ModelToolCall(
+          id: 'call-cross-member',
+          name: 'request_command',
+          arguments: jsonEncode({
+            'memberId': 'member-frontend',
+            'command': 'df -h /',
+            'workingDirectory': temp.path,
+          }),
+        ),
+        finalReply: '命令请求失败已说明',
+      );
+
+      final updated = await TeamOrchestrator(gateway).dispatchMemberChat(
+        AppState.seed(),
+        conversationId: 'conv-member-secretary',
+        userText: '秘书看一下磁盘占用',
+      );
+
+      final result = gateway.toolRounds.single.results.single.content;
+      expect(updated.commandRequests, isEmpty);
+      expect(result, contains('"ok":false'));
+      expect(result, contains('不允许跨成员请求命令'));
+      expect(result, isNot(contains('Bad state: No element')));
+    });
+
+    test('member chat blocks command execution claims without tool calls',
+        () async {
+      final gateway = ScriptedToolGateway(
+        toolCall: null,
+        finalReply: '我已尝试执行 `df -h /` 查看磁盘占用。',
+      );
+
+      final updated = await TeamOrchestrator(gateway).dispatchMemberChat(
+        AppState.seed(),
+        conversationId: 'conv-member-secretary',
+        userText: '执行 df -h / 看磁盘占用',
+      );
+
+      final reply = updated.conversations
+          .firstWhere(
+            (conversation) => conversation.id == 'conv-member-secretary',
+          )
+          .messages
+          .last
+          .content;
+      expect(updated.commandRequests, isEmpty);
+      expect(reply, contains('未创建命令请求'));
+      expect(reply, isNot(contains('已尝试执行')));
+    });
+
+    test('member chat returns structured tool errors without dropping reply',
+        () async {
+      final gateway = ScriptedToolGateway(
+        toolCall: const ModelToolCall(
+          id: 'call-unknown',
+          name: 'unknown_tool',
+          arguments: '{}',
+        ),
+        finalReply: '工具失败已说明',
+      );
+
+      final updated = await TeamOrchestrator(gateway).dispatchMemberChat(
+        AppState.seed(),
+        conversationId: 'conv-member-secretary',
+        userText: '调用未知工具',
+      );
+
+      expect(
+        gateway.toolRounds.single.results.single.content,
+        contains('"ok":false'),
+      );
+      expect(
+        gateway.toolRounds.single.results.single.content,
+        contains('未知工具'),
+      );
+      expect(
+        updated.conversations
+            .firstWhere(
+              (conversation) => conversation.id == 'conv-member-secretary',
+            )
+            .messages
+            .last
+            .content,
+        '工具失败已说明',
+      );
+    });
+
     test('generates a unified diff and applies only after approval', () async {
       final temp = await Directory.systemTemp.createTemp('ai_team_patch_test_');
       addTearDown(() async => temp.delete(recursive: true));
@@ -1392,6 +1957,84 @@ class ScriptedRecordingGateway implements ModelGateway {
     ));
     cancellation?.throwIfCancelled();
     return responses[_index++];
+  }
+}
+
+class ScriptedToolGateway implements MetadataModelGateway {
+  ScriptedToolGateway({
+    required this.toolCall,
+    required this.finalReply,
+  });
+
+  final ModelToolCall? toolCall;
+  final String finalReply;
+  final List<ModelToolDefinition> firstTools = [];
+  final List<ModelToolRound> toolRounds = [];
+  String? firstSystemPrompt;
+
+  @override
+  Future<String> complete({
+    required ModelProfile model,
+    required String systemPrompt,
+    required List<ChatMessage> messages,
+    ModelRequestCancellation? cancellation,
+  }) async {
+    final completion = await completeWithMetadata(
+      model: model,
+      systemPrompt: systemPrompt,
+      messages: messages,
+      cancellation: cancellation,
+    );
+    return completion.content;
+  }
+
+  @override
+  Future<ModelCompletion> completeWithMetadata({
+    required ModelProfile model,
+    required String systemPrompt,
+    required List<ChatMessage> messages,
+    ModelRequestCancellation? cancellation,
+    ModelStreamDeltaHandler? onDelta,
+    List<ModelToolDefinition> tools = const [],
+    ModelToolChoice toolChoice = ModelToolChoice.auto,
+    List<ModelToolRound> toolRounds = const [],
+  }) async {
+    cancellation?.throwIfCancelled();
+    if (toolRounds.isEmpty) {
+      firstTools.addAll(tools);
+      firstSystemPrompt = systemPrompt;
+      final toolCall = this.toolCall;
+      if (toolCall == null) {
+        return ModelCompletion(
+          content: finalReply,
+          diagnostics: ModelResponseDiagnostics(
+            streaming: false,
+            contentLength: finalReply.length,
+            thinkingContentLength: 0,
+            toolCallCount: 0,
+          ),
+        );
+      }
+      return ModelCompletion(
+        content: '',
+        toolCalls: [toolCall],
+        diagnostics: const ModelResponseDiagnostics(
+          streaming: false,
+          contentLength: 0,
+          thinkingContentLength: 0,
+          toolCallCount: 1,
+        ),
+      );
+    }
+    this.toolRounds.addAll(toolRounds);
+    return ModelCompletion(
+      content: finalReply,
+      diagnostics: ModelResponseDiagnostics(
+        streaming: false,
+        contentLength: finalReply.length,
+        thinkingContentLength: 0,
+      ),
+    );
   }
 }
 
@@ -1505,6 +2148,9 @@ class ScriptedMetadataGateway implements MetadataModelGateway {
     required List<ChatMessage> messages,
     ModelRequestCancellation? cancellation,
     ModelStreamDeltaHandler? onDelta,
+    List<ModelToolDefinition> tools = const [],
+    ModelToolChoice toolChoice = ModelToolChoice.auto,
+    List<ModelToolRound> toolRounds = const [],
   }) async {
     cancellation?.throwIfCancelled();
     return completion;
@@ -1539,6 +2185,9 @@ class ScriptedStreamingMetadataGateway implements MetadataModelGateway {
     required List<ChatMessage> messages,
     ModelRequestCancellation? cancellation,
     ModelStreamDeltaHandler? onDelta,
+    List<ModelToolDefinition> tools = const [],
+    ModelToolChoice toolChoice = ModelToolChoice.auto,
+    List<ModelToolRound> toolRounds = const [],
   }) async {
     final content = StringBuffer();
     final thinking = StringBuffer();

@@ -786,6 +786,9 @@ class _ScriptedStreamingGateway implements MetadataModelGateway {
     required List<ChatMessage> messages,
     ModelRequestCancellation? cancellation,
     ModelStreamDeltaHandler? onDelta,
+    List<ModelToolDefinition> tools = const [],
+    ModelToolChoice toolChoice = ModelToolChoice.auto,
+    List<ModelToolRound> toolRounds = const [],
   }) async {
     final content = StringBuffer();
     for (var index = 0; index < deltas.length; index++) {
