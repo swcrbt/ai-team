@@ -2741,6 +2741,167 @@ print("safe");
     expect(find.text('移动端交付组'), findsNothing);
   });
 
+  testWidgets('configuration dialogs use the clean shared dialog frame',
+      (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    Future<void> expectSharedDialog({
+      required String pageTooltip,
+      required String actionTooltip,
+      required String title,
+      required String closeText,
+    }) async {
+      await tester.tap(find.byTooltip(pageTooltip));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip(actionTooltip).first);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.byKey(const ValueKey('config-dialog-frame')), findsOneWidget);
+      expect(
+          find.byKey(const ValueKey('config-dialog-header')), findsOneWidget);
+      expect(find.byKey(const ValueKey('config-dialog-body')), findsOneWidget);
+      expect(
+          find.byKey(const ValueKey('config-dialog-actions')), findsOneWidget);
+      expect(find.text(title), findsOneWidget);
+
+      await tester.tap(find.text(closeText).last);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+    }
+
+    await expectSharedDialog(
+      pageTooltip: '团队',
+      actionTooltip: '新增团队',
+      title: '新增团队',
+      closeText: '取消',
+    );
+    await expectSharedDialog(
+      pageTooltip: '模型',
+      actionTooltip: '编辑模型',
+      title: '编辑模型配置',
+      closeText: '取消',
+    );
+    await expectSharedDialog(
+      pageTooltip: '角色',
+      actionTooltip: '新增角色',
+      title: '新增角色配置',
+      closeText: '取消',
+    );
+    await expectSharedDialog(
+      pageTooltip: '成员',
+      actionTooltip: '新增成员',
+      title: '新增团队成员',
+      closeText: '取消',
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed().copyWith(
+          workspaces: [
+            ProjectWorkspace(
+              id: 'workspace-dialog-test',
+              name: '当前项目',
+              path: Directory.current.path,
+            ),
+          ],
+        ),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await expectSharedDialog(
+      pageTooltip: '项目',
+      actionTooltip: '创建补丁',
+      title: '创建补丁提案',
+      closeText: '取消',
+    );
+    await expectSharedDialog(
+      pageTooltip: '项目',
+      actionTooltip: '浏览文件',
+      title: '工作区文件',
+      closeText: '关闭',
+    );
+    await expectSharedDialog(
+      pageTooltip: '设置',
+      actionTooltip: '创建命令请求',
+      title: '创建命令请求',
+      closeText: '取消',
+    );
+    await expectSharedDialog(
+      pageTooltip: '设置',
+      actionTooltip: '导入 / 导出配置',
+      title: '导入 / 导出配置',
+      closeText: '关闭',
+    );
+  });
+
+  testWidgets('role dialog remains usable in a compact viewport',
+      (tester) async {
+    tester.view.physicalSize = const Size(720, 520);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('角色'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('新增角色'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.byKey(const ValueKey('config-dialog-body')), findsOneWidget);
+    expect(find.widgetWithText(TextButton, '取消'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, '保存'), findsOneWidget);
+
+    await tester.drag(
+      find.byKey(const ValueKey('config-dialog-body')),
+      const Offset(0, -260),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.widgetWithText(TextButton, '取消'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, '保存'), findsOneWidget);
+  });
+
+  testWidgets('model dialog validation uses the shared error treatment',
+      (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('模型'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('编辑模型').first);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.widgetWithText(TextField, '温度 0-2'), 'abc');
+    await tester.tap(find.widgetWithText(FilledButton, '保存'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('config-dialog-error')), findsOneWidget);
+    expect(find.textContaining('温度和最大 Token 必须是数字'), findsOneWidget);
+    expect(find.text('编辑模型配置'), findsOneWidget);
+  });
+
   testWidgets('member dialog edits execution priority', (tester) async {
     await tester.pumpWidget(
       AiTeamApp(
@@ -2937,7 +3098,9 @@ print("safe");
 
     expect(find.text('深度思考'), findsOneWidget);
 
-    await tester.tap(find.text('关闭').last);
+    await tester.ensureVisible(find.byType(DropdownButtonFormField<String>));
+    await tester.pump();
+    await tester.tap(find.byType(DropdownButtonFormField<String>));
     await tester.pumpAndSettle();
     await tester.tap(find.text('high').last);
     await tester.pumpAndSettle();

@@ -4856,83 +4856,87 @@ Future<void> _showTeamDialog(
   await showDialog<void>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => AlertDialog(
-        title: Text(team == null ? '新增团队' : '编辑团队'),
-        content: SizedBox(
-          width: 520,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (error != null) _DialogError(error!),
-                _DialogField(
-                  controller: nameController,
-                  label: '团队名称',
-                ),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    '协同模式',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: SegmentedButton<TeamCollaborationMode>(
-                    segments: const [
-                      ButtonSegment(
-                        value: TeamCollaborationMode.serial,
-                        label: Text('串行'),
-                      ),
-                      ButtonSegment(
-                        value: TeamCollaborationMode.parallel,
-                        label: Text('并行'),
-                      ),
-                    ],
-                    selected: {collaborationMode},
-                    onSelectionChanged: (selection) {
-                      setDialogState(
-                        () => collaborationMode = selection.single,
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    '团队成员',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                ...controller.state.members
-                    .where((member) => !member.isSecretary)
-                    .map(
-                      (member) => CheckboxListTile(
-                        value: selectedMemberIds.contains(member.id),
-                        onChanged: (value) {
-                          setDialogState(() {
-                            if (value ?? false) {
-                              selectedMemberIds.add(member.id);
-                            } else {
-                              selectedMemberIds.remove(member.id);
-                            }
-                          });
-                        },
-                        title: Text(member.name),
-                        subtitle: Text(
-                          '${_roleName(controller.state, member.roleId)} · ${_modelName(controller.state, member.modelId)}',
-                        ),
-                        controlAffinity: ListTileControlAffinity.leading,
-                        dense: true,
-                      ),
-                    ),
-                const Text('默认秘书会自动加入每个团队。'),
-              ],
+      builder: (context, setDialogState) => _ConfigDialog(
+        title: team == null ? '新增团队' : '编辑团队',
+        subtitle: '配置团队名称、协同方式和参与成员。',
+        icon: Icons.groups_rounded,
+        width: 560,
+        body: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (error != null) _DialogError(error!),
+            _DialogSection(
+              title: '基础信息',
+              child: _DialogField(
+                controller: nameController,
+                label: '团队名称',
+              ),
             ),
-          ),
+            _DialogSection(
+              title: '协同模式',
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: SegmentedButton<TeamCollaborationMode>(
+                  segments: const [
+                    ButtonSegment(
+                      value: TeamCollaborationMode.serial,
+                      label: Text('串行'),
+                    ),
+                    ButtonSegment(
+                      value: TeamCollaborationMode.parallel,
+                      label: Text('并行'),
+                    ),
+                  ],
+                  selected: {collaborationMode},
+                  onSelectionChanged: (selection) {
+                    setDialogState(
+                      () => collaborationMode = selection.single,
+                    );
+                  },
+                ),
+              ),
+            ),
+            _DialogSection(
+              title: '团队成员',
+              child: Column(
+                children: [
+                  ...controller.state.members
+                      .where((member) => !member.isSecretary)
+                      .map(
+                        (member) => CheckboxListTile(
+                          value: selectedMemberIds.contains(member.id),
+                          onChanged: (value) {
+                            setDialogState(() {
+                              if (value ?? false) {
+                                selectedMemberIds.add(member.id);
+                              } else {
+                                selectedMemberIds.remove(member.id);
+                              }
+                            });
+                          },
+                          title: Text(member.name),
+                          subtitle: Text(
+                            '${_roleName(controller.state, member.roleId)} · ${_modelName(controller.state, member.modelId)}',
+                          ),
+                          controlAffinity: ListTileControlAffinity.leading,
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '默认秘书会自动加入每个团队。',
+                      style: TextStyle(color: Color(0xFF667085)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -4993,54 +4997,67 @@ Future<void> _showModelDialog(
   await showDialog<void>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => AlertDialog(
-        title: Text(model == null ? '新增模型配置' : '编辑模型配置'),
-        content: SizedBox(
-          width: 420,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (validationError != null) _DialogError(validationError!),
-                _DialogField(controller: name, label: '名称'),
-                _DialogField(controller: baseUrl, label: 'Base URL'),
-                _DialogField(controller: modelName, label: '模型名称'),
-                _DialogField(
-                  controller: apiKey,
-                  label: 'API Key',
-                  obscure: true,
-                ),
-                SwitchListTile(
-                  value: streaming,
-                  onChanged: (value) => setDialogState(() => streaming = value),
-                  title: const Text('流式输出'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-                DropdownButtonFormField<String>(
-                  initialValue: reasoningEffort,
-                  decoration: const InputDecoration(labelText: '深度思考'),
-                  items: [
-                    for (final value in [
-                      _reasoningEffortOffValue,
-                      ..._reasoningEffortValues,
-                    ])
-                      DropdownMenuItem(
-                        value: value,
-                        child: Text(_reasoningEffortLabels[value] ?? value),
-                      ),
-                  ],
-                  onChanged: (value) {
-                    if (value == null) {
-                      return;
-                    }
-                    setDialogState(() => reasoningEffort = value);
-                  },
-                ),
-                _DialogField(controller: temperature, label: '温度 0-2'),
-                _DialogField(controller: maxTokens, label: '最大 Token'),
-              ],
+      builder: (context, setDialogState) => _ConfigDialog(
+        title: model == null ? '新增模型配置' : '编辑模型配置',
+        subtitle: '维护 OpenAI 兼容模型、密钥和请求参数。',
+        icon: Icons.memory_rounded,
+        body: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (validationError != null) _DialogError(validationError!),
+            _DialogSection(
+              title: '基础信息',
+              child: Column(
+                children: [
+                  _DialogField(controller: name, label: '名称'),
+                  _DialogField(controller: baseUrl, label: 'Base URL'),
+                  _DialogField(controller: modelName, label: '模型名称'),
+                  _DialogField(
+                    controller: apiKey,
+                    label: 'API Key',
+                    obscure: true,
+                  ),
+                ],
+              ),
             ),
-          ),
+            _DialogSection(
+              title: '请求参数',
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    value: streaming,
+                    onChanged: (value) =>
+                        setDialogState(() => streaming = value),
+                    title: const Text('流式输出'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  DropdownButtonFormField<String>(
+                    initialValue: reasoningEffort,
+                    decoration: _dialogInputDecoration('深度思考'),
+                    items: [
+                      for (final value in [
+                        _reasoningEffortOffValue,
+                        ..._reasoningEffortValues,
+                      ])
+                        DropdownMenuItem(
+                          value: value,
+                          child: Text(_reasoningEffortLabels[value] ?? value),
+                        ),
+                    ],
+                    onChanged: (value) {
+                      if (value == null) {
+                        return;
+                      }
+                      setDialogState(() => reasoningEffort = value);
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  _DialogField(controller: temperature, label: '温度 0-2'),
+                  _DialogField(controller: maxTokens, label: '最大 Token'),
+                ],
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -5127,83 +5144,108 @@ Future<void> _showRoleDialog(
   await showDialog<void>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => AlertDialog(
-        title: Text(role == null ? '新增角色配置' : '编辑角色配置'),
-        content: SizedBox(
-          width: 460,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (validationError != null) _DialogError(validationError!),
-                _DialogField(controller: name, label: '角色名称'),
-                _DialogField(controller: description, label: '角色描述'),
-                _DialogField(
-                  controller: identity,
-                  label: '身份提示词',
-                  minLines: 2,
-                  maxLines: 4,
-                ),
-                _DialogField(
-                  controller: goal,
-                  label: '目标提示词',
-                  minLines: 2,
-                  maxLines: 4,
-                ),
-                _DialogField(
-                  controller: constraint,
-                  label: '约束提示词',
-                  minLines: 2,
-                  maxLines: 4,
-                ),
-                _DialogField(
-                  controller: outputFormat,
-                  label: '输出格式提示词',
-                  minLines: 2,
-                  maxLines: 4,
-                ),
-                _DialogField(
-                  controller: allowedCommands,
-                  label: '允许命令（一行一个）',
-                  minLines: 2,
-                  maxLines: 4,
-                ),
-                _DialogField(
-                  controller: blockedCommands,
-                  label: '禁止命令（一行一个）',
-                  minLines: 2,
-                  maxLines: 4,
-                ),
-                _DialogField(
-                  controller: allowedDirectories,
-                  label: '允许目录（一行一个，留空不限）',
-                  minLines: 2,
-                  maxLines: 4,
-                ),
-                CheckboxListTile(
-                  value: requiresConfirmation,
-                  onChanged: (value) =>
-                      setDialogState(() => requiresConfirmation = value!),
-                  title: const Text('命令需要确认'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-                CheckboxListTile(
-                  value: canReadProject,
-                  onChanged: (value) =>
-                      setDialogState(() => canReadProject = value!),
-                  title: const Text('允许读取项目'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-                CheckboxListTile(
-                  value: canProposePatch,
-                  onChanged: (value) =>
-                      setDialogState(() => canProposePatch = value!),
-                  title: const Text('允许生成补丁'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ],
+      builder: (context, setDialogState) => _ConfigDialog(
+        title: role == null ? '新增角色配置' : '编辑角色配置',
+        subtitle: '定义角色提示词、命令策略和项目权限。',
+        icon: Icons.badge_rounded,
+        width: 560,
+        body: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (validationError != null) _DialogError(validationError!),
+            _DialogSection(
+              title: '角色提示词',
+              child: Column(
+                children: [
+                  _DialogField(controller: name, label: '角色名称'),
+                  _DialogField(controller: description, label: '角色描述'),
+                  _DialogField(
+                    controller: identity,
+                    label: '身份提示词',
+                    minLines: 2,
+                    maxLines: 4,
+                  ),
+                  _DialogField(
+                    controller: goal,
+                    label: '目标提示词',
+                    minLines: 2,
+                    maxLines: 4,
+                  ),
+                  _DialogField(
+                    controller: constraint,
+                    label: '约束提示词',
+                    minLines: 2,
+                    maxLines: 4,
+                  ),
+                  _DialogField(
+                    controller: outputFormat,
+                    label: '输出格式提示词',
+                    minLines: 2,
+                    maxLines: 4,
+                  ),
+                ],
+              ),
             ),
-          ),
+            _DialogSection(
+              title: '命令权限',
+              child: Column(
+                children: [
+                  _DialogField(
+                    controller: allowedCommands,
+                    label: '允许命令（一行一个）',
+                    minLines: 2,
+                    maxLines: 4,
+                  ),
+                  const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        '* 表示允许所有通过安全语法、禁止命令和目录检查的命令；仍受确认开关约束。',
+                        style: TextStyle(
+                          color: Color(0xFF667085),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                  _DialogField(
+                    controller: blockedCommands,
+                    label: '禁止命令（一行一个）',
+                    minLines: 2,
+                    maxLines: 4,
+                  ),
+                  _DialogField(
+                    controller: allowedDirectories,
+                    label: '允许目录（一行一个，留空不限）',
+                    minLines: 2,
+                    maxLines: 4,
+                  ),
+                  CheckboxListTile(
+                    value: requiresConfirmation,
+                    onChanged: (value) =>
+                        setDialogState(() => requiresConfirmation = value!),
+                    title: const Text('命令需要确认'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  CheckboxListTile(
+                    value: canReadProject,
+                    onChanged: (value) =>
+                        setDialogState(() => canReadProject = value!),
+                    title: const Text('允许读取项目'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  CheckboxListTile(
+                    value: canProposePatch,
+                    onChanged: (value) =>
+                        setDialogState(() => canProposePatch = value!),
+                    title: const Text('允许生成补丁'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -5282,44 +5324,52 @@ Future<void> _showMemberDialog(
   await showDialog<void>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => AlertDialog(
-        title: Text(member == null ? '新增团队成员' : '编辑团队成员'),
-        content: SizedBox(
-          width: 420,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (validationError != null) _DialogError(validationError!),
-              _DialogField(controller: name, label: '成员名称'),
-              _DialogField(controller: priority, label: '执行优先级'),
-              DropdownButtonFormField<String>(
-                initialValue: roleId,
-                decoration: const InputDecoration(labelText: '角色'),
-                items: controller.state.roles
-                    .map(
-                      (role) => DropdownMenuItem(
-                        value: role.id,
-                        child: Text(role.name),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (value) => setDialogState(() => roleId = value!),
+      builder: (context, setDialogState) => _ConfigDialog(
+        title: member == null ? '新增团队成员' : '编辑团队成员',
+        subtitle: '绑定成员名称、执行优先级、角色和模型。',
+        icon: Icons.person_add_alt_1_rounded,
+        body: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (validationError != null) _DialogError(validationError!),
+            _DialogSection(
+              title: '成员信息',
+              child: Column(
+                children: [
+                  _DialogField(controller: name, label: '成员名称'),
+                  _DialogField(controller: priority, label: '执行优先级'),
+                  DropdownButtonFormField<String>(
+                    initialValue: roleId,
+                    decoration: _dialogInputDecoration('角色'),
+                    items: controller.state.roles
+                        .map(
+                          (role) => DropdownMenuItem(
+                            value: role.id,
+                            child: Text(role.name),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) => setDialogState(() => roleId = value!),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: modelId,
+                    decoration: _dialogInputDecoration('模型'),
+                    items: controller.state.models
+                        .map(
+                          (model) => DropdownMenuItem(
+                            value: model.id,
+                            child: Text(model.name),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) =>
+                        setDialogState(() => modelId = value!),
+                  ),
+                ],
               ),
-              DropdownButtonFormField<String>(
-                initialValue: modelId,
-                decoration: const InputDecoration(labelText: '模型'),
-                items: controller.state.models
-                    .map(
-                      (model) => DropdownMenuItem(
-                        value: model.id,
-                        child: Text(model.name),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (value) => setDialogState(() => modelId = value!),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -5377,57 +5427,65 @@ Future<void> _showWorkspacePatchDialog(
   await showDialog<void>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => AlertDialog(
-        title: const Text('创建补丁提案'),
-        content: SizedBox(
-          width: 520,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (validationError != null) _DialogError(validationError!),
-              DropdownButtonFormField<String>(
-                initialValue: workspaceId,
-                decoration: const InputDecoration(labelText: '工作区'),
-                items: controller.state.workspaces
-                    .map(
-                      (workspace) => DropdownMenuItem(
-                        value: workspace.id,
-                        child: Text(workspace.name),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (value) =>
-                    setDialogState(() => workspaceId = value!),
-              ),
-              DropdownButtonFormField<String>(
-                initialValue: memberName,
-                decoration: const InputDecoration(labelText: '提案成员'),
-                items: controller.currentMembers
-                    .map(
-                      (member) => DropdownMenuItem(
-                        value: member.name,
-                        child: Text(member.name),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (value) => setDialogState(() => memberName = value!),
-              ),
-              _DialogField(controller: relativePath, label: '相对路径'),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: TextField(
-                  controller: proposedContent,
-                  minLines: 8,
-                  maxLines: 12,
-                  decoration: const InputDecoration(
-                    labelText: '目标文件内容',
-                    border: OutlineInputBorder(),
-                    alignLabelWithHint: true,
+      builder: (context, setDialogState) => _ConfigDialog(
+        title: '创建补丁提案',
+        subtitle: '从本地工作区读取文件并生成受控补丁提案。',
+        icon: Icons.difference_rounded,
+        width: 580,
+        body: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (validationError != null) _DialogError(validationError!),
+            _DialogSection(
+              title: '提案范围',
+              child: Column(
+                children: [
+                  DropdownButtonFormField<String>(
+                    initialValue: workspaceId,
+                    decoration: _dialogInputDecoration('工作区'),
+                    items: controller.state.workspaces
+                        .map(
+                          (workspace) => DropdownMenuItem(
+                            value: workspace.id,
+                            child: Text(workspace.name),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) =>
+                        setDialogState(() => workspaceId = value!),
                   ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: memberName,
+                    decoration: _dialogInputDecoration('提案成员'),
+                    items: controller.currentMembers
+                        .map(
+                          (member) => DropdownMenuItem(
+                            value: member.name,
+                            child: Text(member.name),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) =>
+                        setDialogState(() => memberName = value!),
+                  ),
+                  const SizedBox(height: 12),
+                  _DialogField(controller: relativePath, label: '相对路径'),
+                ],
+              ),
+            ),
+            _DialogSection(
+              title: '目标内容',
+              child: TextField(
+                controller: proposedContent,
+                minLines: 8,
+                maxLines: 12,
+                decoration: _dialogInputDecoration('目标文件内容').copyWith(
+                  alignLabelWithHint: true,
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -5484,16 +5542,18 @@ Future<void> _showWorkspaceFilesDialog(
   await showDialog<void>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => AlertDialog(
-        title: const Text('工作区文件'),
-        content: SizedBox(
-          width: 520,
+      builder: (context, setDialogState) => _ConfigDialog(
+        title: '工作区文件',
+        subtitle: '浏览当前本地工作区中可用于读取和补丁提案的文件。',
+        icon: Icons.folder_open_rounded,
+        width: 580,
+        body: SizedBox(
           height: 420,
           child: Column(
             children: [
               DropdownButtonFormField<String>(
                 initialValue: workspaceId,
-                decoration: const InputDecoration(labelText: '工作区'),
+                decoration: _dialogInputDecoration('工作区'),
                 items: controller.state.workspaces
                     .map(
                       (workspace) => DropdownMenuItem(
@@ -5567,16 +5627,18 @@ Future<void> _showCommandDialog(
   await showDialog<void>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => AlertDialog(
-        title: const Text('创建命令请求'),
-        content: SizedBox(
-          width: 460,
+      builder: (context, setDialogState) => _ConfigDialog(
+        title: '创建命令请求',
+        subtitle: '为成员创建需要审批或执行的本地命令请求。',
+        icon: Icons.terminal_rounded,
+        body: _DialogSection(
+          title: '命令信息',
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               DropdownButtonFormField<String>(
                 initialValue: memberId,
-                decoration: const InputDecoration(labelText: '成员'),
+                decoration: _dialogInputDecoration('成员'),
                 items: controller.currentMembers
                     .map(
                       (member) => DropdownMenuItem(
@@ -5622,13 +5684,56 @@ Future<void> _showExportDialog(
   await showDialog<void>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => AlertDialog(
-        title: const Text('导入 / 导出配置'),
-        content: CheckboxListTile(
-          value: includeSecrets,
-          onChanged: (value) => setDialogState(() => includeSecrets = value!),
-          title: const Text('导出时包含 API Key'),
-          subtitle: const Text('包含密钥的文件只适合本机迁移，请谨慎保存。'),
+      builder: (context, setDialogState) => _ConfigDialog(
+        title: '导入 / 导出配置',
+        subtitle: '管理本机配置文件，密钥导出需要明确确认。',
+        icon: Icons.ios_share_rounded,
+        width: 560,
+        body: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _DialogSection(
+              title: '导出选项',
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: const Color(0xFFDDE5F0)),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: CheckboxListTile(
+                  value: includeSecrets,
+                  onChanged: (value) =>
+                      setDialogState(() => includeSecrets = value!),
+                  title: const Text('导出时包含 API Key'),
+                  subtitle: const Text('包含密钥的文件只适合本机迁移，请谨慎保存。'),
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+              ),
+            ),
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.only(bottom: 18),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFF7ED),
+                border: Border.all(color: const Color(0xFFFED7AA)),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                '密钥风险提示：启用后导出的 JSON 会包含可用凭证。',
+                style: TextStyle(color: Color(0xFF9A3412), height: 1.35),
+              ),
+            ),
+            const _DialogSection(
+              title: '文件操作',
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '导入会读取选择的 JSON 配置；导出会保存当前本机配置。',
+                  style: TextStyle(color: Color(0xFF667085)),
+                ),
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton.icon(
@@ -5663,6 +5768,155 @@ Future<void> _showExportDialog(
   );
 }
 
+class _ConfigDialog extends StatelessWidget {
+  const _ConfigDialog({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.body,
+    required this.actions,
+    this.width = 520,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Widget body;
+  final List<Widget> actions;
+  final double width;
+
+  @override
+  Widget build(BuildContext context) {
+    final availableHeight = MediaQuery.sizeOf(context).height - 48;
+    return Dialog(
+      key: const ValueKey('config-dialog-frame'),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      elevation: 18,
+      shadowColor: const Color(0x331F2937),
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: const BorderSide(color: Color(0xFFDDE5F0)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: width,
+          maxHeight: availableHeight < 360 ? 360 : availableHeight,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              key: const ValueKey('config-dialog-header'),
+              padding: const EdgeInsets.fromLTRB(24, 18, 24, 16),
+              decoration: const BoxDecoration(
+                color: Color(0xFFF8FAFC),
+                border: Border(
+                  bottom: BorderSide(color: Color(0xFFDDE5F0)),
+                ),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(22),
+                    ),
+                    child: Icon(icon, color: const Color(0xFF2563EB)),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF111827),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          subtitle,
+                          style: const TextStyle(
+                            color: Color(0xFF667085),
+                            height: 1.35,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                key: const ValueKey('config-dialog-body'),
+                padding: const EdgeInsets.fromLTRB(24, 22, 24, 12),
+                child: body,
+              ),
+            ),
+            Container(
+              key: const ValueKey('config-dialog-actions'),
+              padding: const EdgeInsets.fromLTRB(24, 14, 24, 14),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                border: Border(top: BorderSide(color: Color(0xFFDDE5F0))),
+              ),
+              child: OverflowBar(
+                alignment: MainAxisAlignment.end,
+                spacing: 10,
+                overflowSpacing: 8,
+                children: actions,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DialogSection extends StatelessWidget {
+  const _DialogSection({
+    required this.title,
+    required this.child,
+  });
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              color: Color(0xFF667085),
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0,
+            ),
+          ),
+          const SizedBox(height: 10),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
 class _DialogError extends StatelessWidget {
   const _DialogError(this.message);
 
@@ -5671,16 +5925,34 @@ class _DialogError extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      key: const ValueKey('config-dialog-error'),
       width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(10),
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: const Color(0xFFFFF1F2),
-        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFFFECACA)),
+        borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(
-        message,
-        style: const TextStyle(color: Color(0xFFBE123C)),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.error_outline_rounded,
+            size: 18,
+            color: Color(0xFFBE123C),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: Color(0xFFBE123C),
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -5717,16 +5989,35 @@ class _DialogField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: TextField(
         controller: controller,
         obscureText: obscure,
         minLines: obscure ? 1 : minLines,
         maxLines: obscure ? 1 : maxLines,
-        decoration: InputDecoration(labelText: label),
+        decoration: _dialogInputDecoration(label),
       ),
     );
   }
+}
+
+InputDecoration _dialogInputDecoration(String label) {
+  return InputDecoration(
+    labelText: label,
+    filled: true,
+    fillColor: Colors.white,
+    border: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+    ),
+    enabledBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: const BorderSide(color: Color(0xFFDDE5F0)),
+    ),
+    focusedBorder: OutlineInputBorder(
+      borderRadius: BorderRadius.circular(8),
+      borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.5),
+    ),
+  );
 }
 
 List<String> _splitLines(String text) => text
