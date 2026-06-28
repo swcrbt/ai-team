@@ -266,7 +266,7 @@ void main() {
   });
 
   group('secure local persistence', () {
-    test('saves api keys in local app state and restores them', () async {
+    test('saves api keys in secret store and restores them', () async {
       final temp = await Directory.systemTemp.createTemp('ai_team_store_');
       addTearDown(() async => temp.delete(recursive: true));
       final secrets = MemorySecretStore();
@@ -280,8 +280,8 @@ void main() {
       final raw = await File('${temp.path}/state.json').readAsString();
       final loaded = await store.load();
 
-      expect(raw, contains('sk-local-placeholder'));
-      expect(raw, contains('"apiKey"'));
+      expect(raw, isNot(contains('sk-local-placeholder')));
+      expect(raw, isNot(contains('"apiKey"')));
       expect(loaded.models.first.apiKey, 'sk-local-placeholder');
       expect(await secrets.read('model-main'), 'sk-local-placeholder');
     });
@@ -304,8 +304,7 @@ void main() {
       expect(await stateFile.readAsString(), contains('"models"'));
     });
 
-    test('persists api keys in local state when secret storage fails',
-        () async {
+    test('keeps local state redacted when secret storage fails', () async {
       final temp =
           await Directory.systemTemp.createTemp('ai_team_secret_fail_');
       addTearDown(() async => temp.delete(recursive: true));
@@ -329,10 +328,12 @@ void main() {
 
       expect(raw, contains('Persisted model'));
       expect(raw, contains('https://persist.example/v1'));
-      expect(raw, contains('secret-that-stays-out-of-json'));
+      expect(raw, isNot(contains('secret-that-stays-out-of-json')));
+      expect(raw, isNot(contains('"apiKey"')));
     });
 
-    test('loads api keys from local state when secret storage fails', () async {
+    test('loads legacy api keys from local state when secret storage fails',
+        () async {
       final temp =
           await Directory.systemTemp.createTemp('ai_team_secret_load_');
       addTearDown(() async => temp.delete(recursive: true));
@@ -346,10 +347,11 @@ void main() {
               ),
         ],
       );
-      await JsonLocalStore(
-        stateFile,
-        secretStore: MemorySecretStore(),
-      ).save(state);
+      await stateFile.writeAsString(
+        const JsonEncoder.withIndent('  ').convert(
+          ConfigExporter.exportState(state, includeSecrets: true),
+        ),
+      );
       final store = JsonLocalStore(
         stateFile,
         secretStore: ThrowingSecretStore(),
@@ -360,6 +362,40 @@ void main() {
       expect(loaded.models.single.name, 'Loaded model');
       expect(loaded.models.single.baseUrl, 'https://loaded.example/v1');
       expect(loaded.models.single.apiKey, 'loaded-secret');
+    });
+
+    test('redacts legacy api keys on next successful save', () async {
+      final temp =
+          await Directory.systemTemp.createTemp('ai_team_secret_migrate_');
+      addTearDown(() async => temp.delete(recursive: true));
+      final stateFile = File('${temp.path}/state.json');
+      final state = AppState.seed().copyWith(
+        models: [
+          AppState.seed().models.first.copyWith(
+                name: 'Legacy model',
+                baseUrl: 'https://legacy.example/v1',
+                apiKey: 'legacy-secret',
+              ),
+        ],
+      );
+      await stateFile.writeAsString(
+        const JsonEncoder.withIndent('  ').convert(
+          ConfigExporter.exportState(state, includeSecrets: true),
+        ),
+      );
+      final store = JsonLocalStore(
+        stateFile,
+        secretStore: MemorySecretStore(),
+      );
+
+      final loaded = await store.load();
+      await store.save(loaded);
+      final raw = await stateFile.readAsString();
+
+      expect(loaded.models.single.apiKey, 'legacy-secret');
+      expect(raw, contains('Legacy model'));
+      expect(raw, isNot(contains('legacy-secret')));
+      expect(raw, isNot(contains('"apiKey"')));
     });
 
     test('backs up corrupt state files and falls back to seed state', () async {

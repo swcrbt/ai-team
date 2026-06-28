@@ -140,7 +140,7 @@ class JsonLocalStore {
     const encoder = JsonEncoder.withIndent('  ');
     final tempFile = File('${file.path}.tmp');
     await tempFile.writeAsString(
-      encoder.convert(state.toJson(includeSecrets: true)),
+      encoder.convert(state.toJson(includeSecrets: false)),
     );
     if (await file.exists()) {
       await file.delete();
