@@ -1,6 +1,12 @@
-part of '../orchestrator.dart';
+import 'dart:convert';
 
-Future<_ToolExecutionOutcome> _executeModelToolCalls({
+import '../commands/command_service.dart';
+import '../domain.dart';
+import '../model_gateway.dart';
+import '../workspace/workspace_service.dart';
+import 'assignment_helpers.dart';
+
+Future<ToolExecutionOutcome> executeModelToolCalls({
   required AppState state,
   required String conversationId,
   required String? memberId,
@@ -26,14 +32,14 @@ Future<_ToolExecutionOutcome> _executeModelToolCalls({
     results.add(result.result);
     displayBlocks.addAll(result.displayBlocks);
   }
-  return _ToolExecutionOutcome(
+  return ToolExecutionOutcome(
     workingState: workingState,
     round: ModelToolRound(calls: calls, results: results),
     displayBlocks: displayBlocks,
   );
 }
 
-Future<_SingleToolExecutionOutcome> _executeModelToolCall({
+Future<SingleToolExecutionOutcome> _executeModelToolCall({
   required AppState state,
   required String conversationId,
   required String? activeMemberId,
@@ -99,7 +105,7 @@ Future<_SingleToolExecutionOutcome> _executeModelToolCall({
   }
 }
 
-Future<_SingleToolExecutionOutcome> _proposeWorkspacePatchTool(
+Future<SingleToolExecutionOutcome> _proposeWorkspacePatchTool(
   AppState state,
   ModelToolCall call, {
   required String? activeMemberId,
@@ -116,14 +122,14 @@ Future<_SingleToolExecutionOutcome> _proposeWorkspacePatchTool(
     relativePath: _requiredString(arguments, 'relativePath'),
     proposedContent: _requiredString(arguments, 'proposedContent'),
     memberName: member.name,
-    id: _id('patch'),
+    id: orchestrationId('patch'),
   );
   final nextState = state.copyWith(
     patchProposals: [...state.patchProposals, proposal],
     auditLog: [
       ...state.auditLog,
       AuditEntry(
-        id: _id('audit'),
+        id: orchestrationId('audit'),
         action: 'patch_proposed',
         detail: '${proposal.memberName}: ${proposal.filePath}',
         createdAt: DateTime.now(),
@@ -142,7 +148,7 @@ Future<_SingleToolExecutionOutcome> _proposeWorkspacePatchTool(
   );
 }
 
-Future<_SingleToolExecutionOutcome> _requestCommandTool(
+Future<SingleToolExecutionOutcome> _requestCommandTool(
   AppState state,
   ModelToolCall call, {
   required String conversationId,
@@ -182,7 +188,7 @@ Future<_SingleToolExecutionOutcome> _requestCommandTool(
     workingDirectory: workingDirectory,
   );
   final request = CommandRequest.pending(
-    id: _id('command'),
+    id: orchestrationId('command'),
     memberName: member.name,
     command: command,
     workingDirectory: workingDirectory,
@@ -197,7 +203,7 @@ Future<_SingleToolExecutionOutcome> _requestCommandTool(
     auditLog: [
       ...state.auditLog,
       AuditEntry(
-        id: _id('audit'),
+        id: orchestrationId('audit'),
         action: decision == CommandDecision.denied
             ? 'command_denied'
             : 'command_requested',
@@ -219,7 +225,7 @@ Future<_SingleToolExecutionOutcome> _requestCommandTool(
       auditLog: [
         ...nextState.auditLog,
         AuditEntry(
-          id: _id('audit'),
+          id: orchestrationId('audit'),
           action: runResult.status == CommandRequestStatus.executed
               ? 'command_executed'
               : 'command_failed',
@@ -364,39 +370,39 @@ Future<String> _readWorkspaceFile(
   );
 }
 
-_SingleToolExecutionOutcome _toolSuccess(
+SingleToolExecutionOutcome _toolSuccess(
   AppState state,
   ModelToolCall call,
   Map<String, Object?> payload, {
   List<ChatMessageContentBlock> displayBlocks = const [],
 }) {
-  return _SingleToolExecutionOutcome(
+  return SingleToolExecutionOutcome(
     workingState: state,
     result: ModelToolResult(
       toolCallId: call.id,
       name: call.name,
-      content: _toolResultJson(ok: true, payload: payload),
+      content: toolResultJson(ok: true, payload: payload),
     ),
     displayBlocks: displayBlocks,
   );
 }
 
-_SingleToolExecutionOutcome _toolFailure(
+SingleToolExecutionOutcome _toolFailure(
   AppState state,
   ModelToolCall call,
   String error,
 ) {
-  return _SingleToolExecutionOutcome(
+  return SingleToolExecutionOutcome(
     workingState: state,
     result: ModelToolResult(
       toolCallId: call.id,
       name: call.name,
-      content: _toolResultJson(ok: false, error: error),
+      content: toolResultJson(ok: false, error: error),
     ),
   );
 }
 
-String _toolResultJson({
+String toolResultJson({
   required bool ok,
   Map<String, Object?> payload = const {},
   String? error,

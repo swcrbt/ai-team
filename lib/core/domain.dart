@@ -1,5 +1,5 @@
-part 'domain/commands_and_tasks.dart';
-part 'domain/configuration.dart';
-part 'domain/conversations.dart';
-part 'domain/app_state.dart';
-part 'domain/diff.dart';
+export 'domain/app_state.dart';
+export 'domain/commands_and_tasks.dart';
+export 'domain/configuration.dart';
+export 'domain/conversations.dart';
+export 'domain/diff.dart';

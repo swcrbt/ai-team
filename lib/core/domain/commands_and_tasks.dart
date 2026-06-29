@@ -1,4 +1,4 @@
-part of '../domain.dart';
+import 'diff.dart';
 
 enum ConversationStatus { idle, running, paused, stopped, failed }
 
@@ -118,7 +118,7 @@ class PatchProposal {
       originalContent: originalContent,
       proposedContent: proposedContent,
       memberName: memberName,
-      diff: _createUnifiedDiff(filePath, originalContent, proposedContent),
+      diff: createUnifiedDiff(filePath, originalContent, proposedContent),
     );
   }
 

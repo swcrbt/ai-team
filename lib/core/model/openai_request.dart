@@ -1,4 +1,5 @@
-part of '../model_gateway.dart';
+import '../domain.dart';
+import 'gateway_contracts.dart';
 
 Map<String, Object?> buildOpenAiCompatibleRequestBody({
   required ModelProfile model,
@@ -10,7 +11,7 @@ Map<String, Object?> buildOpenAiCompatibleRequestBody({
 }) {
   final reasoningEffort = model.reasoningEffort == null
       ? null
-      : _normalizeOptionalText(model.reasoningEffort!);
+      : _normalizeOptionalRequestText(model.reasoningEffort!);
   final requestBody = <String, Object?>{
     'model': model.modelName,
     'stream': model.streaming,
@@ -53,3 +54,7 @@ List<Map<String, Object?>> _toolRoundMessages(List<ModelToolRound> rounds) {
 Uri openAiCompatibleChatCompletionsEndpoint(ModelProfile model) => Uri.parse(
       '${model.baseUrl.replaceFirst(RegExp(r'/$'), '')}/chat/completions',
     );
+
+String? _normalizeOptionalRequestText(String value) {
+  return value.trim().isEmpty ? null : value;
+}

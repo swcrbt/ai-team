@@ -1,158 +1,18 @@
-part of '../app.dart';
+import 'dart:async';
 
-typedef StateChanged = FutureOr<void> Function(AppState state);
+import 'package:flutter/material.dart';
 
-class ChatScrollDiagnostics {
-  var contentUpdateCount = 0;
-  var scrollScheduleCount = 0;
-  var actualJumpCount = 0;
-  var nearBottomFlipCount = 0;
-  var streamingBodyBuildCount = 0;
-  var streamingThinkingBuildCount = 0;
-  var streamingStableSegmentCommitCount = 0;
-  var streamingTailUpdateCount = 0;
-  var markdownBodyBuildCount = 0;
-  var globalCommitCount = 0;
-  var globalNotifyCount = 0;
-  var persistenceWriteCount = 0;
-  var appBuildCount = 0;
-  var chatPaneBuildCount = 0;
-  var streamingDraftUpdateCount = 0;
-  final messageBubbleBuildCounts = <String, int>{};
-  final jumpSamples = <ChatScrollJumpSample>[];
-
-  void reset() {
-    contentUpdateCount = 0;
-    scrollScheduleCount = 0;
-    actualJumpCount = 0;
-    nearBottomFlipCount = 0;
-    streamingBodyBuildCount = 0;
-    streamingThinkingBuildCount = 0;
-    streamingStableSegmentCommitCount = 0;
-    streamingTailUpdateCount = 0;
-    markdownBodyBuildCount = 0;
-    globalCommitCount = 0;
-    globalNotifyCount = 0;
-    persistenceWriteCount = 0;
-    appBuildCount = 0;
-    chatPaneBuildCount = 0;
-    streamingDraftUpdateCount = 0;
-    messageBubbleBuildCounts.clear();
-    jumpSamples.clear();
-  }
-}
-
-class ChatScrollJumpSample {
-  const ChatScrollJumpSample({
-    required this.beforePixels,
-    required this.beforeMaxScrollExtent,
-    required this.target,
-    required this.afterPixels,
-    required this.afterMaxScrollExtent,
-  });
-
-  final double beforePixels;
-  final double beforeMaxScrollExtent;
-  final double target;
-  final double afterPixels;
-  final double afterMaxScrollExtent;
-}
-
-class StreamingTextPartitionUpdate {
-  const StreamingTextPartitionUpdate({
-    required this.reset,
-    required this.newStableSegments,
-    required this.tailChanged,
-  });
-
-  final bool reset;
-  final List<String> newStableSegments;
-  final bool tailChanged;
-}
-
-class StreamingTextPartition {
-  final stableSegments = <String>[];
-  var lastContent = '';
-  var stableCommittedLength = 0;
-  var liveTail = '';
-
-  StreamingTextPartitionUpdate apply(String content, {bool reset = false}) {
-    var didReset = false;
-    if (reset || !content.startsWith(lastContent)) {
-      _reset();
-      didReset = true;
-    }
-    if (content.length < stableCommittedLength) {
-      _reset();
-      didReset = true;
-    }
-
-    final newStableSegments = <String>[];
-    final stableBoundary = content.lastIndexOf('\n') + 1;
-    if (stableBoundary < stableCommittedLength) {
-      _reset();
-      didReset = true;
-    }
-    if (stableBoundary > stableCommittedLength) {
-      final stableText = content.substring(
-        stableCommittedLength,
-        stableBoundary,
-      );
-      stableSegments.add(stableText);
-      newStableSegments.add(stableText);
-      stableCommittedLength = stableBoundary;
-    }
-
-    final nextTail = content.substring(stableCommittedLength);
-    final tailChanged = nextTail != liveTail;
-    if (tailChanged) {
-      liveTail = nextTail;
-    }
-    lastContent = content;
-
-    return StreamingTextPartitionUpdate(
-      reset: didReset,
-      newStableSegments: newStableSegments,
-      tailChanged: tailChanged,
-    );
-  }
-
-  void _reset() {
-    stableSegments.clear();
-    stableCommittedLength = 0;
-    liveTail = '';
-    lastContent = '';
-  }
-}
-
-class ChatStreamingDraft {
-  const ChatStreamingDraft({
-    required this.conversationId,
-    required this.message,
-  });
-
-  final String conversationId;
-  final ChatMessage message;
-}
-
-const _reasoningEffortOffValue = '';
-const _reasoningEffortValues = [
-  'none',
-  'minimal',
-  'low',
-  'medium',
-  'high',
-  'xhigh'
-];
-const _reasoningEffortLabels = <String, String>{
-  _reasoningEffortOffValue: '关闭',
-  'none': 'none',
-  'minimal': 'minimal',
-  'low': 'low',
-  'medium': 'medium',
-  'high': 'high',
-  'xhigh': 'xhigh',
-};
+import '../application/app_controller.dart';
+import '../application/chat_streaming.dart';
+import '../core/domain.dart';
+import '../core/file_dialogs.dart';
+import '../core/model_gateway.dart';
+import '../core/orchestrator.dart';
+import 'chat/chat_pane.dart';
+import 'conversation_sidebar.dart';
+import 'main_view.dart';
+import 'management/management_pages.dart';
+import 'sidebar.dart';
 
 class AiTeamApp extends StatelessWidget {
   const AiTeamApp({
@@ -216,8 +76,8 @@ class AiTeamHome extends StatefulWidget {
 
 class _AiTeamHomeState extends State<AiTeamHome> {
   late AppController controller;
-  final chatPaneKeys = <String, GlobalKey<_ChatPaneState>>{};
-  _MainView mainView = _MainView.chat;
+  final chatPaneKeys = <String, GlobalKey<ChatPaneState>>{};
+  MainView mainView = MainView.chat;
 
   @override
   void initState() {
@@ -238,7 +98,7 @@ class _AiTeamHomeState extends State<AiTeamHome> {
     super.dispose();
   }
 
-  void _showMainView(_MainView view) {
+  void _showMainView(MainView view) {
     setState(() => mainView = view);
   }
 
@@ -258,17 +118,17 @@ class _AiTeamHomeState extends State<AiTeamHome> {
                   children: [
                     SizedBox(
                       width: 72,
-                      child: _AppSidebar(
+                      child: AppSidebar(
                         selectedView: mainView,
-                        onChat: () => _showMainView(_MainView.chat),
-                        onTeam: () => _showMainView(_MainView.teams),
-                        onModels: () => _showMainView(_MainView.models),
-                        onRoles: () => _showMainView(_MainView.roles),
-                        onMembers: () => _showMainView(_MainView.members),
-                        onHistory: () => _showMainView(_MainView.history),
-                        onAudit: () => _showMainView(_MainView.audit),
-                        onProject: () => _showMainView(_MainView.project),
-                        onSettings: () => _showMainView(_MainView.settings),
+                        onChat: () => _showMainView(MainView.chat),
+                        onTeam: () => _showMainView(MainView.teams),
+                        onModels: () => _showMainView(MainView.models),
+                        onRoles: () => _showMainView(MainView.roles),
+                        onMembers: () => _showMainView(MainView.members),
+                        onHistory: () => _showMainView(MainView.history),
+                        onAudit: () => _showMainView(MainView.audit),
+                        onProject: () => _showMainView(MainView.project),
+                        onSettings: () => _showMainView(MainView.settings),
                       ),
                     ),
                     Expanded(
@@ -276,10 +136,10 @@ class _AiTeamHomeState extends State<AiTeamHome> {
                         fit: StackFit.expand,
                         children: [
                           Offstage(
-                            offstage: mainView != _MainView.chat,
+                            offstage: mainView != MainView.chat,
                             child: _buildChatWorkspace(conversationListWidth),
                           ),
-                          if (mainView != _MainView.chat) _buildSecondaryView(),
+                          if (mainView != MainView.chat) _buildSecondaryView(),
                         ],
                       ),
                     ),
@@ -310,12 +170,12 @@ class _AiTeamHomeState extends State<AiTeamHome> {
       children: [
         SizedBox(
           width: conversationListWidth,
-          child: _ConversationList(
+          child: ConversationList(
             controller: controller,
             selectedView: mainView,
             onSelectConversation: (conversationId) {
               controller.selectConversation(conversationId);
-              setState(() => mainView = _MainView.chat);
+              setState(() => mainView = MainView.chat);
             },
           ),
         ),
@@ -325,10 +185,10 @@ class _AiTeamHomeState extends State<AiTeamHome> {
             index: selectedIndex < 0 ? 0 : selectedIndex,
             children: paneConversations
                 .map(
-                  (conversation) => _ChatPane(
+                  (conversation) => ChatPane(
                     key: chatPaneKeys.putIfAbsent(
                       conversation.id,
-                      () => GlobalKey<_ChatPaneState>(
+                      () => GlobalKey<ChatPaneState>(
                         debugLabel: 'chat-pane-${conversation.id}',
                       ),
                     ),
@@ -346,33 +206,21 @@ class _AiTeamHomeState extends State<AiTeamHome> {
 
   Widget _buildSecondaryView() {
     return switch (mainView) {
-      _MainView.teams => _TeamManagementPage(
+      MainView.teams => TeamManagementPage(
           controller: controller,
-          onStartChat: () => _showMainView(_MainView.chat),
+          onStartChat: () => _showMainView(MainView.chat),
         ),
-      _MainView.models => _ModelManagementPage(controller: controller),
-      _MainView.roles => _RoleManagementPage(controller: controller),
-      _MainView.members => _MemberManagementPage(
+      MainView.models => ModelManagementPage(controller: controller),
+      MainView.roles => RoleManagementPage(controller: controller),
+      MainView.members => MemberManagementPage(
           controller: controller,
-          onStartChat: () => _showMainView(_MainView.chat),
+          onStartChat: () => _showMainView(MainView.chat),
         ),
-      _MainView.history => _HistoryPage(controller: controller),
-      _MainView.audit => _AuditLogPage(controller: controller),
-      _MainView.project => _ProjectPage(controller: controller),
-      _MainView.settings => _SettingsPage(controller: controller),
-      _MainView.chat => const SizedBox.shrink(),
+      MainView.history => HistoryPage(controller: controller),
+      MainView.audit => AuditLogPage(controller: controller),
+      MainView.project => ProjectPage(controller: controller),
+      MainView.settings => SettingsPage(controller: controller),
+      MainView.chat => const SizedBox.shrink(),
     };
   }
-}
-
-enum _MainView {
-  chat,
-  teams,
-  models,
-  roles,
-  members,
-  history,
-  audit,
-  project,
-  settings,
 }

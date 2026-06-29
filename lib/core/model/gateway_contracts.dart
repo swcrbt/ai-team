@@ -1,4 +1,7 @@
-part of '../model_gateway.dart';
+import 'dart:async';
+
+import '../domain.dart';
+import 'model_gateway_exception.dart';
 
 abstract class ModelGateway {
   Future<String> complete({

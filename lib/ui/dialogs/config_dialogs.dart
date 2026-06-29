@@ -1,6 +1,12 @@
-part of '../../app.dart';
+import 'dart:io';
 
-Future<void> _showTeamDialog(
+import 'package:flutter/material.dart';
+
+import '../../application/app_controller.dart';
+import '../../core/domain.dart';
+import '../../core/model_gateway.dart';
+
+Future<void> showTeamDialog(
   BuildContext context,
   AppController controller, {
   Team? team,
@@ -141,7 +147,7 @@ Future<void> _showTeamDialog(
   );
 }
 
-Future<void> _showModelDialog(
+Future<void> showModelDialog(
   BuildContext context,
   AppController controller, {
   ModelProfile? model,
@@ -159,7 +165,7 @@ Future<void> _showModelDialog(
     text: (model?.maxTokens ?? 1600).toString(),
   );
   var streaming = model?.streaming ?? true;
-  var reasoningEffort = model?.reasoningEffort ?? _reasoningEffortOffValue;
+  var reasoningEffort = model?.reasoningEffort ?? reasoningEffortOffValue;
   String? validationError;
   await showDialog<void>(
     context: context,
@@ -203,12 +209,12 @@ Future<void> _showModelDialog(
                     decoration: _dialogInputDecoration('深度思考'),
                     items: [
                       for (final value in [
-                        _reasoningEffortOffValue,
-                        ..._reasoningEffortValues,
+                        reasoningEffortOffValue,
+                        ...reasoningEffortValues,
                       ])
                         DropdownMenuItem(
                           value: value,
-                          child: Text(_reasoningEffortLabels[value] ?? value),
+                          child: Text(reasoningEffortLabels[value] ?? value),
                         ),
                     ],
                     onChanged: (value) {
@@ -251,7 +257,7 @@ Future<void> _showModelDialog(
                   streaming: streaming,
                   temperature: parsedTemperature,
                   maxTokens: parsedMaxTokens,
-                  reasoningEffort: reasoningEffort == _reasoningEffortOffValue
+                  reasoningEffort: reasoningEffort == reasoningEffortOffValue
                       ? null
                       : reasoningEffort,
                 );
@@ -273,7 +279,7 @@ Future<void> _showModelDialog(
   );
 }
 
-Future<void> _showRoleDialog(
+Future<void> showRoleDialog(
   BuildContext context,
   AppController controller, {
   RoleTemplate? role,
@@ -476,7 +482,7 @@ Future<void> _showRoleDialog(
   );
 }
 
-Future<void> _showMemberDialog(
+Future<void> showMemberDialog(
   BuildContext context,
   AppController controller, {
   TeamMember? member,
@@ -577,7 +583,7 @@ Future<void> _showMemberDialog(
   );
 }
 
-Future<void> _showWorkspacePatchDialog(
+Future<void> showWorkspacePatchDialog(
   BuildContext context,
   AppController controller,
 ) async {
@@ -700,7 +706,7 @@ Future<void> _showWorkspacePatchDialog(
   );
 }
 
-Future<void> _showWorkspaceFilesDialog(
+Future<void> showWorkspaceFilesDialog(
   BuildContext context,
   AppController controller,
 ) async {
@@ -788,7 +794,7 @@ Future<void> _showWorkspaceFilesDialog(
   );
 }
 
-Future<void> _showCommandDialog(
+Future<void> showCommandDialog(
   BuildContext context,
   AppController controller,
 ) async {
@@ -857,7 +863,7 @@ Future<void> _showCommandDialog(
   );
 }
 
-Future<void> _showExportDialog(
+Future<void> showExportDialog(
   BuildContext context,
   AppController controller,
 ) async {
@@ -1139,7 +1145,7 @@ class _DialogError extends StatelessWidget {
   }
 }
 
-void _runConfigAction(
+void runConfigAction(
   BuildContext context,
   VoidCallback action,
 ) {

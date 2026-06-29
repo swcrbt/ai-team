@@ -1,19 +1,22 @@
-part of '../app.dart';
+import 'package:flutter/material.dart';
 
-String _conversationTitle(AppController controller, Conversation conversation) {
+import '../application/app_controller.dart';
+import '../core/domain.dart';
+
+String conversationTitle(AppController controller, Conversation conversation) {
   if (conversation.memberId == null) {
-    return '群聊 · ${_conversationDisplayTitle(controller, conversation)}';
+    return '群聊 · ${conversationDisplayTitle(controller, conversation)}';
   }
-  return '私聊 · ${_conversationDisplayTitle(controller, conversation)}';
+  return '私聊 · ${conversationDisplayTitle(controller, conversation)}';
 }
 
-String _messageTimeText(DateTime value) {
+String messageTimeText(DateTime value) {
   final hour = value.hour.toString().padLeft(2, '0');
   final minute = value.minute.toString().padLeft(2, '0');
   return '$hour:$minute';
 }
 
-String _auditLogTimeText(DateTime value) {
+String auditLogTimeText(DateTime value) {
   final year = value.year.toString().padLeft(4, '0');
   final month = value.month.toString().padLeft(2, '0');
   final day = value.day.toString().padLeft(2, '0');
@@ -23,8 +26,8 @@ String _auditLogTimeText(DateTime value) {
   return '$year-$month-$day $hour:$minute:$second';
 }
 
-String _conversationMeta(AppController controller, Conversation conversation) {
-  final status = _statusText(conversation.status);
+String conversationMeta(AppController controller, Conversation conversation) {
+  final status = statusText(conversation.status);
   final members = controller.membersForConversation(conversation.id);
   if (conversation.memberId == null) {
     return '${members.length} 位成员 · 第 ${conversation.currentRound} 轮 · $status';
@@ -32,22 +35,28 @@ String _conversationMeta(AppController controller, Conversation conversation) {
   final member = members.firstWhere(
     (item) => item.id == conversation.memberId,
   );
-  return '${_roleName(controller.state, member.roleId)} · ${_modelName(controller.state, member.modelId)} · $status';
+  return '${roleName(controller.state, member.roleId)} · ${modelName(controller.state, member.modelId)} · $status';
 }
 
-String _inputHint(AppController controller, Conversation conversation) {
+String roleName(AppState state, String roleId) =>
+    state.roles.firstWhere((role) => role.id == roleId).name;
+
+String modelName(AppState state, String modelId) =>
+    state.models.firstWhere((model) => model.id == modelId).name;
+
+String inputHint(AppController controller, Conversation conversation) {
   if (conversation.memberId == null) {
     return '发给 ${controller.teamForConversation(conversation.id).name}';
   }
-  return '发给 ${_conversationSubjectTitle(controller, conversation)}';
+  return '发给 ${conversationSubjectTitle(controller, conversation)}';
 }
 
-String _avatarText(String name) {
+String avatarText(String name) {
   final trimmed = name.trim();
   return trimmed.isEmpty ? '?' : trimmed.substring(0, 1);
 }
 
-Color _avatarColor(String name) {
+Color avatarColor(String name) {
   if (name == '秘书') {
     return const Color(0xFF22C55E);
   }
@@ -60,7 +69,7 @@ Color _avatarColor(String name) {
   return const Color(0xFF64748B);
 }
 
-String _conversationPreview(Conversation conversation) {
+String conversationPreview(Conversation conversation) {
   if (conversation.messages.isEmpty) {
     return '暂无消息';
   }
@@ -68,7 +77,7 @@ String _conversationPreview(Conversation conversation) {
   return '${message.authorName}: ${message.content}'.replaceAll('\n', ' ');
 }
 
-String _conversationDisplayTitle(
+String conversationDisplayTitle(
   AppController controller,
   Conversation conversation,
 ) {
@@ -79,10 +88,10 @@ String _conversationDisplayTitle(
   if (conversation.messages.isEmpty) {
     return '新会话';
   }
-  return _conversationSubjectTitle(controller, conversation);
+  return conversationSubjectTitle(controller, conversation);
 }
 
-String _conversationSubjectTitle(
+String conversationSubjectTitle(
   AppController controller,
   Conversation conversation,
 ) {
@@ -101,7 +110,7 @@ String? _distinctConversationTitle(Conversation conversation) {
     return null;
   }
   if (conversation.messages.isNotEmpty &&
-      _conversationPreview(conversation).trim() == title) {
+      conversationPreview(conversation).trim() == title) {
     return null;
   }
   String? firstUserMessage;
@@ -117,27 +126,7 @@ String? _distinctConversationTitle(Conversation conversation) {
   return title;
 }
 
-String? _normalizeGeneratedConversationTitle(
-  String value, {
-  required Conversation conversation,
-  required String firstUserMessage,
-}) {
-  final title = value
-      .trim()
-      .split(RegExp(r'[\r\n]+'))
-      .first
-      .trim()
-      .replaceAll(RegExp(r"""^["“”'‘’]+|["“”'‘’]+$"""), '')
-      .trim();
-  if (title.isEmpty ||
-      title == firstUserMessage.trim() ||
-      title == _conversationPreview(conversation).trim()) {
-    return null;
-  }
-  return title.length > 32 ? title.substring(0, 32) : title;
-}
-
-String? _normalizedThinkingContent(ChatMessage message) {
+String? normalizedThinkingContent(ChatMessage message) {
   final thinkingContent = message.thinkingContent;
   if (thinkingContent == null || thinkingContent.trim().isEmpty) {
     return null;
@@ -145,8 +134,8 @@ String? _normalizedThinkingContent(ChatMessage message) {
   return thinkingContent;
 }
 
-String _thinkingTitle(ChatMessage message) {
-  final duration = _messageGenerationDurationText(message);
+String thinkingTitle(ChatMessage message) {
+  final duration = messageGenerationDurationText(message);
   return switch (message.generationStatus) {
     ChatMessageGenerationStatus.streaming => '思考中… $duration',
     ChatMessageGenerationStatus.failed => '思考失败 · $duration',
@@ -156,8 +145,8 @@ String _thinkingTitle(ChatMessage message) {
   };
 }
 
-String? _messageInlineGenerationStatus(ChatMessage message) {
-  final duration = _messageGenerationDurationText(message);
+String? messageInlineGenerationStatus(ChatMessage message) {
+  final duration = messageGenerationDurationText(message);
   return switch (message.generationStatus) {
     ChatMessageGenerationStatus.failed => '失败 · $duration',
     ChatMessageGenerationStatus.stopped => '已停止 · $duration',
@@ -165,14 +154,14 @@ String? _messageInlineGenerationStatus(ChatMessage message) {
   };
 }
 
-bool _isAwaitingFirstModelOutput(ChatMessage message) {
+bool isAwaitingFirstModelOutput(ChatMessage message) {
   return !message.isUser &&
       message.generationStatus == ChatMessageGenerationStatus.streaming &&
       message.content.trim().isEmpty &&
       (message.thinkingContent?.trim().isEmpty ?? true);
 }
 
-bool _isStreamingThinkingWithoutReplyContent(
+bool isStreamingThinkingWithoutReplyContent(
   ChatMessage message,
   String? thinkingContent,
 ) {
@@ -182,7 +171,7 @@ bool _isStreamingThinkingWithoutReplyContent(
       thinkingContent != null;
 }
 
-String _messageGenerationDurationText(ChatMessage message) {
+String messageGenerationDurationText(ChatMessage message) {
   final milliseconds =
       message.generationStatus == ChatMessageGenerationStatus.streaming
           ? DateTime.now().difference(message.createdAt).inMilliseconds
@@ -191,7 +180,7 @@ String _messageGenerationDurationText(ChatMessage message) {
   return '${seconds}s';
 }
 
-IconData _conversationListIcon(
+IconData conversationListIcon(
   AppController controller,
   Conversation conversation,
 ) {
@@ -206,23 +195,23 @@ IconData _conversationListIcon(
       : Icons.person_rounded;
 }
 
-String _conversationListTitle(
+String conversationListTitle(
   AppController controller,
   Conversation conversation,
 ) {
-  return _conversationDisplayTitle(controller, conversation);
+  return conversationDisplayTitle(controller, conversation);
 }
 
-String _conversationListSubtitle(
+String conversationListSubtitle(
   AppController controller,
   Conversation conversation,
 ) {
   if (conversation.messages.isEmpty) {
     final prefix = conversation.memberId == null ? '群聊' : '私聊';
-    return '$prefix · ${_conversationSubjectTitle(controller, conversation)}';
+    return '$prefix · ${conversationSubjectTitle(controller, conversation)}';
   }
   if (conversation.memberId == null) {
-    return _conversationPreview(conversation);
+    return conversationPreview(conversation);
   }
   final member = controller.state.members.firstWhere(
     (item) => item.id == conversation.memberId,
@@ -230,7 +219,7 @@ String _conversationListSubtitle(
   return _privateConversationPreview(controller, conversation, member);
 }
 
-String? _conversationListBadge(
+String? conversationListBadge(
   AppController controller,
   Conversation conversation,
 ) {
@@ -253,24 +242,24 @@ String _privateConversationPreview(
   TeamMember member,
 ) {
   if (conversation.messages.length > 1) {
-    return _conversationPreview(conversation);
+    return conversationPreview(conversation);
   }
-  return _roleName(controller.state, member.roleId);
+  return roleName(controller.state, member.roleId);
 }
 
-String _conversationMenuTitle(
+String conversationMenuTitle(
   AppController controller,
   Conversation conversation,
 ) {
-  final title = _conversationDisplayTitle(controller, conversation);
-  final subject = _conversationSubjectTitle(controller, conversation);
+  final title = conversationDisplayTitle(controller, conversation);
+  final subject = conversationSubjectTitle(controller, conversation);
   if (title == subject) {
     return title;
   }
   return '$title · $subject';
 }
 
-List<TeamMember> _typingMembers(
+List<TeamMember> typingMembers(
   AppController controller,
   Conversation conversation,
 ) {
@@ -316,22 +305,7 @@ List<TeamMember> _typingMembers(
       .toList();
 }
 
-int _queuedTaskSort(QueuedTask a, QueuedTask b) {
-  final priority = b.priority.compareTo(a.priority);
-  if (priority != 0) {
-    return priority;
-  }
-  return a.createdAt.compareTo(b.createdAt);
-}
-
-QueuedTask? _firstQueuedTaskOrNull(List<QueuedTask> tasks) {
-  if (tasks.isEmpty) {
-    return null;
-  }
-  return tasks.first;
-}
-
-QueuedTask? _firstTaskWithStatus(
+QueuedTask? firstTaskWithStatus(
   List<QueuedTask> tasks,
   QueuedTaskStatus status,
 ) {
@@ -343,19 +317,7 @@ QueuedTask? _firstTaskWithStatus(
   return null;
 }
 
-String _initialConversationId(AppState state) {
-  if (state.queuedTasks.isNotEmpty) {
-    return state.queuedTasks.first.conversationId;
-  }
-  return state.conversations
-      .firstWhere(
-        (conversation) => conversation.memberId != null,
-        orElse: () => state.conversations.first,
-      )
-      .id;
-}
-
-String _queuedTaskStatusText(QueuedTaskStatus status) {
+String queuedTaskStatusText(QueuedTaskStatus status) {
   return switch (status) {
     QueuedTaskStatus.pending => '待执行',
     QueuedTaskStatus.running => '执行中',
@@ -365,66 +327,7 @@ String _queuedTaskStatusText(QueuedTaskStatus status) {
   };
 }
 
-Conversation _createTeamConversation(Team team) {
-  return Conversation(
-    id: 'conv-${team.id}',
-    title: '团队会话',
-    teamId: team.id,
-    memberId: null,
-    messages: [
-      ChatMessage(
-        id: 'msg-welcome-${team.id}',
-        authorName: '秘书',
-        memberId: team.secretaryMemberId,
-        content: '把开发任务发到这里，我会分配给团队成员并汇总结果。',
-        createdAt: DateTime.now(),
-      ),
-    ],
-  );
-}
-
-Conversation _createMemberConversation(String teamId, TeamMember member) {
-  return Conversation(
-    id: 'conv-$teamId-${member.id}',
-    title: member.name,
-    teamId: teamId,
-    memberId: member.id,
-    messages: [
-      ChatMessage(
-        id: 'msg-welcome-$teamId-${member.id}',
-        authorName: member.name,
-        memberId: member.id,
-        content: '这里是和${member.name}的独立会话。',
-        createdAt: DateTime.now(),
-      ),
-    ],
-  );
-}
-
-bool _isGeneratedWelcomeOnlyMemberConversation(Conversation conversation) {
-  final memberId = conversation.memberId;
-  if (memberId == null || conversation.teamId == 'team-default') {
-    return false;
-  }
-  if (conversation.id != 'conv-${conversation.teamId}-$memberId' ||
-      conversation.messages.length != 1) {
-    return false;
-  }
-  final message = conversation.messages.single;
-  return message.id == 'msg-welcome-${conversation.teamId}-$memberId' &&
-      message.memberId == memberId;
-}
-
-String _basename(String path) {
-  final normalized = path.replaceAll('\\', '/');
-  final trimmed = normalized.endsWith('/')
-      ? normalized.substring(0, normalized.length - 1)
-      : normalized;
-  final index = trimmed.lastIndexOf('/');
-  return index >= 0 ? trimmed.substring(index + 1) : trimmed;
-}
-
-String _statusText(ConversationStatus status) {
+String statusText(ConversationStatus status) {
   return switch (status) {
     ConversationStatus.idle => '待命',
     ConversationStatus.running => '运行中',
@@ -434,14 +337,14 @@ String _statusText(ConversationStatus status) {
   };
 }
 
-String _collaborationModeLabel(TeamCollaborationMode mode) {
+String collaborationModeLabel(TeamCollaborationMode mode) {
   return switch (mode) {
     TeamCollaborationMode.serial => '串行',
     TeamCollaborationMode.parallel => '并行',
   };
 }
 
-String _taskStatusText(TaskAssignmentStatus status) {
+String taskStatusText(TaskAssignmentStatus status) {
   return switch (status) {
     TaskAssignmentStatus.pending => '待执行',
     TaskAssignmentStatus.running => '执行中',
@@ -451,7 +354,7 @@ String _taskStatusText(TaskAssignmentStatus status) {
   };
 }
 
-Color _taskStatusColor(TaskAssignmentStatus status) {
+Color taskStatusColor(TaskAssignmentStatus status) {
   return switch (status) {
     TaskAssignmentStatus.pending => const Color(0xFF6B7280),
     TaskAssignmentStatus.running => const Color(0xFF2563EB),

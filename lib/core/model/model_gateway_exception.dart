@@ -1,5 +1,3 @@
-part of '../model_gateway.dart';
-
 class ModelGatewayException implements Exception {
   const ModelGatewayException(this.message, {this.isRetryable = false});
 

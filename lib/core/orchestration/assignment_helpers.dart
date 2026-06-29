@@ -1,4 +1,5 @@
-part of '../orchestrator.dart';
+import '../domain.dart';
+import '../model_gateway.dart';
 
 class ParsedAssignment {
   const ParsedAssignment({
@@ -10,8 +11,8 @@ class ParsedAssignment {
   final String instruction;
 }
 
-class _AssignmentPlan {
-  const _AssignmentPlan({
+class AssignmentPlanResult {
+  const AssignmentPlanResult({
     required this.assignments,
     required this.invalidNames,
   });
@@ -20,8 +21,8 @@ class _AssignmentPlan {
   final List<String> invalidNames;
 }
 
-class _AssignmentOutcome {
-  const _AssignmentOutcome({
+class AssignmentOutcome {
+  const AssignmentOutcome({
     required this.message,
     required this.processMessages,
     required this.workingState,
@@ -34,8 +35,8 @@ class _AssignmentOutcome {
   final bool failed;
 }
 
-class _ModelMessageResult {
-  const _ModelMessageResult({
+class ModelMessageResult {
+  const ModelMessageResult({
     required this.message,
     required this.workingState,
   });
@@ -44,8 +45,8 @@ class _ModelMessageResult {
   final AppState workingState;
 }
 
-class _ToolExecutionOutcome {
-  const _ToolExecutionOutcome({
+class ToolExecutionOutcome {
+  const ToolExecutionOutcome({
     required this.workingState,
     required this.round,
     this.displayBlocks = const [],
@@ -56,8 +57,8 @@ class _ToolExecutionOutcome {
   final List<ChatMessageContentBlock> displayBlocks;
 }
 
-class _SingleToolExecutionOutcome {
-  const _SingleToolExecutionOutcome({
+class SingleToolExecutionOutcome {
+  const SingleToolExecutionOutcome({
     required this.workingState,
     required this.result,
     this.displayBlocks = const [],
@@ -68,7 +69,7 @@ class _SingleToolExecutionOutcome {
   final List<ChatMessageContentBlock> displayBlocks;
 }
 
-_AssignmentPlan _parseAssignmentPlan({
+AssignmentPlanResult parseAssignmentPlan({
   required String plan,
   required List<TeamMember> members,
 }) {
@@ -91,7 +92,7 @@ _AssignmentPlan _parseAssignmentPlan({
     }
     assignments.add(ParsedAssignment(member: member, instruction: instruction));
   }
-  return _AssignmentPlan(assignments: assignments, invalidNames: invalidNames);
+  return AssignmentPlanResult(assignments: assignments, invalidNames: invalidNames);
 }
 
 int _assignmentSeparatorIndex(String line) {
@@ -115,7 +116,7 @@ TeamMember? _memberByNameOrNull(List<TeamMember> members, String name) {
   return null;
 }
 
-String _secretarySystemPrompt({
+String secretarySystemPrompt({
   required RoleTemplate role,
   required TeamMember secretary,
   required Team team,
@@ -130,16 +131,16 @@ String _secretarySystemPrompt({
   ].join('\n');
 }
 
-ChatMessage _systemMessage(String content) {
+ChatMessage systemMessage(String content) {
   return ChatMessage(
-    id: _id('msg'),
+    id: orchestrationId('msg'),
     authorName: '系统',
     content: content,
     createdAt: DateTime.now(),
   );
 }
 
-void _ensureModelReady({
+void ensureModelReady({
   required TeamMember member,
   required ModelProfile model,
 }) {
@@ -149,7 +150,7 @@ void _ensureModelReady({
   }
 }
 
-AppState _replaceConversation(AppState state, Conversation conversation) {
+AppState replaceConversation(AppState state, Conversation conversation) {
   return state.copyWith(
     conversations: state.conversations
         .map((item) => item.id == conversation.id ? conversation : item)
@@ -157,7 +158,7 @@ AppState _replaceConversation(AppState state, Conversation conversation) {
   );
 }
 
-AppState _ensureMemberConversation(
+AppState ensureMemberConversation(
   AppState state, {
   required String teamId,
   required TeamMember member,
@@ -191,7 +192,7 @@ AppState _ensureMemberConversation(
   );
 }
 
-AppState _replaceTaskAssignment(AppState state, TaskAssignment assignment) {
+AppState replaceTaskAssignment(AppState state, TaskAssignment assignment) {
   return state.copyWith(
     taskAssignments: state.taskAssignments
         .map((item) => item.id == assignment.id ? assignment : item)
@@ -199,7 +200,7 @@ AppState _replaceTaskAssignment(AppState state, TaskAssignment assignment) {
   );
 }
 
-void _replaceMessageInList(List<ChatMessage> messages, ChatMessage message) {
+void replaceMessageInList(List<ChatMessage> messages, ChatMessage message) {
   final index = messages.indexWhere((item) => item.id == message.id);
   if (index < 0) {
     messages.add(message);
@@ -208,11 +209,11 @@ void _replaceMessageInList(List<ChatMessage> messages, ChatMessage message) {
   messages[index] = message;
 }
 
-String? _normalizeOptionalText(String value) {
+String? normalizeOptionalOrchestrationText(String value) {
   return value.trim().isEmpty ? null : value;
 }
 
-String _summarize(String content) {
+String summarizeMessage(String content) {
   final normalized = content.trim().replaceAll(RegExp(r'\s+'), ' ');
   if (normalized.length <= 120) {
     return normalized;
@@ -220,7 +221,7 @@ String _summarize(String content) {
   return '${normalized.substring(0, 120)}...';
 }
 
-String _formatSecretaryPrivateDispatchSuccess({
+String formatSecretaryPrivateDispatchSuccess({
   required String memberName,
   required String content,
 }) {
@@ -253,4 +254,4 @@ class FakeModelGateway implements ModelGateway {
   }
 }
 
-String _id(String prefix) => '$prefix-${DateTime.now().microsecondsSinceEpoch}';
+String orchestrationId(String prefix) => '$prefix-${DateTime.now().microsecondsSinceEpoch}';

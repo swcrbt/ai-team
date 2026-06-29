@@ -1,4 +1,7 @@
-part of '../app.dart';
+import 'dart:async';
+
+import '../core/domain.dart';
+import 'chat_streaming.dart';
 
 class StatePersistenceQueue {
   Future<void> _queue = Future<void>.value();

@@ -1,6 +1,4 @@
-part of '../domain.dart';
-
-String _createUnifiedDiff(
+String createUnifiedDiff(
   String filePath,
   String originalContent,
   String proposedContent,

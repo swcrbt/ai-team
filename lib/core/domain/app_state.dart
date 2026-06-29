@@ -1,4 +1,6 @@
-part of '../domain.dart';
+import 'commands_and_tasks.dart';
+import 'configuration.dart';
+import 'conversations.dart';
 
 class AppState {
   const AppState({

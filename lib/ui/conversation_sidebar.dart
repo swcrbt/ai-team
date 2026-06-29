@@ -1,21 +1,28 @@
-part of '../app.dart';
+// ignore_for_file: use_key_in_widget_constructors
 
-class _ConversationList extends StatefulWidget {
-  const _ConversationList({
+import 'package:flutter/material.dart';
+
+import '../application/app_controller.dart';
+import 'app_helpers.dart';
+import 'dialogs/config_dialogs.dart';
+import 'main_view.dart';
+
+class ConversationList extends StatefulWidget {
+  const ConversationList({
     required this.controller,
     required this.selectedView,
     required this.onSelectConversation,
   });
 
   final AppController controller;
-  final _MainView selectedView;
+  final MainView selectedView;
   final ValueChanged<String> onSelectConversation;
 
   @override
-  State<_ConversationList> createState() => _ConversationListState();
+  State<ConversationList> createState() => _ConversationListState();
 }
 
-class _ConversationListState extends State<_ConversationList> {
+class _ConversationListState extends State<ConversationList> {
   late final ScrollController conversationScrollController;
 
   @override
@@ -73,7 +80,7 @@ class _ConversationListState extends State<_ConversationList> {
                 IconButton.filledTonal(
                   tooltip: '新增',
                   onPressed: () =>
-                      _showMemberDialog(context, widget.controller),
+                      showMemberDialog(context, widget.controller),
                   icon: const Icon(Icons.add_rounded),
                 ),
               ],
@@ -96,23 +103,23 @@ class _ConversationListState extends State<_ConversationList> {
                   final conversation = visibleConversations[index];
                   return _RailTile(
                     key: ValueKey('conversation-row-${conversation.id}'),
-                    icon: _conversationListIcon(
+                    icon: conversationListIcon(
                       widget.controller,
                       conversation,
                     ),
-                    title: _conversationListTitle(
+                    title: conversationListTitle(
                       widget.controller,
                       conversation,
                     ),
-                    subtitle: _conversationListSubtitle(
+                    subtitle: conversationListSubtitle(
                       widget.controller,
                       conversation,
                     ),
-                    badge: _conversationListBadge(
+                    badge: conversationListBadge(
                       widget.controller,
                       conversation,
                     ),
-                    selected: widget.selectedView == _MainView.chat &&
+                    selected: widget.selectedView == MainView.chat &&
                         widget.controller.selectedConversationId ==
                             conversation.id,
                     pinned:

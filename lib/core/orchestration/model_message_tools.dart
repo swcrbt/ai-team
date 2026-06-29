@@ -1,6 +1,9 @@
-part of '../orchestrator.dart';
+import 'dart:convert';
 
-List<ModelToolDefinition> _modelToolDefinitions({
+import '../domain.dart';
+import '../model_gateway.dart';
+
+List<ModelToolDefinition> modelToolDefinitions({
   required RoleTemplate? role,
 }) {
   return [
@@ -64,7 +67,7 @@ List<ModelToolDefinition> _modelToolDefinitions({
   ];
 }
 
-RoleTemplate? _roleForMember(AppState state, String? memberId) {
+RoleTemplate? roleForMember(AppState state, String? memberId) {
   if (memberId == null) {
     return null;
   }
@@ -100,7 +103,7 @@ RoleTemplate? _roleForMember(AppState state, String? memberId) {
   );
 }
 
-String _appendToolSystemPrompt(
+String appendToolSystemPrompt(
   String systemPrompt, {
   required RoleTemplate? role,
 }) {
@@ -124,7 +127,7 @@ String _appendToolSystemPrompt(
   ].join('\n');
 }
 
-String _guardCommandExecutionClaim({
+String guardCommandExecutionClaim({
   required String content,
   required List<ChatMessage> requestMessages,
   required List<ModelToolDefinition> toolDefinitions,
@@ -162,7 +165,7 @@ bool _claimsCommandExecution(String content) {
   ).hasMatch(content);
 }
 
-String _formatCommandResultMessage(CommandRequest request) {
+String formatCommandResultMessage(CommandRequest request) {
   final output = request.output?.trim();
   return [
     '命令执行结果',
@@ -173,7 +176,7 @@ String _formatCommandResultMessage(CommandRequest request) {
   ].join('\n');
 }
 
-String _contentFromBlocks(List<ChatMessageContentBlock> blocks) {
+String contentFromBlocks(List<ChatMessageContentBlock> blocks) {
   return blocks
       .map((block) {
         return switch (block.type) {
@@ -198,7 +201,7 @@ String _formatCommandResultBlockText(CommandResultAttachment result) {
   ].join('\n');
 }
 
-List<ChatMessageContentBlock> _appendTextBlock(
+List<ChatMessageContentBlock> appendTextBlock(
   List<ChatMessageContentBlock> blocks,
   String text,
 ) {
@@ -211,13 +214,13 @@ List<ChatMessageContentBlock> _appendTextBlock(
   ];
 }
 
-ChatMessage _messageWithBlocks(
+ChatMessage messageWithBlocks(
   ChatMessage message,
   List<ChatMessageContentBlock> blocks, {
   ChatMessageGenerationStatus? generationStatus,
 }) {
   return message.copyWith(
-    content: _contentFromBlocks(blocks),
+    content: contentFromBlocks(blocks),
     contentBlocks: blocks,
     generationStatus: generationStatus,
   );

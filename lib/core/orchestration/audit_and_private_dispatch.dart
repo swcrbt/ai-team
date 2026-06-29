@@ -1,6 +1,8 @@
-part of '../orchestrator.dart';
+import '../domain.dart';
+import '../model_gateway.dart';
+import 'assignment_helpers.dart';
 
-AppState _appendModelRequestDiagnostic(
+AppState appendModelRequestDiagnostic(
   AppState state, {
   required String conversationId,
   required String? memberId,
@@ -29,7 +31,7 @@ AppState _appendModelRequestDiagnostic(
     auditLog: [
       ...state.auditLog,
       AuditEntry(
-        id: _id('audit'),
+        id: orchestrationId('audit'),
         action: 'model_request_diagnostic',
         detail: detail,
         metadata: metadata,
@@ -39,7 +41,7 @@ AppState _appendModelRequestDiagnostic(
   );
 }
 
-AppState _appendModelResponseDiagnostic(
+AppState appendModelResponseDiagnostic(
   AppState state, {
   required String conversationId,
   required String messageId,
@@ -90,7 +92,7 @@ AppState _appendModelResponseDiagnostic(
     auditLog: [
       ...state.auditLog,
       AuditEntry(
-        id: _id('audit'),
+        id: orchestrationId('audit'),
         action: 'model_response_diagnostic',
         detail: detail,
         metadata: metadata,
@@ -100,7 +102,7 @@ AppState _appendModelResponseDiagnostic(
   );
 }
 
-AppState _appendSecretaryPrivateDispatchAudit(
+AppState appendSecretaryPrivateDispatchAudit(
   AppState state, {
   required TeamMember secretary,
   required TeamMember target,
@@ -116,7 +118,7 @@ AppState _appendSecretaryPrivateDispatchAudit(
     auditLog: [
       ...state.auditLog,
       AuditEntry(
-        id: _id('audit'),
+        id: orchestrationId('audit'),
         action: 'secretary_private_member_dispatch',
         detail: 'secretary=${secretary.id} target=${target.id} status=$status',
         metadata: {
@@ -137,7 +139,7 @@ AppState _appendSecretaryPrivateDispatchAudit(
   );
 }
 
-List<TeamMember> _mentionedDispatchMembers({
+List<TeamMember> mentionedDispatchMembers({
   required AppState state,
   required Team team,
   required String userText,

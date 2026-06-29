@@ -1,4 +1,21 @@
-part of '../app.dart';
+import 'dart:async';
+import 'dart:collection';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+
+import '../core/commands/command_service.dart';
+import '../core/domain.dart';
+import '../core/file_dialogs.dart';
+import '../core/local_store.dart';
+import '../core/model_gateway.dart';
+import '../core/orchestrator.dart';
+import '../core/patching.dart';
+import '../core/workspace/workspace_service.dart';
+import 'app_controller_helpers.dart';
+import 'chat_streaming.dart';
+import 'state_persistence_queue.dart';
 
 class AppController extends ChangeNotifier {
   AppController(
@@ -13,7 +30,7 @@ class AppController extends ChangeNotifier {
   })  : state = initialState,
         exportStore = exportStore ?? JsonLocalStore.defaultStore(),
         commandService = commandService ?? const CommandService(),
-        selectedConversationId = _initialConversationId(initialState) {
+        selectedConversationId = initialConversationId(initialState) {
     final conversation = state.conversations.firstWhere(
       (item) => item.id == selectedConversationId,
     );
@@ -154,7 +171,7 @@ class AppController extends ChangeNotifier {
     final tasks = tasksForCurrentConversation
         .where((task) => task.status == QueuedTaskStatus.pending)
         .toList();
-    tasks.sort(_queuedTaskSort);
+    tasks.sort(queuedTaskSort);
     return tasks;
   }
 
@@ -252,7 +269,7 @@ class AppController extends ChangeNotifier {
     if (openedConversationIds.contains(conversation.id)) {
       return true;
     }
-    return !_isGeneratedWelcomeOnlyMemberConversation(conversation);
+    return !isGeneratedWelcomeOnlyMemberConversation(conversation);
   }
 
   List<TeamMember> get currentMembers => state.members
@@ -297,7 +314,7 @@ class AppController extends ChangeNotifier {
       }
     }
     if (conversation == null) {
-      conversation = _createMemberConversation(currentTeam.id, member);
+      conversation = createMemberConversation(currentTeam.id, member);
       _commit(
         state.copyWith(
           conversations: [
@@ -737,7 +754,7 @@ class AppController extends ChangeNotifier {
     if (_runningTaskId != null) {
       return;
     }
-    final next = _firstQueuedTaskOrNull(pendingTasksForCurrentConversation);
+    final next = firstQueuedTaskOrNull(pendingTasksForCurrentConversation);
     if (next == null) {
       return;
     }
@@ -956,7 +973,7 @@ class AppController extends ChangeNotifier {
           ),
         ],
       );
-      final normalizedTitle = _normalizeGeneratedConversationTitle(
+      final normalizedTitle = normalizeGeneratedConversationTitle(
         generated,
         conversation: _conversationById(conversationId),
         firstUserMessage: firstUserMessage,
@@ -1043,7 +1060,7 @@ class AppController extends ChangeNotifier {
         teams: [...state.teams, team],
         conversations: [
           ...state.conversations,
-          _createTeamConversation(team),
+          createTeamConversation(team),
         ],
         auditLog: [
           ...state.auditLog,
@@ -1333,7 +1350,7 @@ class AppController extends ChangeNotifier {
     final normalized = Directory(path).absolute.path;
     final workspace = ProjectWorkspace(
       id: 'workspace-${DateTime.now().microsecondsSinceEpoch}',
-      name: _basename(normalized),
+      name: pathBasename(normalized),
       path: normalized,
     );
     _commit(
@@ -1928,7 +1945,7 @@ class AppController extends ChangeNotifier {
     state = nextState;
     _syncConversationOrder();
     if (!state.conversations.any((item) => item.id == selectedConversationId)) {
-      selectedConversationId = _initialConversationId(state);
+      selectedConversationId = initialConversationId(state);
     }
     _persistState(state);
     _notifyListeners();
@@ -2092,7 +2109,7 @@ class AppController extends ChangeNotifier {
     final reasoningEffort = model.reasoningEffort?.trim();
     if (reasoningEffort != null &&
         reasoningEffort.isNotEmpty &&
-        !_reasoningEffortValues.contains(reasoningEffort)) {
+        !reasoningEffortValues.contains(reasoningEffort)) {
       throw ArgumentError('深度思考档位无效');
     }
   }

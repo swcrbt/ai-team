@@ -1,4 +1,6 @@
-part of '../model_gateway.dart';
+import '../domain.dart';
+import 'gateway_contracts.dart';
+import 'model_gateway_exception.dart';
 
 Future<ModelCompletion> completeModelWithMetadata(
   ModelGateway gateway, {

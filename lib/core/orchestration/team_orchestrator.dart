@@ -1,11 +1,17 @@
-part of '../orchestrator.dart';
+import '../commands/command_service.dart';
+import '../domain.dart';
+import '../model_gateway.dart';
+import 'assignment_helpers.dart';
+import 'audit_and_private_dispatch.dart';
+import 'model_message_tools.dart';
+import 'tool_executor.dart';
 
 typedef StreamingMessageDraftHandler = void Function({
   required String conversationId,
   required ChatMessage message,
 });
 
-const _maxModelToolRounds = 3;
+const maxModelToolRounds = 3;
 
 class TeamOrchestrator {
   TeamOrchestrator(
@@ -86,12 +92,12 @@ class TeamOrchestrator {
         state.roles.firstWhere((item) => item.id == secretary.roleId);
     final secretaryModel =
         state.models.firstWhere((item) => item.id == secretary.modelId);
-    _ensureModelReady(member: secretary, model: secretaryModel);
+    ensureModelReady(member: secretary, model: secretaryModel);
     final now = DateTime.now();
     final messages = [
       ...conversation.messages,
       ChatMessage(
-        id: _id('msg'),
+        id: orchestrationId('msg'),
         authorName: '我',
         content: userText,
         createdAt: now,
@@ -99,7 +105,7 @@ class TeamOrchestrator {
       ),
     ];
     final round = conversation.currentRound + 1;
-    var workingState = _replaceConversation(
+    var workingState = replaceConversation(
       state,
       conversation.copyWith(
         messages: messages,
@@ -116,7 +122,7 @@ class TeamOrchestrator {
       authorName: secretary.name,
       memberId: secretary.id,
       model: secretaryModel,
-      systemPrompt: _secretarySystemPrompt(
+      systemPrompt: secretarySystemPrompt(
         role: secretaryRole,
         secretary: secretary,
         team: team,
@@ -125,7 +131,7 @@ class TeamOrchestrator {
       requestMessages: [
         ...messages,
         ChatMessage(
-          id: _id('msg-plan-request'),
+          id: orchestrationId('msg-plan-request'),
           authorName: '系统',
           content:
               '请按每行“成员名: 具体任务”的格式分配任务。可用成员: ${workerMembers.map((member) => member.name).join('、')}。',
@@ -138,7 +144,7 @@ class TeamOrchestrator {
     );
     workingState = planResult.workingState;
     var plan = planResult.message.content;
-    var parsed = _parseAssignmentPlan(plan: plan, members: workerMembers);
+    var parsed = parseAssignmentPlan(plan: plan, members: workerMembers);
     if (parsed.invalidNames.isNotEmpty) {
       planResult = await _runVisibleModelMessage(
         workingState: workingState,
@@ -147,7 +153,7 @@ class TeamOrchestrator {
         authorName: secretary.name,
         memberId: secretary.id,
         model: secretaryModel,
-        systemPrompt: _secretarySystemPrompt(
+        systemPrompt: secretarySystemPrompt(
           role: secretaryRole,
           secretary: secretary,
           team: team,
@@ -156,7 +162,7 @@ class TeamOrchestrator {
         requestMessages: [
           ...messages,
           ChatMessage(
-            id: _id('msg-replan-request'),
+            id: orchestrationId('msg-replan-request'),
             authorName: '系统',
             content:
                 '分工包含不存在成员: ${parsed.invalidNames.join('、')}。请只使用: ${workerMembers.map((member) => member.name).join('、')}。',
@@ -169,7 +175,7 @@ class TeamOrchestrator {
       );
       workingState = planResult.workingState;
       plan = planResult.message.content;
-      parsed = _parseAssignmentPlan(plan: plan, members: workerMembers);
+      parsed = parseAssignmentPlan(plan: plan, members: workerMembers);
       if (parsed.invalidNames.isNotEmpty) {
         throw ModelGatewayException(
           '秘书分工包含不存在成员: ${parsed.invalidNames.join('、')}',
@@ -183,13 +189,13 @@ class TeamOrchestrator {
         currentRound: round,
         status: ConversationStatus.idle,
       );
-      return _replaceConversation(workingState, updatedConversation);
+      return replaceConversation(workingState, updatedConversation);
     }
 
     final taskAssignments = [
       for (var index = 0; index < parsed.assignments.length; index++)
         TaskAssignment(
-          id: _id('task-$round-$index'),
+          id: orchestrationId('task-$round-$index'),
           conversationId: conversation.id,
           round: round,
           memberId: parsed.assignments[index].member.id,
@@ -226,13 +232,13 @@ class TeamOrchestrator {
         );
         messages.addAll(outcome.processMessages);
         workingState = outcome.workingState;
-        workingState = _replaceTaskAssignment(
+        workingState = replaceTaskAssignment(
           workingState,
           taskAssignments[index].copyWith(
             status: outcome.failed
                 ? TaskAssignmentStatus.failed
                 : TaskAssignmentStatus.completed,
-            summary: _summarize(outcome.message.content),
+            summary: summarizeMessage(outcome.message.content),
             completedAt: DateTime.now(),
           ),
         );
@@ -251,7 +257,7 @@ class TeamOrchestrator {
           onStreamingDraft: onStreamingDraft,
         );
         workingState = incremental.workingState;
-        workingState = _replaceConversation(
+        workingState = replaceConversation(
           workingState,
           conversation.copyWith(
             messages: messages,
@@ -278,13 +284,13 @@ class TeamOrchestrator {
         );
         messages.addAll(outcome.processMessages);
         workingState = outcome.workingState;
-        workingState = _replaceTaskAssignment(
+        workingState = replaceTaskAssignment(
           workingState,
           taskAssignments[index].copyWith(
             status: outcome.failed
                 ? TaskAssignmentStatus.failed
                 : TaskAssignmentStatus.completed,
-            summary: _summarize(outcome.message.content),
+            summary: summarizeMessage(outcome.message.content),
             completedAt: DateTime.now(),
           ),
         );
@@ -315,14 +321,14 @@ class TeamOrchestrator {
       currentRound: round,
       status: nextStatus,
     );
-    return _replaceConversation(
+    return replaceConversation(
       workingState,
       updatedConversation,
     ).copyWith(
       auditLog: [
         ...workingState.auditLog,
         AuditEntry(
-          id: _id('audit'),
+          id: orchestrationId('audit'),
           action: 'team_task_dispatched',
           detail: 'team=$teamId round=$round text=$userText',
           createdAt: DateTime.now(),
@@ -331,7 +337,7 @@ class TeamOrchestrator {
     );
   }
 
-  Future<_ModelMessageResult> _runSecretarySummary({
+  Future<ModelMessageResult> _runSecretarySummary({
     required AppState state,
     required AppState workingState,
     required Conversation conversation,
@@ -353,7 +359,7 @@ class TeamOrchestrator {
       authorName: secretary.name,
       memberId: secretary.id,
       model: secretaryModel,
-      systemPrompt: _secretarySystemPrompt(
+      systemPrompt: secretarySystemPrompt(
         role: secretaryRole,
         secretary: secretary,
         team: team,
@@ -366,7 +372,7 @@ class TeamOrchestrator {
     );
   }
 
-  Future<_AssignmentOutcome> _runAssignmentWithRecovery({
+  Future<AssignmentOutcome> _runAssignmentWithRecovery({
     required AppState state,
     required AppState workingState,
     required Conversation conversation,
@@ -394,14 +400,14 @@ class TeamOrchestrator {
         onStreamingDraft: onStreamingDraft,
       );
       executedMemberIds.add(assignment.member.id);
-      return _AssignmentOutcome(
+      return AssignmentOutcome(
         message: result.message,
         processMessages: processMessages,
         workingState: result.workingState,
       );
     } catch (firstError) {
       cancellation?.throwIfCancelled();
-      processMessages.add(_systemMessage('执行失败，正在重试：$firstError'));
+      processMessages.add(systemMessage('执行失败，正在重试：$firstError'));
       try {
         final result = await _runAssignment(
           state: state,
@@ -416,7 +422,7 @@ class TeamOrchestrator {
           onStreamingDraft: onStreamingDraft,
         );
         executedMemberIds.add(assignment.member.id);
-        return _AssignmentOutcome(
+        return AssignmentOutcome(
           message: result.message,
           processMessages: processMessages,
           workingState: result.workingState,
@@ -430,16 +436,16 @@ class TeamOrchestrator {
           executedMemberIds: executedMemberIds,
         );
         if (replacement == null) {
-          processMessages.add(_systemMessage('任务失败：$secondError'));
-          return _AssignmentOutcome(
-            message: _systemMessage('${assignment.member.name} 执行失败，无法转派。'),
+          processMessages.add(systemMessage('任务失败：$secondError'));
+          return AssignmentOutcome(
+            message: systemMessage('${assignment.member.name} 执行失败，无法转派。'),
             processMessages: processMessages,
             workingState: workingState,
             failed: true,
           );
         }
         processMessages.add(
-          _systemMessage(
+          systemMessage(
             '${assignment.member.name} 重试失败，已转派给 ${replacement.name}',
           ),
         );
@@ -459,7 +465,7 @@ class TeamOrchestrator {
           onStreamingDraft: onStreamingDraft,
         );
         executedMemberIds.add(replacement.id);
-        return _AssignmentOutcome(
+        return AssignmentOutcome(
           message: result.message,
           processMessages: processMessages,
           workingState: result.workingState,
@@ -468,7 +474,7 @@ class TeamOrchestrator {
     }
   }
 
-  Future<_ModelMessageResult> _runAssignment({
+  Future<ModelMessageResult> _runAssignment({
     required AppState state,
     required AppState workingState,
     required Conversation conversation,
@@ -483,7 +489,7 @@ class TeamOrchestrator {
     final member = assignment.member;
     final role = state.roles.firstWhere((item) => item.id == member.roleId);
     final model = state.models.firstWhere((item) => item.id == member.modelId);
-    _ensureModelReady(member: member, model: model);
+    ensureModelReady(member: member, model: model);
     cancellation?.throwIfCancelled();
     return _runVisibleModelMessage(
       workingState: workingState,
@@ -499,7 +505,7 @@ class TeamOrchestrator {
       requestMessages: [
         ...messages,
         ChatMessage(
-          id: _id('msg-assignment'),
+          id: orchestrationId('msg-assignment'),
           authorName: '秘书',
           content: '任务分配：${assignment.instruction}',
           createdAt: DateTime.now(),
@@ -512,7 +518,7 @@ class TeamOrchestrator {
     );
   }
 
-  Future<_ModelMessageResult> _runVisibleModelMessage({
+  Future<ModelMessageResult> _runVisibleModelMessage({
     required AppState workingState,
     required Conversation conversation,
     required List<ChatMessage> messages,
@@ -531,13 +537,13 @@ class TeamOrchestrator {
     var nextState = workingState;
     var lastProgressAt = DateTime.fromMillisecondsSinceEpoch(0);
     final outboundMessages = [...requestMessages];
-    final activeRole = _roleForMember(nextState, memberId);
+    final activeRole = roleForMember(nextState, memberId);
     final toolDefinitions = enableTools && gateway is MetadataModelGateway
-        ? _modelToolDefinitions(role: activeRole)
+        ? modelToolDefinitions(role: activeRole)
         : const <ModelToolDefinition>[];
     final toolSystemPrompt = toolDefinitions.isEmpty
         ? systemPrompt
-        : _appendToolSystemPrompt(
+        : appendToolSystemPrompt(
             systemPrompt,
             role: activeRole,
           );
@@ -556,8 +562,8 @@ class TeamOrchestrator {
       bool force = false,
       bool draft = false,
     }) {
-      _replaceMessageInList(messages, message);
-      nextState = _replaceConversation(
+      replaceMessageInList(messages, message);
+      nextState = replaceConversation(
         nextState,
         conversation.copyWith(
           messages: [...messages],
@@ -593,7 +599,7 @@ class TeamOrchestrator {
                 generationDurationMs: 0,
               ) ??
               ChatMessage(
-                id: _id('msg'),
+                id: orchestrationId('msg'),
                 authorName: authorName,
                 memberId: memberId,
                 content: '',
@@ -604,7 +610,7 @@ class TeamOrchestrator {
           if (visibleToolMessage == null) {
             messages.add(current);
           } else {
-            _replaceMessageInList(messages, current);
+            replaceMessageInList(messages, current);
           }
           activeStreamingMessage = current;
           publish(current, force: true);
@@ -621,7 +627,7 @@ class TeamOrchestrator {
               disableTools ? ModelToolChoice.none : ModelToolChoice.auto,
           toolRounds: toolRounds,
         );
-        nextState = _appendModelRequestDiagnostic(
+        nextState = appendModelRequestDiagnostic(
           nextState,
           conversationId: conversation.id,
           memberId: memberId,
@@ -657,13 +663,13 @@ class TeamOrchestrator {
                   final streamedContent = contentBuffer.toString();
                   final streamedBlocks = baseBlocksForRequest.isEmpty
                       ? null
-                      : _appendTextBlock(
+                      : appendTextBlock(
                           baseBlocksForRequest,
                           streamedContent,
                         );
                   current = (streamedBlocks == null
                           ? existing.copyWith(content: streamedContent)
-                          : _messageWithBlocks(
+                          : messageWithBlocks(
                               existing,
                               streamedBlocks,
                               generationStatus:
@@ -671,7 +677,7 @@ class TeamOrchestrator {
                             ))
                       .copyWith(
                     thinkingContent:
-                        _normalizeOptionalText(thinkingBuffer.toString()),
+                        normalizeOptionalOrchestrationText(thinkingBuffer.toString()),
                     generationStatus: ChatMessageGenerationStatus.streaming,
                     generationDurationMs: elapsedMs,
                   );
@@ -700,33 +706,33 @@ class TeamOrchestrator {
           final existing = current ?? visibleToolMessage;
           final initialBlocks = existing?.contentBlocks.isNotEmpty == true
               ? existing!.contentBlocks
-              : _appendTextBlock(
+              : appendTextBlock(
                   visibleToolMessage?.contentBlocks ??
                       const <ChatMessageContentBlock>[],
                   toolText,
                 );
           if (existing == null) {
             visibleToolMessage = ChatMessage(
-              id: _id('msg'),
+              id: orchestrationId('msg'),
               authorName: authorName,
               memberId: memberId,
-              content: _contentFromBlocks(initialBlocks),
+              content: contentFromBlocks(initialBlocks),
               contentBlocks: initialBlocks,
               createdAt: DateTime.now(),
               generationStatus: ChatMessageGenerationStatus.streaming,
             );
             messages.add(visibleToolMessage);
           } else {
-            visibleToolMessage = _messageWithBlocks(
+            visibleToolMessage = messageWithBlocks(
               existing,
               initialBlocks,
               generationStatus: ChatMessageGenerationStatus.streaming,
             );
-            _replaceMessageInList(messages, visibleToolMessage);
+            replaceMessageInList(messages, visibleToolMessage);
           }
           activeStreamingMessage = visibleToolMessage;
           publish(visibleToolMessage, force: true);
-          if (roundIndex >= _maxModelToolRounds - 1) {
+          if (roundIndex >= maxModelToolRounds - 1) {
             toolRounds.add(
               ModelToolRound(
                 calls: completion.toolCalls,
@@ -735,21 +741,21 @@ class TeamOrchestrator {
                       (call) => ModelToolResult(
                         toolCallId: call.id,
                         name: call.name,
-                        content: _toolResultJson(
+                        content: toolResultJson(
                           ok: false,
-                          error: '工具调用超过最大轮数 $_maxModelToolRounds',
+                          error: '工具调用超过最大轮数 $maxModelToolRounds',
                         ),
                       ),
                     )
                     .toList(),
               ),
             );
-            visibleToolMessage = _messageWithBlocks(
+            visibleToolMessage = messageWithBlocks(
               visibleToolMessage,
               [
                 ...visibleToolMessage.contentBlocks,
                 const ChatMessageContentBlock.toolError(
-                  '工具调用超过最大轮数 $_maxModelToolRounds',
+                  '工具调用超过最大轮数 $maxModelToolRounds',
                 ),
               ],
               generationStatus: ChatMessageGenerationStatus.streaming,
@@ -758,7 +764,7 @@ class TeamOrchestrator {
             disableTools = true;
             continue;
           }
-          final outcome = await _executeModelToolCalls(
+          final outcome = await executeModelToolCalls(
             state: nextState,
             conversationId: conversation.id,
             memberId: memberId,
@@ -770,7 +776,7 @@ class TeamOrchestrator {
           nextState = outcome.workingState;
           toolRounds.add(outcome.round);
           if (outcome.displayBlocks.isNotEmpty) {
-            visibleToolMessage = _messageWithBlocks(
+            visibleToolMessage = messageWithBlocks(
               visibleToolMessage,
               [
                 ...visibleToolMessage.contentBlocks,
@@ -785,7 +791,7 @@ class TeamOrchestrator {
           continue;
         }
 
-        final guardedContent = _guardCommandExecutionClaim(
+        final guardedContent = guardCommandExecutionClaim(
           content: completion.content,
           requestMessages: outboundMessages,
           toolDefinitions: toolDefinitions,
@@ -793,12 +799,12 @@ class TeamOrchestrator {
         );
         final elapsedMs = DateTime.now().difference(startedAt).inMilliseconds;
         final finalMessage = visibleToolMessage != null
-            ? _messageWithBlocks(
+            ? messageWithBlocks(
                 current ?? visibleToolMessage,
-                _appendTextBlock(baseBlocksForRequest, guardedContent),
+                appendTextBlock(baseBlocksForRequest, guardedContent),
                 generationStatus: ChatMessageGenerationStatus.complete,
               ).copyWith(
-                thinkingContent: _normalizeOptionalText(
+                thinkingContent: normalizeOptionalOrchestrationText(
                       completion.thinkingContent ?? thinkingBuffer.toString(),
                     ) ??
                     current?.thinkingContent,
@@ -806,7 +812,7 @@ class TeamOrchestrator {
               )
             : (current ??
                     ChatMessage(
-                      id: _id('msg'),
+                      id: orchestrationId('msg'),
                       authorName: authorName,
                       memberId: memberId,
                       content: guardedContent,
@@ -815,7 +821,7 @@ class TeamOrchestrator {
                     ))
                 .copyWith(
                 content: guardedContent,
-                thinkingContent: _normalizeOptionalText(
+                thinkingContent: normalizeOptionalOrchestrationText(
                       completion.thinkingContent ?? thinkingBuffer.toString(),
                     ) ??
                     current?.thinkingContent,
@@ -826,20 +832,20 @@ class TeamOrchestrator {
           if (visibleToolMessage == null) {
             messages.add(finalMessage);
           } else {
-            _replaceMessageInList(messages, finalMessage);
+            replaceMessageInList(messages, finalMessage);
           }
         } else {
-          _replaceMessageInList(messages, finalMessage);
+          replaceMessageInList(messages, finalMessage);
         }
         activeStreamingMessage = null;
-        nextState = _replaceConversation(
+        nextState = replaceConversation(
           nextState,
           conversation.copyWith(
             messages: [...messages],
             status: ConversationStatus.running,
           ),
         );
-        nextState = _appendModelResponseDiagnostic(
+        nextState = appendModelResponseDiagnostic(
           nextState,
           conversationId: conversation.id,
           messageId: finalMessage.id,
@@ -856,7 +862,7 @@ class TeamOrchestrator {
         if (model.streaming) {
           onProgress?.call(nextState);
         }
-        return _ModelMessageResult(
+        return ModelMessageResult(
           message: finalMessage,
           workingState: nextState,
         );
@@ -875,11 +881,11 @@ class TeamOrchestrator {
             generationDurationMs:
                 DateTime.now().difference(startedAt).inMilliseconds,
           );
-          _replaceMessageInList(messages, partial);
+          replaceMessageInList(messages, partial);
         } else {
           messages.removeWhere((message) => message.id == existing.id);
         }
-        nextState = _replaceConversation(
+        nextState = replaceConversation(
           nextState,
           conversation.copyWith(
             messages: [...messages],
@@ -946,19 +952,19 @@ class TeamOrchestrator {
         state.teams.firstWhere((item) => item.id == conversation.teamId);
     final role = state.roles.firstWhere((item) => item.id == member.roleId);
     final model = state.models.firstWhere((item) => item.id == member.modelId);
-    _ensureModelReady(member: member, model: model);
+    ensureModelReady(member: member, model: model);
     final now = DateTime.now();
     final messages = [
       ...conversation.messages,
       ChatMessage(
-        id: _id('msg'),
+        id: orchestrationId('msg'),
         authorName: '我',
         content: userText,
         createdAt: now,
         isUser: true,
       ),
     ];
-    var workingState = _replaceConversation(
+    var workingState = replaceConversation(
       state,
       conversation.copyWith(
         messages: messages,
@@ -989,11 +995,11 @@ class TeamOrchestrator {
       messages: messages,
       status: ConversationStatus.idle,
     );
-    return _replaceConversation(workingState, updatedConversation).copyWith(
+    return replaceConversation(workingState, updatedConversation).copyWith(
       auditLog: [
         ...workingState.auditLog,
         AuditEntry(
-          id: _id('audit'),
+          id: orchestrationId('audit'),
           action: 'member_chat_dispatched',
           detail: 'member=${member.id} text=$userText',
           createdAt: DateTime.now(),
@@ -1024,7 +1030,7 @@ class TeamOrchestrator {
         state.teams.firstWhere((item) => item.id == conversation.teamId);
     final role = state.roles.firstWhere((item) => item.id == member.roleId);
     final model = state.models.firstWhere((item) => item.id == member.modelId);
-    _ensureModelReady(member: member, model: model);
+    ensureModelReady(member: member, model: model);
 
     final resultBlock = ChatMessageContentBlock.commandResult(
       CommandResultAttachment(
@@ -1043,14 +1049,14 @@ class TeamOrchestrator {
             .firstWhere((message) => message != null, orElse: () => null);
     final visibleResultMessage = targetMessage == null
         ? ChatMessage(
-            id: _id('msg'),
+            id: orchestrationId('msg'),
             authorName: member.name,
             memberId: member.id,
-            content: _contentFromBlocks([resultBlock]),
+            content: contentFromBlocks([resultBlock]),
             contentBlocks: [resultBlock],
             createdAt: DateTime.now(),
           )
-        : _messageWithBlocks(
+        : messageWithBlocks(
             targetMessage,
             [
               ...targetMessage.contentBlocks,
@@ -1061,7 +1067,7 @@ class TeamOrchestrator {
     final modelResultMessage = ChatMessage(
       id: visibleResultMessage.id,
       authorName: '系统',
-      content: _formatCommandResultMessage(request),
+      content: formatCommandResultMessage(request),
       createdAt: visibleResultMessage.createdAt,
       isUser: true,
     );
@@ -1074,7 +1080,7 @@ class TeamOrchestrator {
             .map((message) =>
                 message.id == targetMessage.id ? visibleResultMessage : message)
             .toList();
-    var workingState = _replaceConversation(
+    var workingState = replaceConversation(
       state,
       conversation.copyWith(
         messages: visibleMessages,
@@ -1112,11 +1118,11 @@ class TeamOrchestrator {
       messages: visibleMessages,
       status: ConversationStatus.idle,
     );
-    return _replaceConversation(workingState, updatedConversation).copyWith(
+    return replaceConversation(workingState, updatedConversation).copyWith(
       auditLog: [
         ...workingState.auditLog,
         AuditEntry(
-          id: _id('audit'),
+          id: orchestrationId('audit'),
           action: 'command_result_continued',
           detail: 'conversation=$conversationId command=${request.id}',
           createdAt: DateTime.now(),
@@ -1154,7 +1160,7 @@ class TeamOrchestrator {
     if (team.id.isEmpty || conversation.memberId != team.secretaryMemberId) {
       return const [];
     }
-    return _mentionedDispatchMembers(
+    return mentionedDispatchMembers(
       state: state,
       team: team,
       userText: userText,
@@ -1180,7 +1186,7 @@ class TeamOrchestrator {
     final secretary = state.members.firstWhere(
       (item) => item.id == team.secretaryMemberId,
     );
-    final targets = _mentionedDispatchMembers(
+    final targets = mentionedDispatchMembers(
       state: state,
       team: team,
       userText: userText,
@@ -1191,7 +1197,7 @@ class TeamOrchestrator {
 
     final now = DateTime.now();
     final waitingMessage = ChatMessage(
-      id: _id('msg'),
+      id: orchestrationId('msg'),
       authorName: secretary.name,
       memberId: secretary.id,
       content: '已分配给${targets.map((member) => member.name).join('、')}，等待回复中',
@@ -1201,7 +1207,7 @@ class TeamOrchestrator {
     final sourceMessages = [
       ...sourceConversation.messages,
       ChatMessage(
-        id: _id('msg'),
+        id: orchestrationId('msg'),
         authorName: '我',
         content: userText,
         createdAt: now,
@@ -1209,7 +1215,7 @@ class TeamOrchestrator {
       ),
       waitingMessage,
     ];
-    var workingState = _replaceConversation(
+    var workingState = replaceConversation(
       state,
       sourceConversation.copyWith(
         messages: sourceMessages,
@@ -1221,7 +1227,7 @@ class TeamOrchestrator {
     final summaries = <String>[];
     for (final target in targets) {
       cancellation?.throwIfCancelled();
-      workingState = _ensureMemberConversation(
+      workingState = ensureMemberConversation(
         workingState,
         teamId: team.id,
         member: target,
@@ -1232,14 +1238,14 @@ class TeamOrchestrator {
       final targetMessages = [
         ...targetConversation.messages,
         ChatMessage(
-          id: _id('msg-assignment'),
+          id: orchestrationId('msg-assignment'),
           authorName: secretary.name,
           memberId: secretary.id,
           content: '任务分配：$userText',
           createdAt: DateTime.now(),
         ),
       ];
-      workingState = _replaceConversation(
+      workingState = replaceConversation(
         workingState,
         targetConversation.copyWith(
           messages: targetMessages,
@@ -1269,18 +1275,18 @@ class TeamOrchestrator {
             (result.message.thinkingContent?.trim().isEmpty ?? true)) {
           throw const ModelGatewayException('成员未返回内容');
         }
-        summaries.add(_formatSecretaryPrivateDispatchSuccess(
+        summaries.add(formatSecretaryPrivateDispatchSuccess(
           memberName: target.name,
           content: result.message.content,
         ));
-        workingState = _replaceConversation(
+        workingState = replaceConversation(
           workingState,
           targetConversation.copyWith(
             messages: targetMessages,
             status: ConversationStatus.idle,
           ),
         );
-        workingState = _appendSecretaryPrivateDispatchAudit(
+        workingState = appendSecretaryPrivateDispatchAudit(
           workingState,
           secretary: secretary,
           target: target,
@@ -1294,17 +1300,17 @@ class TeamOrchestrator {
       } catch (error) {
         cancellation?.throwIfCancelled();
         summaries.add('- ${target.name}：调度失败：$error');
-        workingState = _replaceConversation(
+        workingState = replaceConversation(
           workingState,
           targetConversation.copyWith(
             messages: [
               ...targetMessages,
-              _systemMessage('任务失败：$error'),
+              systemMessage('任务失败：$error'),
             ],
             status: ConversationStatus.failed,
           ),
         );
-        workingState = _appendSecretaryPrivateDispatchAudit(
+        workingState = appendSecretaryPrivateDispatchAudit(
           workingState,
           secretary: secretary,
           target: target,
@@ -1327,8 +1333,8 @@ class TeamOrchestrator {
       ].join('\n'),
       generationStatus: ChatMessageGenerationStatus.complete,
     );
-    _replaceMessageInList(sourceMessages, summaryMessage);
-    workingState = _replaceConversation(
+    replaceMessageInList(sourceMessages, summaryMessage);
+    workingState = replaceConversation(
       workingState,
       sourceConversation.copyWith(
         messages: sourceMessages,

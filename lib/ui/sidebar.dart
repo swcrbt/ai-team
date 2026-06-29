@@ -1,7 +1,11 @@
-part of '../app.dart';
+// ignore_for_file: use_key_in_widget_constructors
 
-class _AppSidebar extends StatelessWidget {
-  const _AppSidebar({
+import 'package:flutter/material.dart';
+
+import 'main_view.dart';
+
+class AppSidebar extends StatelessWidget {
+  const AppSidebar({
     required this.selectedView,
     required this.onChat,
     required this.onTeam,
@@ -14,7 +18,7 @@ class _AppSidebar extends StatelessWidget {
     required this.onSettings,
   });
 
-  final _MainView selectedView;
+  final MainView selectedView;
   final VoidCallback onChat;
   final VoidCallback onTeam;
   final VoidCallback onModels;
@@ -57,49 +61,49 @@ class _AppSidebar extends StatelessWidget {
                   _SidebarButton(
                     icon: Icons.chat_bubble_rounded,
                     label: '消息',
-                    selected: selectedView == _MainView.chat,
+                    selected: selectedView == MainView.chat,
                     onPressed: onChat,
                   ),
                   _SidebarButton(
                     icon: Icons.groups_rounded,
                     label: '团队',
-                    selected: selectedView == _MainView.teams,
+                    selected: selectedView == MainView.teams,
                     onPressed: onTeam,
                   ),
                   _SidebarButton(
                     icon: Icons.memory_rounded,
                     label: '模型',
-                    selected: selectedView == _MainView.models,
+                    selected: selectedView == MainView.models,
                     onPressed: onModels,
                   ),
                   _SidebarButton(
                     icon: Icons.badge_rounded,
                     label: '角色',
-                    selected: selectedView == _MainView.roles,
+                    selected: selectedView == MainView.roles,
                     onPressed: onRoles,
                   ),
                   _SidebarButton(
                     icon: Icons.manage_accounts_rounded,
                     label: '成员',
-                    selected: selectedView == _MainView.members,
+                    selected: selectedView == MainView.members,
                     onPressed: onMembers,
                   ),
                   _SidebarButton(
                     icon: Icons.history_rounded,
                     label: '历史',
-                    selected: selectedView == _MainView.history,
+                    selected: selectedView == MainView.history,
                     onPressed: onHistory,
                   ),
                   _SidebarButton(
                     icon: Icons.receipt_long_rounded,
                     label: '审计',
-                    selected: selectedView == _MainView.audit,
+                    selected: selectedView == MainView.audit,
                     onPressed: onAudit,
                   ),
                   _SidebarButton(
                     icon: Icons.folder_copy_rounded,
                     label: '项目',
-                    selected: selectedView == _MainView.project,
+                    selected: selectedView == MainView.project,
                     onPressed: onProject,
                   ),
                 ],
@@ -109,7 +113,7 @@ class _AppSidebar extends StatelessWidget {
           _SidebarButton(
             icon: Icons.settings_rounded,
             label: '设置',
-            selected: selectedView == _MainView.settings,
+            selected: selectedView == MainView.settings,
             onPressed: onSettings,
           ),
           const SizedBox(height: 16),

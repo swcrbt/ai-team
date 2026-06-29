@@ -1,4 +1,4 @@
-part of '../domain.dart';
+import 'commands_and_tasks.dart';
 
 class ModelProfile {
   const ModelProfile({

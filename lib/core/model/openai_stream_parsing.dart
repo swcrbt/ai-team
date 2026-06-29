@@ -1,6 +1,9 @@
-part of '../model_gateway.dart';
+import 'dart:async';
 
-Future<bool> _moveNextStreamingLine(
+import 'gateway_contracts.dart';
+import 'model_gateway_exception.dart';
+
+Future<bool> moveNextStreamingLine(
   StreamIterator<String> iterator,
   ModelRequestCancellation? cancellation,
 ) {
@@ -15,7 +18,7 @@ Future<bool> _moveNextStreamingLine(
   ]);
 }
 
-List<ModelToolCall> _parseToolCalls(Object? value) {
+List<ModelToolCall> parseToolCalls(Object? value) {
   if (value is! List) {
     return const [];
   }
@@ -46,7 +49,7 @@ List<ModelToolCall> _parseToolCalls(Object? value) {
   return calls;
 }
 
-List<Map<String, Object?>> _rawToolCalls(Object? value) {
+List<Map<String, Object?>> rawToolCalls(Object? value) {
   if (value is! List) {
     return const [];
   }
@@ -56,9 +59,9 @@ List<Map<String, Object?>> _rawToolCalls(Object? value) {
   ];
 }
 
-void _appendStreamingToolCalls(
+void appendStreamingToolCalls(
   Object? value,
-  Map<int, _StreamingToolCallBuilder> builders,
+  Map<int, StreamingToolCallBuilder> builders,
 ) {
   if (value is! List) {
     return;
@@ -75,7 +78,7 @@ void _appendStreamingToolCalls(
     final index = indexValue.toInt();
     final builder = builders.putIfAbsent(
       index,
-      () => _StreamingToolCallBuilder(),
+      () => StreamingToolCallBuilder(),
     );
     final id = json['id'];
     if (id is String && id.isNotEmpty) {
@@ -96,8 +99,8 @@ void _appendStreamingToolCalls(
   }
 }
 
-List<ModelToolCall> _completeStreamingToolCalls(
-  Map<int, _StreamingToolCallBuilder> builders,
+List<ModelToolCall> completeStreamingToolCalls(
+  Map<int, StreamingToolCallBuilder> builders,
 ) {
   final indexes = builders.keys.toList()..sort();
   return [
@@ -106,7 +109,7 @@ List<ModelToolCall> _completeStreamingToolCalls(
   ];
 }
 
-class _StreamingToolCallBuilder {
+class StreamingToolCallBuilder {
   String? id;
   String? name;
   final StringBuffer arguments = StringBuffer();
@@ -120,7 +123,7 @@ class _StreamingToolCallBuilder {
       );
 }
 
-String? _firstStringValue(
+String? firstStringValue(
   Map<String, Object?>? json,
   List<String> keys, {
   Set<String>? keysSeen,
@@ -134,7 +137,7 @@ String? _firstStringValue(
     }
     final value = json[key];
     if (value is String) {
-      final normalized = _normalizeOptionalText(value);
+      final normalized = normalizeOptionalText(value);
       if (normalized != null) {
         return normalized;
       }
@@ -143,6 +146,6 @@ String? _firstStringValue(
   return null;
 }
 
-String? _normalizeOptionalText(String value) {
+String? normalizeOptionalText(String value) {
   return value.trim().isEmpty ? null : value;
 }

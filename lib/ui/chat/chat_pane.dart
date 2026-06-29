@@ -1,7 +1,19 @@
-part of '../../app.dart';
+import 'dart:async';
 
-class _ChatPane extends StatefulWidget {
-  const _ChatPane({
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+
+import '../../application/app_controller.dart';
+import '../../application/chat_streaming.dart';
+import '../../core/domain.dart';
+import '../app_helpers.dart';
+import '../management/management_pages.dart';
+
+class ChatPane extends StatefulWidget {
+  const ChatPane({
     super.key,
     required this.controller,
     required this.conversationId,
@@ -13,10 +25,10 @@ class _ChatPane extends StatefulWidget {
   final ChatScrollDiagnostics? diagnostics;
 
   @override
-  State<_ChatPane> createState() => _ChatPaneState();
+  State<ChatPane> createState() => ChatPaneState();
 }
 
-class _ChatPaneState extends State<_ChatPane> {
+class ChatPaneState extends State<ChatPane> {
   static const _messageBottomThreshold = 24.0;
   static const _messageScrollJumpTolerance = 0.5;
   static const _messageBottomSettleFrameCount = 3;
@@ -53,7 +65,7 @@ class _ChatPaneState extends State<_ChatPane> {
     widget.diagnostics?.chatPaneBuildCount++;
     final conversation =
         widget.controller.conversationById(widget.conversationId);
-    final typingMembers = _typingMembers(widget.controller, conversation);
+    final typingMemberList = typingMembers(widget.controller, conversation);
     final pendingPatches =
         widget.controller.selectedConversationId == conversation.id
             ? widget.controller.patchProposals
@@ -63,7 +75,7 @@ class _ChatPaneState extends State<_ChatPane> {
     final commandRequests =
         widget.controller.commandRequestsForConversation(conversation.id);
     final messageListItemCount = conversation.messages.length +
-        typingMembers.length +
+        typingMemberList.length +
         commandRequests.length +
         pendingPatches.length;
     final currentLastMessage =
@@ -139,7 +151,7 @@ class _ChatPaneState extends State<_ChatPane> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _conversationTitle(widget.controller, conversation),
+                      conversationTitle(widget.controller, conversation),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -148,7 +160,7 @@ class _ChatPaneState extends State<_ChatPane> {
                       ),
                     ),
                     Text(
-                      _conversationMeta(widget.controller, conversation),
+                      conversationMeta(widget.controller, conversation),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(color: Colors.grey.shade600),
@@ -190,7 +202,7 @@ class _ChatPaneState extends State<_ChatPane> {
                           const SizedBox(width: 10),
                           Flexible(
                             child: Text(
-                              _conversationMenuTitle(
+                              conversationMenuTitle(
                                 widget.controller,
                                 item,
                               ),
@@ -259,16 +271,16 @@ class _ChatPaneState extends State<_ChatPane> {
                             }
                             final typingIndex =
                                 index - conversation.messages.length;
-                            if (typingIndex < typingMembers.length) {
+                            if (typingIndex < typingMemberList.length) {
                               return _TypingIndicator(
-                                member: typingMembers[typingIndex],
+                                member: typingMemberList[typingIndex],
                               );
                             }
                             final commandIndex =
-                                typingIndex - typingMembers.length;
+                                typingIndex - typingMemberList.length;
                             if (commandIndex < commandRequests.length) {
                               final request = commandRequests[commandIndex];
-                              return _ChatCommandRequestCard(
+                              return ChatCommandRequestCard(
                                 request: request,
                                 onApproveExecute: () => unawaited(
                                   widget.controller
@@ -285,7 +297,7 @@ class _ChatPaneState extends State<_ChatPane> {
                             }
                             final patch = pendingPatches[
                                 commandIndex - commandRequests.length];
-                            return _ChatPatchConfirmationCard(
+                            return ChatPatchConfirmationCard(
                               patch: patch,
                               onApply: () =>
                                   widget.controller.applyPatch(patch),
@@ -322,7 +334,7 @@ class _ChatPaneState extends State<_ChatPane> {
               style: const TextStyle(color: Color(0xFFBE123C)),
             ),
           ),
-        _TaskQueueBar(
+        TaskQueueBar(
           controller: widget.controller,
           conversationId: conversation.id,
         ),
@@ -346,7 +358,7 @@ class _ChatPaneState extends State<_ChatPane> {
                       minLines: 3,
                       maxLines: 4,
                       decoration: InputDecoration(
-                        hintText: _inputHint(widget.controller, conversation),
+                        hintText: inputHint(widget.controller, conversation),
                         border: InputBorder.none,
                         isDense: true,
                         contentPadding: const EdgeInsets.symmetric(
@@ -404,7 +416,7 @@ class _ChatPaneState extends State<_ChatPane> {
       builder: (context) => AlertDialog(
         title: const Text('确认删除该会话？'),
         content: Text(
-          '删除后将永久移除“${_conversationMenuTitle(widget.controller, conversation)}”及其消息。',
+          '删除后将永久移除“${conversationMenuTitle(widget.controller, conversation)}”及其消息。',
         ),
         actions: [
           TextButton(
@@ -853,9 +865,9 @@ class _TypingIndicator extends StatelessWidget {
       children: [
         CircleAvatar(
           radius: 18,
-          backgroundColor: _avatarColor(member.name),
+          backgroundColor: avatarColor(member.name),
           child: Text(
-            _avatarText(member.name),
+            avatarText(member.name),
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w700,
@@ -986,14 +998,14 @@ class _MessageBubbleState extends State<_MessageBubble> {
     final alignRight = message.isUser;
     final showAuthorName = !alignRight && widget.showAuthorName;
     final thinkingContent =
-        alignRight ? null : _normalizedThinkingContent(message);
+        alignRight ? null : normalizedThinkingContent(message);
     final inlineStatus = thinkingContent == null
-        ? _messageInlineGenerationStatus(message)
+        ? messageInlineGenerationStatus(message)
         : null;
     final showMessageHeader =
         !alignRight && (showAuthorName || inlineStatus != null);
     final showReplyBubble =
-        !_isStreamingThinkingWithoutReplyContent(message, thinkingContent);
+        !isStreamingThinkingWithoutReplyContent(message, thinkingContent);
     final thinkingSection = thinkingContent == null
         ? null
         : ConstrainedBox(
@@ -1001,7 +1013,7 @@ class _MessageBubbleState extends State<_MessageBubble> {
             child: _MessageThinkingDisclosure(
               partitionKey: message.id,
               content: thinkingContent,
-              title: _thinkingTitle(message),
+              title: thinkingTitle(message),
               expanded: thinkingExpanded,
               streaming: message.generationStatus ==
                   ChatMessageGenerationStatus.streaming,
@@ -1026,7 +1038,7 @@ class _MessageBubbleState extends State<_MessageBubble> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (_isAwaitingFirstModelOutput(message))
+          if (isAwaitingFirstModelOutput(message))
             Text(
               '正在输入中',
               style: TextStyle(
@@ -1050,7 +1062,7 @@ class _MessageBubbleState extends State<_MessageBubble> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  _messageTimeText(message.createdAt),
+                  messageTimeText(message.createdAt),
                   style: TextStyle(
                     color: Colors.grey.shade500,
                     fontSize: 12,
@@ -1136,9 +1148,9 @@ class _MessageBubbleState extends State<_MessageBubble> {
             if (!alignRight) ...[
               CircleAvatar(
                 radius: 18,
-                backgroundColor: _avatarColor(message.authorName),
+                backgroundColor: avatarColor(message.authorName),
                 child: Text(
-                  _avatarText(message.authorName),
+                  avatarText(message.authorName),
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,

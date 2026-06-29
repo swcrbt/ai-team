@@ -1,4 +1,14 @@
-part of '../../app.dart';
+// ignore_for_file: use_key_in_widget_constructors
+
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+
+import '../../application/app_controller.dart';
+import '../../core/domain.dart';
+import '../../core/model_gateway.dart';
+import '../app_helpers.dart';
+import '../dialogs/config_dialogs.dart';
 
 class _ManagementPage extends StatelessWidget {
   const _ManagementPage({
@@ -56,8 +66,8 @@ class _ManagementPage extends StatelessWidget {
   }
 }
 
-class _TeamManagementPage extends StatelessWidget {
-  const _TeamManagementPage({
+class TeamManagementPage extends StatelessWidget {
+  const TeamManagementPage({
     required this.controller,
     required this.onStartChat,
   });
@@ -75,7 +85,7 @@ class _TeamManagementPage extends StatelessWidget {
         icon: Icons.groups_rounded,
         action: IconButton(
           tooltip: '新增团队',
-          onPressed: () => _showTeamDialog(context, controller),
+          onPressed: () => showTeamDialog(context, controller),
           icon: const Icon(Icons.add_rounded),
         ),
         child: Column(
@@ -116,7 +126,7 @@ class _TeamCard extends StatelessWidget {
     return _KeyValueRow(
       label: team.name,
       value:
-          '${_collaborationModeLabel(team.collaborationMode)}协同 · ${members.map((member) => member.name).join('、')}',
+          '${collaborationModeLabel(team.collaborationMode)}协同 · ${members.map((member) => member.name).join('、')}',
       actions: [
         FilledButton(
           onPressed: onStartChat,
@@ -124,7 +134,7 @@ class _TeamCard extends StatelessWidget {
         ),
         IconButton(
           tooltip: '编辑团队',
-          onPressed: () => _showTeamDialog(
+          onPressed: () => showTeamDialog(
             context,
             controller,
             team: team,
@@ -135,7 +145,7 @@ class _TeamCard extends StatelessWidget {
           tooltip: '删除团队',
           onPressed: controller.state.teams.length <= 1
               ? null
-              : () => _runConfigAction(
+              : () => runConfigAction(
                     context,
                     () => controller.deleteTeam(team.id),
                   ),
@@ -146,8 +156,8 @@ class _TeamCard extends StatelessWidget {
   }
 }
 
-class _ModelManagementPage extends StatelessWidget {
-  const _ModelManagementPage({required this.controller});
+class ModelManagementPage extends StatelessWidget {
+  const ModelManagementPage({required this.controller});
 
   final AppController controller;
 
@@ -161,8 +171,8 @@ class _ModelManagementPage extends StatelessWidget {
   }
 }
 
-class _RoleManagementPage extends StatelessWidget {
-  const _RoleManagementPage({required this.controller});
+class RoleManagementPage extends StatelessWidget {
+  const RoleManagementPage({required this.controller});
 
   final AppController controller;
 
@@ -176,8 +186,8 @@ class _RoleManagementPage extends StatelessWidget {
   }
 }
 
-class _MemberManagementPage extends StatelessWidget {
-  const _MemberManagementPage({
+class MemberManagementPage extends StatelessWidget {
+  const MemberManagementPage({
     required this.controller,
     required this.onStartChat,
   });
@@ -198,8 +208,8 @@ class _MemberManagementPage extends StatelessWidget {
   }
 }
 
-class _ProjectPage extends StatelessWidget {
-  const _ProjectPage({
+class ProjectPage extends StatelessWidget {
+  const ProjectPage({
     required this.controller,
   });
 
@@ -250,16 +260,16 @@ class _ProjectPage extends StatelessWidget {
   }
 }
 
-class _HistoryPage extends StatefulWidget {
-  const _HistoryPage({required this.controller});
+class HistoryPage extends StatefulWidget {
+  const HistoryPage({required this.controller});
 
   final AppController controller;
 
   @override
-  State<_HistoryPage> createState() => _HistoryPageState();
+  State<HistoryPage> createState() => HistoryPageState();
 }
 
-class _HistoryPageState extends State<_HistoryPage> {
+class HistoryPageState extends State<HistoryPage> {
   final searchController = TextEditingController();
 
   @override
@@ -336,7 +346,7 @@ class _HistoryPageState extends State<_HistoryPage> {
                 child: ExpansionTile(
                   title: Text(task.title),
                   subtitle: Text(
-                    '${_queuedTaskStatusText(task.status)} · 优先级 ${task.priority}',
+                    '${queuedTaskStatusText(task.status)} · 优先级 ${task.priority}',
                   ),
                   trailing: IconButton(
                     tooltip: '删除历史任务',
@@ -365,8 +375,8 @@ class _HistoryPageState extends State<_HistoryPage> {
   }
 }
 
-class _AuditLogPage extends StatelessWidget {
-  const _AuditLogPage({required this.controller});
+class AuditLogPage extends StatelessWidget {
+  const AuditLogPage({required this.controller});
 
   final AppController controller;
 
@@ -439,7 +449,7 @@ class _AuditLogRow extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '创建时间：${_auditLogTimeText(entry.createdAt)}',
+            '创建时间：${auditLogTimeText(entry.createdAt)}',
             style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
           ),
         ],
@@ -472,7 +482,7 @@ void _showAuditLogDetails(BuildContext context, AuditEntry entry) {
                   children: [
                     SelectableText('action: ${entry.action}'),
                     SelectableText(
-                      'createdAt: ${_auditLogTimeText(entry.createdAt)}',
+                      'createdAt: ${auditLogTimeText(entry.createdAt)}',
                     ),
                   ],
                 ),
@@ -651,25 +661,18 @@ String _auditMetadataValueText(Object? value) {
   return value.toString();
 }
 
-String _reasoningEffortLabel(String? value) {
-  if (value == null || value.trim().isEmpty) {
-    return _reasoningEffortLabels[_reasoningEffortOffValue]!;
-  }
-  return _reasoningEffortLabels[value] ?? value;
-}
-
-class _SettingsPage extends StatefulWidget {
-  const _SettingsPage({
+class SettingsPage extends StatefulWidget {
+  const SettingsPage({
     required this.controller,
   });
 
   final AppController controller;
 
   @override
-  State<_SettingsPage> createState() => _SettingsPageState();
+  State<SettingsPage> createState() => SettingsPageState();
 }
 
-class _SettingsPageState extends State<_SettingsPage> {
+class SettingsPageState extends State<SettingsPage> {
   final scrollController = ScrollController();
   final sectionKeys = {
     '命令请求': GlobalKey(),
@@ -744,7 +747,7 @@ class _SettingsPageState extends State<_SettingsPage> {
                   icon: Icons.ios_share_rounded,
                   action: IconButton(
                     tooltip: '导入 / 导出配置',
-                    onPressed: () => _showExportDialog(context, controller),
+                    onPressed: () => showExportDialog(context, controller),
                     icon: const Icon(Icons.open_in_new_rounded),
                   ),
                   child: const Text('配置文件和密钥导出选项集中在这里管理。'),
@@ -776,7 +779,7 @@ class _SettingsPageState extends State<_SettingsPage> {
                   icon: Icons.terminal_rounded,
                   action: IconButton(
                     tooltip: '创建命令请求',
-                    onPressed: () => _showCommandDialog(context, controller),
+                    onPressed: () => showCommandDialog(context, controller),
                     icon: const Icon(Icons.add_rounded),
                   ),
                   child: Column(
@@ -869,7 +872,7 @@ class _ModelConfigPanel extends StatelessWidget {
       icon: Icons.memory_rounded,
       action: IconButton(
         tooltip: '新增模型',
-        onPressed: () => _showModelDialog(context, controller),
+        onPressed: () => showModelDialog(context, controller),
         icon: const Icon(Icons.add_rounded),
       ),
       child: Column(
@@ -878,17 +881,17 @@ class _ModelConfigPanel extends StatelessWidget {
               (model) => _KeyValueRow(
                 label: model.name,
                 value:
-                    '${model.modelName}\n${model.baseUrl}\n流式: ${model.streaming ? '开' : '关'} · 温度: ${model.temperature} · 最大 Token: ${model.maxTokens} · 深度思考: ${_reasoningEffortLabel(model.reasoningEffort)}',
+                    '${model.modelName}\n${model.baseUrl}\n流式: ${model.streaming ? '开' : '关'} · 温度: ${model.temperature} · 最大 Token: ${model.maxTokens} · 深度思考: ${reasoningEffortLabel(model.reasoningEffort)}',
                 actions: [
                   IconButton(
                     tooltip: '编辑模型',
                     onPressed: () =>
-                        _showModelDialog(context, controller, model: model),
+                        showModelDialog(context, controller, model: model),
                     icon: const Icon(Icons.edit_rounded),
                   ),
                   IconButton(
                     tooltip: '删除模型',
-                    onPressed: () => _runConfigAction(
+                    onPressed: () => runConfigAction(
                       context,
                       () => controller.deleteModel(model.id),
                     ),
@@ -915,7 +918,7 @@ class _RoleConfigPanel extends StatelessWidget {
       icon: Icons.badge_rounded,
       action: IconButton(
         tooltip: '新增角色',
-        onPressed: () => _showRoleDialog(context, controller),
+        onPressed: () => showRoleDialog(context, controller),
         icon: const Icon(Icons.add_rounded),
       ),
       child: Column(
@@ -929,12 +932,12 @@ class _RoleConfigPanel extends StatelessWidget {
                   IconButton(
                     tooltip: '编辑角色',
                     onPressed: () =>
-                        _showRoleDialog(context, controller, role: role),
+                        showRoleDialog(context, controller, role: role),
                     icon: const Icon(Icons.edit_rounded),
                   ),
                   IconButton(
                     tooltip: '删除角色',
-                    onPressed: () => _runConfigAction(
+                    onPressed: () => runConfigAction(
                       context,
                       () => controller.deleteRole(role.id),
                     ),
@@ -965,7 +968,7 @@ class _MemberConfigPanel extends StatelessWidget {
       icon: Icons.groups_rounded,
       action: IconButton(
         tooltip: '新增成员',
-        onPressed: () => _showMemberDialog(context, controller),
+        onPressed: () => showMemberDialog(context, controller),
         icon: const Icon(Icons.add_rounded),
       ),
       child: Column(
@@ -974,7 +977,7 @@ class _MemberConfigPanel extends StatelessWidget {
               (member) => _KeyValueRow(
                 label: member.name,
                 value:
-                    '${_roleName(controller.state, member.roleId)} · ${_modelName(controller.state, member.modelId)} · 优先级 ${member.executionPriority}',
+                    '${roleName(controller.state, member.roleId)} · ${modelName(controller.state, member.modelId)} · 优先级 ${member.executionPriority}',
                 actions: [
                   FilledButton(
                     onPressed: () {
@@ -985,7 +988,7 @@ class _MemberConfigPanel extends StatelessWidget {
                   ),
                   IconButton(
                     tooltip: '编辑成员',
-                    onPressed: () => _showMemberDialog(
+                    onPressed: () => showMemberDialog(
                       context,
                       controller,
                       member: member,
@@ -996,7 +999,7 @@ class _MemberConfigPanel extends StatelessWidget {
                     tooltip: '删除成员',
                     onPressed: member.isSecretary
                         ? null
-                        : () => _runConfigAction(
+                        : () => runConfigAction(
                               context,
                               () => controller.deleteMember(member.id),
                             ),
@@ -1028,14 +1031,14 @@ class _WorkspacePanel extends StatelessWidget {
             tooltip: '创建补丁',
             onPressed: controller.state.workspaces.isEmpty
                 ? null
-                : () => _showWorkspacePatchDialog(context, controller),
+                : () => showWorkspacePatchDialog(context, controller),
             icon: const Icon(Icons.difference_rounded),
           ),
           IconButton(
             tooltip: '浏览文件',
             onPressed: controller.state.workspaces.isEmpty
                 ? null
-                : () => _showWorkspaceFilesDialog(context, controller),
+                : () => showWorkspaceFilesDialog(context, controller),
             icon: const Icon(Icons.list_alt_rounded),
           ),
           IconButton(
@@ -1193,9 +1196,9 @@ class _TaskAssignmentCard extends StatelessWidget {
                 ),
               ),
               Text(
-                _taskStatusText(assignment.status),
+                taskStatusText(assignment.status),
                 style: TextStyle(
-                  color: _taskStatusColor(assignment.status),
+                  color: taskStatusColor(assignment.status),
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -1229,8 +1232,8 @@ class _TaskAssignmentCard extends StatelessWidget {
   }
 }
 
-class _TaskQueueBar extends StatelessWidget {
-  const _TaskQueueBar({
+class TaskQueueBar extends StatelessWidget {
+  const TaskQueueBar({
     required this.controller,
     required this.conversationId,
   });
@@ -1244,7 +1247,7 @@ class _TaskQueueBar extends StatelessWidget {
     if (tasks.isEmpty) {
       return const SizedBox.shrink();
     }
-    final running = _firstTaskWithStatus(tasks, QueuedTaskStatus.running);
+    final running = firstTaskWithStatus(tasks, QueuedTaskStatus.running);
     final title = running == null
         ? '队列 ${tasks.length}'
         : '队列 ${tasks.length} · ${running.title}';
@@ -1318,7 +1321,7 @@ class _TaskQueueTileState extends State<_TaskQueueTile> {
       child: ExpansionTile(
         title: Text(task.title),
         subtitle: Text(
-          '${_queuedTaskStatusText(task.status)} · 优先级 ${task.priority} · 备注 ${task.notes.length}',
+          '${queuedTaskStatusText(task.status)} · 优先级 ${task.priority} · 备注 ${task.notes.length}',
         ),
         trailing: Wrap(
           spacing: 4,
@@ -1400,8 +1403,8 @@ class _TaskQueueTileState extends State<_TaskQueueTile> {
   }
 }
 
-class _ChatPatchConfirmationCard extends StatelessWidget {
-  const _ChatPatchConfirmationCard({
+class ChatPatchConfirmationCard extends StatelessWidget {
+  const ChatPatchConfirmationCard({
     required this.patch,
     required this.onApply,
     required this.onReject,
@@ -1479,8 +1482,8 @@ class _ChatPatchConfirmationCard extends StatelessWidget {
   }
 }
 
-class _ChatCommandRequestCard extends StatelessWidget {
-  const _ChatCommandRequestCard({
+class ChatCommandRequestCard extends StatelessWidget {
+  const ChatCommandRequestCard({
     required this.request,
     required this.onApproveExecute,
     required this.onReject,

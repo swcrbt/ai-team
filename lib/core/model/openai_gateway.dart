@@ -1,4 +1,12 @@
-part of '../model_gateway.dart';
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import '../domain.dart';
+import 'gateway_contracts.dart';
+import 'model_gateway_exception.dart';
+import 'openai_request.dart';
+import 'openai_stream_parsing.dart';
 
 class OpenAiCompatibleGateway implements MetadataModelGateway {
   OpenAiCompatibleGateway({
@@ -134,13 +142,13 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
     final first = choices.first as Map<String, Object?>;
     final message = first['message'] as Map<String, Object?>;
     final thinkingFieldKeys = <String>{};
-    final thinkingContent = _firstStringValue(
+    final thinkingContent = firstStringValue(
       message,
       const ['reasoning_content', 'reasoning', 'thinking'],
       keysSeen: thinkingFieldKeys,
     );
     final content = message['content'] as String? ?? '';
-    final toolCalls = _parseToolCalls(message['tool_calls']);
+    final toolCalls = parseToolCalls(message['tool_calls']);
     return ModelCompletion(
       content: content,
       thinkingContent: thinkingContent,
@@ -151,7 +159,7 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
         thinkingContentLength: thinkingContent?.length ?? 0,
         thinkingFieldKeys: thinkingFieldKeys.toList(growable: false),
         toolCallCount: toolCalls.length,
-        rawToolCalls: _rawToolCalls(message['tool_calls']),
+        rawToolCalls: rawToolCalls(message['tool_calls']),
         rawResponse: body,
         requestBody: requestBody,
         requestUrl: requestUrl,
@@ -170,7 +178,7 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
     final thinkingBuffer = StringBuffer();
     final rawBuffer = StringBuffer();
     final thinkingFieldKeys = <String>{};
-    final toolCallBuilders = <int, _StreamingToolCallBuilder>{};
+    final toolCallBuilders = <int, StreamingToolCallBuilder>{};
     var contentDeltaCount = 0;
     var thinkingDeltaCount = 0;
     final lines = response.transform(utf8.decoder).transform(
@@ -178,7 +186,7 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
         );
     final iterator = StreamIterator<String>(lines);
     try {
-      while (await _moveNextStreamingLine(iterator, cancellation)) {
+      while (await moveNextStreamingLine(iterator, cancellation)) {
         final line = iterator.current;
         cancellation?.throwIfCancelled();
         rawBuffer
@@ -204,7 +212,7 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
             contentDelta = content;
             contentDeltaCount++;
           }
-          final thinkingDelta = _firstStringValue(
+          final thinkingDelta = firstStringValue(
             delta,
             const ['reasoning_content', 'reasoning', 'thinking'],
             keysSeen: thinkingFieldKeys,
@@ -213,7 +221,7 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
             thinkingBuffer.write(thinkingDelta);
             thinkingDeltaCount++;
           }
-          _appendStreamingToolCalls(delta?['tool_calls'], toolCallBuilders);
+          appendStreamingToolCalls(delta?['tool_calls'], toolCallBuilders);
           final streamDelta = ModelStreamDelta(
             contentDelta: contentDelta,
             thinkingDelta: thinkingDelta,
@@ -228,8 +236,8 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
     }
     final thinkingContent = thinkingBuffer.toString();
     final content = buffer.toString();
-    final normalizedThinkingContent = _normalizeOptionalText(thinkingContent);
-    final toolCalls = _completeStreamingToolCalls(toolCallBuilders);
+    final normalizedThinkingContent = normalizeOptionalText(thinkingContent);
+    final toolCalls = completeStreamingToolCalls(toolCallBuilders);
     return ModelCompletion(
       content: content,
       thinkingContent: normalizedThinkingContent,
