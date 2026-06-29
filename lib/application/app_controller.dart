@@ -11,11 +11,13 @@ import '../core/file_dialogs.dart';
 import '../core/local_store.dart';
 import '../core/model_gateway.dart';
 import '../core/orchestrator.dart';
-import '../core/patching.dart';
 import '../core/workspace/workspace_service.dart';
 import 'app_controller_helpers.dart';
 import 'chat_streaming.dart';
+import 'conversation_sessions.dart';
 import 'state_persistence_queue.dart';
+import 'streaming_draft_registry.dart';
+import 'workspace_command_controller.dart';
 
 class AppController extends ChangeNotifier {
   AppController(
@@ -31,6 +33,13 @@ class AppController extends ChangeNotifier {
         exportStore = exportStore ?? JsonLocalStore.defaultStore(),
         commandService = commandService ?? const CommandService(),
         selectedConversationId = initialConversationId(initialState) {
+    _streamingDraftRegistry = StreamingDraftRegistry(diagnostics: diagnostics);
+    _workspaceCommands = WorkspaceCommandController(
+      readState: () => state,
+      commit: _commit,
+      workspaceService: workspaceService,
+      commandService: this.commandService,
+    );
     final conversation = state.conversations.firstWhere(
       (item) => item.id == selectedConversationId,
     );
@@ -43,12 +52,8 @@ class AppController extends ChangeNotifier {
   AppState state;
   String selectedConversationId;
   String? activeTeamId;
-  final Set<String> hiddenConversationIds = <String>{};
-  final Set<String> openedConversationIds = <String>{};
-  final List<String> conversationOrderIds = <String>[];
-  final Set<String> pinnedConversationIds = <String>{};
-  final List<String> pinnedConversationOrderIds = <String>[];
-  double _conversationListScrollOffset = 0;
+  final ConversationSessionStore _conversationSessions =
+      ConversationSessionStore();
   final TeamOrchestrator orchestrator;
   final StateChanged? onStateChanged;
   final FileDialogService fileDialogs;
@@ -63,59 +68,44 @@ class AppController extends ChangeNotifier {
   String? _activeDispatchConversationId;
   ConversationStatus? _requestedCancellationStatus;
   final StatePersistenceQueue _persistenceQueue = StatePersistenceQueue();
-  final Map<String, ValueNotifier<ChatStreamingDraft?>>
-      _streamingDraftNotifiers = {};
-  final Map<String, Set<String>> _streamingDraftMessageIdsByConversation = {};
+  late final StreamingDraftRegistry _streamingDraftRegistry;
+  late final WorkspaceCommandController _workspaceCommands;
+
+  Set<String> get hiddenConversationIds =>
+      _conversationSessions.hiddenConversationIds;
+  Set<String> get openedConversationIds =>
+      _conversationSessions.openedConversationIds;
+  List<String> get conversationOrderIds =>
+      _conversationSessions.conversationOrderIds;
+  Set<String> get pinnedConversationIds =>
+      _conversationSessions.pinnedConversationIds;
+  List<String> get pinnedConversationOrderIds =>
+      _conversationSessions.pinnedConversationOrderIds;
 
   @override
   void dispose() {
-    for (final notifier in _streamingDraftNotifiers.values) {
-      notifier.dispose();
-    }
-    _streamingDraftNotifiers.clear();
-    _streamingDraftMessageIdsByConversation.clear();
+    _streamingDraftRegistry.dispose();
     super.dispose();
   }
 
   ValueListenable<ChatStreamingDraft?> streamingDraftListenable(
     String messageId,
   ) {
-    return _streamingDraftNotifiers.putIfAbsent(
-      messageId,
-      () => ValueNotifier<ChatStreamingDraft?>(null),
-    );
+    return _streamingDraftRegistry.listenable(messageId);
   }
 
   void _handleStreamingDraft({
     required String conversationId,
     required ChatMessage message,
   }) {
-    diagnostics?.streamingDraftUpdateCount++;
-    _streamingDraftMessageIdsByConversation
-        .putIfAbsent(conversationId, () => <String>{})
-        .add(message.id);
-    final notifier = _streamingDraftNotifiers.putIfAbsent(
-      message.id,
-      () => ValueNotifier<ChatStreamingDraft?>(null),
-    );
-    notifier.value = ChatStreamingDraft(
+    _streamingDraftRegistry.update(
       conversationId: conversationId,
       message: message,
     );
   }
 
   void _clearStreamingDraftsForConversation(String conversationId) {
-    final messageIds =
-        _streamingDraftMessageIdsByConversation.remove(conversationId);
-    if (messageIds == null) {
-      return;
-    }
-    for (final messageId in messageIds) {
-      final notifier = _streamingDraftNotifiers[messageId];
-      if (notifier?.value != null) {
-        notifier!.value = null;
-      }
-    }
+    _streamingDraftRegistry.clearConversation(conversationId);
   }
 
   Team get currentTeam {
@@ -214,72 +204,28 @@ class AppController extends ChangeNotifier {
       );
 
   List<Conversation> get visibleConversations {
-    _syncConversationOrder();
-    final conversationsById = {
-      for (final conversation in state.conversations)
-        conversation.id: conversation,
-    };
-    final visible = <Conversation>[];
-    final visibleObjectKeys = <String>{};
-    for (final id in _conversationIdsInDisplayOrder()) {
-      final conversation = conversationsById[id];
-      if (conversation == null || !_shouldShowConversation(conversation)) {
-        continue;
-      }
-      final objectKey = _conversationObjectKey(conversation);
-      if (visibleObjectKeys.add(objectKey)) {
-        visible.add(conversation);
-      }
-    }
-    return visible;
+    return _conversationSessions.visibleConversations(
+      state,
+      selectedConversationId: selectedConversationId,
+    );
   }
 
   List<Conversation> get openConversationPanes {
-    _syncConversationOrder();
-    final conversationsById = {
-      for (final conversation in state.conversations)
-        conversation.id: conversation,
-    };
-    final paneIds = <String>{};
-    for (final conversation in visibleConversations) {
-      paneIds.add(conversation.id);
-    }
-    paneIds.add(selectedConversationId);
-    for (final id in _conversationIdsInDisplayOrder(selectedFirst: true)) {
-      if (openedConversationIds.contains(id)) {
-        paneIds.add(id);
-      }
-    }
-    return paneIds
-        .map((id) => conversationsById[id])
-        .whereType<Conversation>()
-        .where((conversation) => !hiddenConversationIds.contains(
-              conversation.id,
-            ))
-        .toList();
-  }
-
-  bool _shouldShowConversation(Conversation conversation) {
-    if (hiddenConversationIds.contains(conversation.id)) {
-      return false;
-    }
-    if (conversation.id == selectedConversationId) {
-      return true;
-    }
-    if (openedConversationIds.contains(conversation.id)) {
-      return true;
-    }
-    return !isGeneratedWelcomeOnlyMemberConversation(conversation);
+    return _conversationSessions.openConversationPanes(
+      state,
+      selectedConversationId: selectedConversationId,
+    );
   }
 
   List<TeamMember> get currentMembers => state.members
       .where((member) => currentTeam.memberIds.contains(member.id))
       .toList();
 
-  double get conversationListScrollOffset => _conversationListScrollOffset;
+  double get conversationListScrollOffset =>
+      _conversationSessions.conversationListScrollOffset;
 
   void recordConversationListScrollOffset(double offset) {
-    _conversationListScrollOffset = offset;
+    _conversationSessions.recordConversationListScrollOffset(offset);
   }
 
   Conversation conversationForMember(String memberId) {
@@ -375,16 +321,11 @@ class AppController extends ChangeNotifier {
       }
       selectedConversationId = fallbackConversation.id;
       activeTeamId = fallbackConversation.teamId;
-      openedConversationIds.add(fallbackConversation.id);
-      hiddenConversationIds.remove(fallbackConversation.id);
+      _conversationSessions.showConversation(fallbackConversation);
     }
 
     _clearStreamingDraftsForConversation(conversationId);
-    openedConversationIds.remove(conversationId);
-    hiddenConversationIds.remove(conversationId);
-    pinnedConversationIds.remove(conversationId);
-    pinnedConversationOrderIds.remove(conversationId);
-    conversationOrderIds.remove(conversationId);
+    _conversationSessions.removeConversation(conversationId);
 
     final nextConversations = [
       for (final item in state.conversations)
@@ -410,142 +351,51 @@ class AppController extends ChangeNotifier {
   }
 
   bool isConversationPinned(String conversationId) {
-    return pinnedConversationIds.contains(conversationId);
+    return _conversationSessions.isPinned(conversationId);
   }
 
   List<Conversation> get conversationHistory {
-    _syncConversationOrder();
-    final conversationsById = {
-      for (final conversation in state.conversations)
-        conversation.id: conversation,
-    };
-    final current = _conversationById(selectedConversationId);
-    return _conversationIdsInDisplayOrder(selectedFirst: true)
-        .map((id) => conversationsById[id])
-        .whereType<Conversation>()
-        .where((conversation) => _isSameConversationObject(
-              conversation,
-              current,
-            ))
-        .toList();
-  }
-
-  void _activateConversation(String conversationId) {
-    final conversation = _conversationById(conversationId);
-    selectedConversationId = conversation.id;
-    openedConversationIds.add(conversation.id);
-    _unhideConversationObject(conversation);
-    activeTeamId = conversation.teamId;
-    _moveConversationToFront(conversation.id);
-  }
-
-  Conversation _activeConversationForObject(Conversation source) {
-    final conversationsById = {
-      for (final conversation in state.conversations)
-        conversation.id: conversation,
-    };
-    for (final id in _conversationIdsInDisplayOrder(selectedFirst: true)) {
-      final conversation = conversationsById[id];
-      if (conversation != null &&
-          _isSameConversationObject(conversation, source)) {
-        return conversation;
-      }
-    }
-    return source;
-  }
-
-  Conversation? _emptyConversationForObject(Conversation source) {
-    final conversationsById = {
-      for (final conversation in state.conversations)
-        conversation.id: conversation,
-    };
-    for (final id in _conversationIdsInDisplayOrder(selectedFirst: true)) {
-      final conversation = conversationsById[id];
-      if (conversation != null &&
-          _isSameConversationObject(conversation, source) &&
-          conversation.messages.isEmpty) {
-        return conversation;
-      }
-    }
-    return null;
-  }
-
-  Conversation? _fallbackConversationAfterDeleting(Conversation deleted) {
-    final conversationsById = {
-      for (final conversation in state.conversations)
-        conversation.id: conversation,
-    };
-    final sameObjectConversations = <Conversation>[];
-    for (final id in _conversationIdsInDisplayOrder()) {
-      final conversation = conversationsById[id];
-      if (conversation != null &&
-          conversation.id != deleted.id &&
-          _isSameConversationObject(conversation, deleted)) {
-        sameObjectConversations.add(conversation);
-      }
-    }
-    for (final conversation in sameObjectConversations) {
-      if (conversation.messages.isNotEmpty) {
-        return conversation;
-      }
-    }
-    if (sameObjectConversations.isEmpty) {
-      return null;
-    }
-    return sameObjectConversations.first;
-  }
-
-  Conversation _createEmptyConversationForObject(Conversation source) {
-    final timestamp = DateTime.now().microsecondsSinceEpoch;
-    return Conversation(
-      id: source.memberId == null
-          ? 'conv-${source.teamId}-$timestamp'
-          : 'conv-${source.teamId}-${source.memberId}-$timestamp',
-      title: '',
-      teamId: source.teamId,
-      memberId: source.memberId,
-      messages: const [],
+    return _conversationSessions.conversationHistory(
+      state,
+      selectedConversationId: selectedConversationId,
     );
   }
 
-  String _conversationObjectKey(Conversation conversation) {
-    final memberId = conversation.memberId;
-    if (memberId == null) {
-      return 'team:${conversation.teamId}';
-    }
-    return 'member:${conversation.teamId}:$memberId';
+  void _activateConversation(String conversationId) {
+    final conversation = _conversationSessions.activate(state, conversationId);
+    selectedConversationId = conversation.id;
+    activeTeamId = conversation.teamId;
   }
 
-  bool _isSameConversationObject(
-    Conversation left,
-    Conversation right,
-  ) {
-    return _conversationObjectKey(left) == _conversationObjectKey(right);
+  Conversation _activeConversationForObject(Conversation source) {
+    return _conversationSessions.activeConversationForObject(
+      state,
+      source,
+      selectedConversationId: selectedConversationId,
+    );
   }
 
-  void _unhideConversationObject(Conversation source) {
-    hiddenConversationIds.removeWhere((id) {
-      final conversation = _conversationByIdOrNull(id);
-      return conversation != null &&
-          _isSameConversationObject(
-            conversation,
-            source,
-          );
-    });
+  Conversation? _emptyConversationForObject(Conversation source) {
+    return _conversationSessions.emptyConversationForObject(
+      state,
+      source,
+      selectedConversationId: selectedConversationId,
+    );
+  }
+
+  Conversation? _fallbackConversationAfterDeleting(Conversation deleted) {
+    return _conversationSessions.fallbackConversationAfterDeleting(
+      state,
+      deleted,
+    );
+  }
+
+  Conversation _createEmptyConversationForObject(Conversation source) {
+    return _conversationSessions.createEmptyConversationForObject(source);
   }
 
   void togglePinnedConversation(String conversationId) {
-    if (!state.conversations
-        .any((conversation) => conversation.id == conversationId)) {
-      return;
-    }
-    if (pinnedConversationIds.remove(conversationId)) {
-      pinnedConversationOrderIds.remove(conversationId);
-    } else {
-      pinnedConversationIds.add(conversationId);
-      pinnedConversationOrderIds.remove(conversationId);
-      pinnedConversationOrderIds.insert(0, conversationId);
-    }
+    _conversationSessions.togglePinned(state, conversationId);
     notifyListeners();
   }
 
@@ -554,24 +404,18 @@ class AppController extends ChangeNotifier {
     if (conversation == null) {
       return;
     }
-    final visibleObjectKeys = visibleConversations
-        .map((conversation) => _conversationObjectKey(conversation))
-        .toSet();
-    final objectKey = _conversationObjectKey(conversation);
-    if (visibleObjectKeys.length <= 1 &&
-        visibleObjectKeys.contains(objectKey)) {
+    if (_conversationSessions.closeWouldHideLastVisibleObject(
+      state,
+      conversation,
+      selectedConversationId: selectedConversationId,
+    )) {
       return;
     }
-    for (final item in state.conversations) {
-      if (_isSameConversationObject(item, conversation)) {
-        hiddenConversationIds.add(item.id);
-        openedConversationIds.remove(item.id);
-      }
-    }
+    _conversationSessions.closeConversationObject(state, conversation);
     final selectedConversation =
         _conversationByIdOrNull(selectedConversationId);
     if (selectedConversation == null ||
-        hiddenConversationIds.contains(selectedConversationId)) {
+        _conversationSessions.isHidden(selectedConversationId)) {
       final nextConversation = visibleConversations.first;
       _activateConversation(nextConversation.id);
     }
@@ -1347,26 +1191,7 @@ class AppController extends ChangeNotifier {
   }
 
   void addWorkspacePath(String path) {
-    final normalized = Directory(path).absolute.path;
-    final workspace = ProjectWorkspace(
-      id: 'workspace-${DateTime.now().microsecondsSinceEpoch}',
-      name: pathBasename(normalized),
-      path: normalized,
-    );
-    _commit(
-      state.copyWith(
-        workspaces: [...state.workspaces, workspace],
-        auditLog: [
-          ...state.auditLog,
-          AuditEntry(
-            id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
-            action: 'workspace_added',
-            detail: normalized,
-            createdAt: DateTime.now(),
-          ),
-        ],
-      ),
-    );
+    _workspaceCommands.addWorkspacePath(path);
   }
 
   Future<bool> pickAndAddWorkspace() async {
@@ -1418,8 +1243,7 @@ class AppController extends ChangeNotifier {
     required String workspaceId,
     required String relativePath,
   }) async {
-    return workspaceService.readFile(
-      state,
+    return _workspaceCommands.readWorkspaceFile(
       workspaceId: workspaceId,
       relativePath: relativePath,
     );
@@ -1429,8 +1253,7 @@ class AppController extends ChangeNotifier {
     required String workspaceId,
     int maxFiles = 500,
   }) async {
-    return workspaceService.listFiles(
-      state,
+    return _workspaceCommands.listWorkspaceFiles(
       workspaceId: workspaceId,
       maxFiles: maxFiles,
     );
@@ -1442,29 +1265,12 @@ class AppController extends ChangeNotifier {
     required String proposedContent,
     required String memberName,
   }) async {
-    final proposal = await workspaceService.proposePatch(
-      state,
+    return _workspaceCommands.proposeWorkspacePatch(
       workspaceId: workspaceId,
       relativePath: relativePath,
       proposedContent: proposedContent,
       memberName: memberName,
-      id: 'patch-${DateTime.now().microsecondsSinceEpoch}',
     );
-    _commit(
-      state.copyWith(
-        patchProposals: [...state.patchProposals, proposal],
-        auditLog: [
-          ...state.auditLog,
-          AuditEntry(
-            id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
-            action: 'patch_proposed',
-            detail: '${proposal.memberName}: ${proposal.filePath}',
-            createdAt: DateTime.now(),
-          ),
-        ],
-      ),
-    );
-    return proposal;
   }
 
   CommandRequest requestCommand({
@@ -1472,71 +1278,18 @@ class AppController extends ChangeNotifier {
     required String command,
     required String workingDirectory,
   }) {
-    final member = state.members.firstWhere((item) => item.id == memberId);
-    final role = state.roles.firstWhere((item) => item.id == member.roleId);
-    final decision = role.commandPolicy.evaluate(
-      command,
-      workingDirectory: workingDirectory,
-    );
-    final request = CommandRequest.pending(
-      id: 'command-${DateTime.now().microsecondsSinceEpoch}',
-      memberName: member.name,
+    return _workspaceCommands.requestCommand(
+      memberId: memberId,
       command: command,
       workingDirectory: workingDirectory,
-      decision: decision,
     );
-    _commit(
-      state.copyWith(
-        commandRequests: [...state.commandRequests, request],
-        auditLog: [
-          ...state.auditLog,
-          AuditEntry(
-            id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
-            action: decision == CommandDecision.denied
-                ? 'command_denied'
-                : 'command_requested',
-            detail: '${member.name}: $command',
-            createdAt: DateTime.now(),
-          ),
-        ],
-      ),
-    );
-    return request;
   }
 
   void updateCommandRequestStatus(
     String requestId,
     CommandRequestStatus status,
   ) {
-    final existing =
-        state.commandRequests.firstWhere((item) => item.id == requestId);
-    if (existing.decision == CommandDecision.denied &&
-        status != CommandRequestStatus.denied) {
-      throw StateError('策略拒绝的命令不能被批准或执行');
-    }
-    if ((existing.status == CommandRequestStatus.executed ||
-            existing.status == CommandRequestStatus.failed) &&
-        status != existing.status) {
-      throw StateError('已结束的命令请求不能修改状态');
-    }
-    _commit(
-      state.copyWith(
-        commandRequests: state.commandRequests
-            .map((request) => request.id == requestId
-                ? request.copyWith(status: status)
-                : request)
-            .toList(),
-        auditLog: [
-          ...state.auditLog,
-          AuditEntry(
-            id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
-            action: 'command_${status.name}',
-            detail: requestId,
-            createdAt: DateTime.now(),
-          ),
-        ],
-      ),
-    );
+    _workspaceCommands.updateCommandRequestStatus(requestId, status);
   }
 
   Future<CommandRequest> executeCommandRequest(
@@ -1544,46 +1297,14 @@ class AppController extends ChangeNotifier {
     Future<ProcessResult> Function(String command, String workingDirectory)?
         runner,
   }) async {
-    final request =
-        state.commandRequests.firstWhere((item) => item.id == requestId);
-    if (request.status != CommandRequestStatus.approved) {
-      throw StateError('只有已批准的命令请求才能执行');
-    }
-    final runResult =
-        await (runner == null ? commandService : CommandService(runner: runner))
-            .run(request);
-    final updated = request.copyWith(
-      status: runResult.status,
-      output: runResult.output,
+    return _workspaceCommands.executeCommandRequest(
+      requestId,
+      runner: runner,
     );
-    _commit(
-      state.copyWith(
-        commandRequests: state.commandRequests
-            .map((item) => item.id == requestId ? updated : item)
-            .toList(),
-        auditLog: [
-          ...state.auditLog,
-          AuditEntry(
-            id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
-            action: runResult.status == CommandRequestStatus.executed
-                ? 'command_executed'
-                : 'command_failed',
-            detail: '${request.command} exit=${runResult.exitCode}',
-            createdAt: DateTime.now(),
-          ),
-        ],
-      ),
-    );
-    return updated;
   }
 
   List<CommandRequest> commandRequestsForConversation(String conversationId) {
-    return state.commandRequests
-        .where((request) => request.conversationId == conversationId)
-        .where((request) =>
-            request.status == CommandRequestStatus.pending ||
-            request.status == CommandRequestStatus.approved)
-        .toList();
+    return _workspaceCommands.commandRequestsForConversation(conversationId);
   }
 
   Future<void> approveExecuteCommandRequestAndContinue(
@@ -1650,56 +1371,18 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> applyPatch(PatchProposal proposal) async {
-    final index =
-        state.patchProposals.indexWhere((item) => item.id == proposal.id);
-    if (index < 0) {
+    if (!state.patchProposals.any((item) => item.id == proposal.id)) {
       return;
     }
-    try {
-      final applied = await PatchApplier().apply(proposal);
-      final proposals = [...state.patchProposals];
-      proposals[index] = applied;
-      _commit(
-        state.copyWith(
-          patchProposals: proposals,
-          auditLog: [
-            ...state.auditLog,
-            AuditEntry(
-              id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
-              action: 'patch_applied',
-              detail: applied.filePath,
-              createdAt: DateTime.now(),
-            ),
-          ],
-        ),
-      );
-    } catch (exception) {
-      error = exception.toString();
+    final applyError = await _workspaceCommands.applyPatch(proposal);
+    if (applyError != null) {
+      error = applyError;
     }
     notifyListeners();
   }
 
   void rejectPatch(PatchProposal proposal) {
-    final index =
-        state.patchProposals.indexWhere((item) => item.id == proposal.id);
-    if (index >= 0) {
-      final proposals = [...state.patchProposals];
-      proposals[index] = proposal.copyWith(status: PatchStatus.rejected);
-      _commit(
-        state.copyWith(
-          patchProposals: proposals,
-          auditLog: [
-            ...state.auditLog,
-            AuditEntry(
-              id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
-              action: 'patch_rejected',
-              detail: proposal.filePath,
-              createdAt: DateTime.now(),
-            ),
-          ],
-        ),
-      );
-    }
+    _workspaceCommands.rejectPatch(proposal);
   }
 
   void _setConversationStatus(
@@ -1972,57 +1655,7 @@ class AppController extends ChangeNotifier {
   }
 
   void _syncConversationOrder() {
-    final existingIds =
-        state.conversations.map((conversation) => conversation.id).toList();
-    final existingIdSet = existingIds.toSet();
-    conversationOrderIds.removeWhere((id) => !existingIdSet.contains(id));
-    pinnedConversationIds.removeWhere((id) => !existingIdSet.contains(id));
-    pinnedConversationOrderIds.removeWhere(
-      (id) =>
-          !existingIdSet.contains(id) || !pinnedConversationIds.contains(id),
-    );
-    for (final id in existingIds) {
-      if (!conversationOrderIds.contains(id)) {
-        conversationOrderIds.add(id);
-      }
-    }
-  }
-
-  List<String> _conversationIdsInDisplayOrder({bool selectedFirst = false}) {
-    _syncConversationOrder();
-    final existingIdSet =
-        state.conversations.map((conversation) => conversation.id).toSet();
-    final ids = <String>{};
-    if (selectedFirst && existingIdSet.contains(selectedConversationId)) {
-      ids.add(selectedConversationId);
-    }
-    ids.addAll(
-      pinnedConversationOrderIds.where(
-        (id) =>
-            existingIdSet.contains(id) && pinnedConversationIds.contains(id),
-      ),
-    );
-    ids.addAll(
-      conversationOrderIds.where(
-        (id) =>
-            existingIdSet.contains(id) && !pinnedConversationIds.contains(id),
-      ),
-    );
-    ids.addAll(existingIdSet);
-    return ids.toList();
-  }
-
-  void _moveConversationToFront(String conversationId) {
-    _syncConversationOrder();
-    if (!conversationOrderIds.contains(conversationId)) {
-      return;
-    }
-    conversationOrderIds.remove(conversationId);
-    conversationOrderIds.insert(0, conversationId);
-    if (pinnedConversationIds.contains(conversationId)) {
-      pinnedConversationOrderIds.remove(conversationId);
-      pinnedConversationOrderIds.insert(0, conversationId);
-    }
+    _conversationSessions.sync(state);
   }
 
   ModelProfile _requireModel(String modelId) {
