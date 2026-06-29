@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../application/app_controller.dart';
 import '../../core/domain.dart';
+import 'dialog_frame.dart';
 import '../../core/model_gateway.dart';
 
 Future<void> showTeamDialog(
@@ -29,7 +30,7 @@ Future<void> showTeamDialog(
   await showDialog<void>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => _ConfigDialog(
+      builder: (context, setDialogState) => ConfigDialog(
         title: team == null ? '新增团队' : '编辑团队',
         subtitle: '配置团队名称、协同方式和参与成员。',
         icon: Icons.groups_rounded,
@@ -37,15 +38,15 @@ Future<void> showTeamDialog(
         body: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (error != null) _DialogError(error!),
-            _DialogSection(
+            if (error != null) DialogError(error!),
+            DialogSection(
               title: '基础信息',
-              child: _DialogField(
+              child: DialogField(
                 controller: nameController,
                 label: '团队名称',
               ),
             ),
-            _DialogSection(
+            DialogSection(
               title: '协同模式',
               child: Align(
                 alignment: Alignment.centerLeft,
@@ -69,7 +70,7 @@ Future<void> showTeamDialog(
                 ),
               ),
             ),
-            _DialogSection(
+            DialogSection(
               title: '团队成员',
               child: Column(
                 children: [
@@ -170,22 +171,22 @@ Future<void> showModelDialog(
   await showDialog<void>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => _ConfigDialog(
+      builder: (context, setDialogState) => ConfigDialog(
         title: model == null ? '新增模型配置' : '编辑模型配置',
         subtitle: '维护 OpenAI 兼容模型、密钥和请求参数。',
         icon: Icons.memory_rounded,
         body: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (validationError != null) _DialogError(validationError!),
-            _DialogSection(
+            if (validationError != null) DialogError(validationError!),
+            DialogSection(
               title: '基础信息',
               child: Column(
                 children: [
-                  _DialogField(controller: name, label: '名称'),
-                  _DialogField(controller: baseUrl, label: 'Base URL'),
-                  _DialogField(controller: modelName, label: '模型名称'),
-                  _DialogField(
+                  DialogField(controller: name, label: '名称'),
+                  DialogField(controller: baseUrl, label: 'Base URL'),
+                  DialogField(controller: modelName, label: '模型名称'),
+                  DialogField(
                     controller: apiKey,
                     label: 'API Key',
                     obscure: true,
@@ -193,7 +194,7 @@ Future<void> showModelDialog(
                 ],
               ),
             ),
-            _DialogSection(
+            DialogSection(
               title: '请求参数',
               child: Column(
                 children: [
@@ -206,7 +207,7 @@ Future<void> showModelDialog(
                   ),
                   DropdownButtonFormField<String>(
                     initialValue: reasoningEffort,
-                    decoration: _dialogInputDecoration('深度思考'),
+                    decoration: dialogInputDecoration('深度思考'),
                     items: [
                       for (final value in [
                         reasoningEffortOffValue,
@@ -225,8 +226,8 @@ Future<void> showModelDialog(
                     },
                   ),
                   const SizedBox(height: 12),
-                  _DialogField(controller: temperature, label: '温度 0-2'),
-                  _DialogField(controller: maxTokens, label: '最大 Token'),
+                  DialogField(controller: temperature, label: '温度 0-2'),
+                  DialogField(controller: maxTokens, label: '最大 Token'),
                 ],
               ),
             ),
@@ -317,7 +318,7 @@ Future<void> showRoleDialog(
   await showDialog<void>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => _ConfigDialog(
+      builder: (context, setDialogState) => ConfigDialog(
         title: role == null ? '新增角色配置' : '编辑角色配置',
         subtitle: '定义角色提示词、命令策略和项目权限。',
         icon: Icons.badge_rounded,
@@ -325,32 +326,32 @@ Future<void> showRoleDialog(
         body: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (validationError != null) _DialogError(validationError!),
-            _DialogSection(
+            if (validationError != null) DialogError(validationError!),
+            DialogSection(
               title: '角色提示词',
               child: Column(
                 children: [
-                  _DialogField(controller: name, label: '角色名称'),
-                  _DialogField(controller: description, label: '角色描述'),
-                  _DialogField(
+                  DialogField(controller: name, label: '角色名称'),
+                  DialogField(controller: description, label: '角色描述'),
+                  DialogField(
                     controller: identity,
                     label: '身份提示词',
                     minLines: 2,
                     maxLines: 4,
                   ),
-                  _DialogField(
+                  DialogField(
                     controller: goal,
                     label: '目标提示词',
                     minLines: 2,
                     maxLines: 4,
                   ),
-                  _DialogField(
+                  DialogField(
                     controller: constraint,
                     label: '约束提示词',
                     minLines: 2,
                     maxLines: 4,
                   ),
-                  _DialogField(
+                  DialogField(
                     controller: outputFormat,
                     label: '输出格式提示词',
                     minLines: 2,
@@ -359,11 +360,11 @@ Future<void> showRoleDialog(
                 ],
               ),
             ),
-            _DialogSection(
+            DialogSection(
               title: '命令权限',
               child: Column(
                 children: [
-                  _DialogField(
+                  DialogField(
                     controller: allowedCommands,
                     label: '允许命令（一行一个）',
                     minLines: 2,
@@ -382,13 +383,13 @@ Future<void> showRoleDialog(
                       ),
                     ),
                   ),
-                  _DialogField(
+                  DialogField(
                     controller: blockedCommands,
                     label: '禁止命令（一行一个）',
                     minLines: 2,
                     maxLines: 4,
                   ),
-                  _DialogField(
+                  DialogField(
                     controller: allowedDirectories,
                     label: '允许目录（一行一个，留空不限）',
                     minLines: 2,
@@ -497,23 +498,23 @@ Future<void> showMemberDialog(
   await showDialog<void>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => _ConfigDialog(
+      builder: (context, setDialogState) => ConfigDialog(
         title: member == null ? '新增团队成员' : '编辑团队成员',
         subtitle: '绑定成员名称、执行优先级、角色和模型。',
         icon: Icons.person_add_alt_1_rounded,
         body: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (validationError != null) _DialogError(validationError!),
-            _DialogSection(
+            if (validationError != null) DialogError(validationError!),
+            DialogSection(
               title: '成员信息',
               child: Column(
                 children: [
-                  _DialogField(controller: name, label: '成员名称'),
-                  _DialogField(controller: priority, label: '执行优先级'),
+                  DialogField(controller: name, label: '成员名称'),
+                  DialogField(controller: priority, label: '执行优先级'),
                   DropdownButtonFormField<String>(
                     initialValue: roleId,
-                    decoration: _dialogInputDecoration('角色'),
+                    decoration: dialogInputDecoration('角色'),
                     items: controller.state.roles
                         .map(
                           (role) => DropdownMenuItem(
@@ -527,7 +528,7 @@ Future<void> showMemberDialog(
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     initialValue: modelId,
-                    decoration: _dialogInputDecoration('模型'),
+                    decoration: dialogInputDecoration('模型'),
                     items: controller.state.models
                         .map(
                           (model) => DropdownMenuItem(
@@ -600,7 +601,7 @@ Future<void> showWorkspacePatchDialog(
   await showDialog<void>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => _ConfigDialog(
+      builder: (context, setDialogState) => ConfigDialog(
         title: '创建补丁提案',
         subtitle: '从本地工作区读取文件并生成受控补丁提案。',
         icon: Icons.difference_rounded,
@@ -608,14 +609,14 @@ Future<void> showWorkspacePatchDialog(
         body: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (validationError != null) _DialogError(validationError!),
-            _DialogSection(
+            if (validationError != null) DialogError(validationError!),
+            DialogSection(
               title: '提案范围',
               child: Column(
                 children: [
                   DropdownButtonFormField<String>(
                     initialValue: workspaceId,
-                    decoration: _dialogInputDecoration('工作区'),
+                    decoration: dialogInputDecoration('工作区'),
                     items: controller.state.workspaces
                         .map(
                           (workspace) => DropdownMenuItem(
@@ -630,7 +631,7 @@ Future<void> showWorkspacePatchDialog(
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     initialValue: memberName,
-                    decoration: _dialogInputDecoration('提案成员'),
+                    decoration: dialogInputDecoration('提案成员'),
                     items: controller.currentMembers
                         .map(
                           (member) => DropdownMenuItem(
@@ -643,17 +644,17 @@ Future<void> showWorkspacePatchDialog(
                         setDialogState(() => memberName = value!),
                   ),
                   const SizedBox(height: 12),
-                  _DialogField(controller: relativePath, label: '相对路径'),
+                  DialogField(controller: relativePath, label: '相对路径'),
                 ],
               ),
             ),
-            _DialogSection(
+            DialogSection(
               title: '目标内容',
               child: TextField(
                 controller: proposedContent,
                 minLines: 8,
                 maxLines: 12,
-                decoration: _dialogInputDecoration('目标文件内容').copyWith(
+                decoration: dialogInputDecoration('目标文件内容').copyWith(
                   alignLabelWithHint: true,
                 ),
               ),
@@ -715,7 +716,7 @@ Future<void> showWorkspaceFilesDialog(
   await showDialog<void>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => _ConfigDialog(
+      builder: (context, setDialogState) => ConfigDialog(
         title: '工作区文件',
         subtitle: '浏览当前本地工作区中可用于读取和补丁提案的文件。',
         icon: Icons.folder_open_rounded,
@@ -726,7 +727,7 @@ Future<void> showWorkspaceFilesDialog(
             children: [
               DropdownButtonFormField<String>(
                 initialValue: workspaceId,
-                decoration: _dialogInputDecoration('工作区'),
+                decoration: dialogInputDecoration('工作区'),
                 items: controller.state.workspaces
                     .map(
                       (workspace) => DropdownMenuItem(
@@ -757,7 +758,7 @@ Future<void> showWorkspaceFilesDialog(
                       if (snapshot.hasError) {
                         return Padding(
                           padding: const EdgeInsets.all(12),
-                          child: _DialogError('读取文件列表失败：${snapshot.error}'),
+                          child: DialogError('读取文件列表失败：${snapshot.error}'),
                         );
                       }
                       final files = snapshot.data ?? const [];
@@ -813,18 +814,18 @@ Future<void> showCommandDialog(
   await showDialog<void>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => _ConfigDialog(
+      builder: (context, setDialogState) => ConfigDialog(
         title: '创建命令请求',
         subtitle: '为成员创建需要审批或执行的本地命令请求。',
         icon: Icons.terminal_rounded,
-        body: _DialogSection(
+        body: DialogSection(
           title: '命令信息',
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               DropdownButtonFormField<String>(
                 initialValue: memberId,
-                decoration: _dialogInputDecoration('成员'),
+                decoration: dialogInputDecoration('成员'),
                 items: controller.currentMembers
                     .map(
                       (member) => DropdownMenuItem(
@@ -836,8 +837,8 @@ Future<void> showCommandDialog(
                 onChanged: (value) => setDialogState(() => memberId = value!),
               ),
               const SizedBox(height: 12),
-              _DialogField(controller: workingDirectory, label: '工作目录'),
-              _DialogField(controller: command, label: '命令'),
+              DialogField(controller: workingDirectory, label: '工作目录'),
+              DialogField(controller: command, label: '命令'),
             ],
           ),
         ),
@@ -871,7 +872,7 @@ Future<void> showExportDialog(
   await showDialog<void>(
     context: context,
     builder: (context) => StatefulBuilder(
-      builder: (context, setDialogState) => _ConfigDialog(
+      builder: (context, setDialogState) => ConfigDialog(
         title: '导入 / 导出配置',
         subtitle: '管理本机配置文件，密钥导出需要明确确认。',
         icon: Icons.ios_share_rounded,
@@ -879,7 +880,7 @@ Future<void> showExportDialog(
         body: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _DialogSection(
+            DialogSection(
               title: '导出选项',
               child: Container(
                 decoration: BoxDecoration(
@@ -910,7 +911,7 @@ Future<void> showExportDialog(
                 style: TextStyle(color: Color(0xFF9A3412), height: 1.35),
               ),
             ),
-            const _DialogSection(
+            const DialogSection(
               title: '文件操作',
               child: Align(
                 alignment: Alignment.centerLeft,
@@ -955,196 +956,6 @@ Future<void> showExportDialog(
   );
 }
 
-class _ConfigDialog extends StatelessWidget {
-  const _ConfigDialog({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.body,
-    required this.actions,
-    this.width = 520,
-  });
-
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Widget body;
-  final List<Widget> actions;
-  final double width;
-
-  @override
-  Widget build(BuildContext context) {
-    final availableHeight = MediaQuery.sizeOf(context).height - 48;
-    return Dialog(
-      key: const ValueKey('config-dialog-frame'),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-      elevation: 18,
-      shadowColor: const Color(0x331F2937),
-      backgroundColor: Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: const BorderSide(color: Color(0xFFDDE5F0)),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: width,
-          maxHeight: availableHeight < 360 ? 360 : availableHeight,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              key: const ValueKey('config-dialog-header'),
-              padding: const EdgeInsets.fromLTRB(24, 18, 24, 16),
-              decoration: const BoxDecoration(
-                color: Color(0xFFF8FAFC),
-                border: Border(
-                  bottom: BorderSide(color: Color(0xFFDDE5F0)),
-                ),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEFF6FF),
-                      borderRadius: BorderRadius.circular(22),
-                    ),
-                    child: Icon(icon, color: const Color(0xFF2563EB)),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                            color: Color(0xFF111827),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          subtitle,
-                          style: const TextStyle(
-                            color: Color(0xFF667085),
-                            height: 1.35,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Flexible(
-              child: SingleChildScrollView(
-                key: const ValueKey('config-dialog-body'),
-                padding: const EdgeInsets.fromLTRB(24, 22, 24, 12),
-                child: body,
-              ),
-            ),
-            Container(
-              key: const ValueKey('config-dialog-actions'),
-              padding: const EdgeInsets.fromLTRB(24, 14, 24, 14),
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                border: Border(top: BorderSide(color: Color(0xFFDDE5F0))),
-              ),
-              child: OverflowBar(
-                alignment: MainAxisAlignment.end,
-                spacing: 10,
-                overflowSpacing: 8,
-                children: actions,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DialogSection extends StatelessWidget {
-  const _DialogSection({
-    required this.title,
-    required this.child,
-  });
-
-  final String title;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 18),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: Color(0xFF667085),
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0,
-            ),
-          ),
-          const SizedBox(height: 10),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-class _DialogError extends StatelessWidget {
-  const _DialogError(this.message);
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      key: const ValueKey('config-dialog-error'),
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF1F2),
-        border: Border.all(color: const Color(0xFFFECACA)),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Icon(
-            Icons.error_outline_rounded,
-            size: 18,
-            color: Color(0xFFBE123C),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(
-                color: Color(0xFFBE123C),
-                height: 1.35,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 void runConfigAction(
   BuildContext context,
   VoidCallback action,
@@ -1156,55 +967,6 @@ void runConfigAction(
       SnackBar(content: Text(exception.toString())),
     );
   }
-}
-
-class _DialogField extends StatelessWidget {
-  const _DialogField({
-    required this.controller,
-    required this.label,
-    this.obscure = false,
-    this.minLines = 1,
-    this.maxLines = 1,
-  });
-
-  final TextEditingController controller;
-  final String label;
-  final bool obscure;
-  final int minLines;
-  final int maxLines;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: TextField(
-        controller: controller,
-        obscureText: obscure,
-        minLines: obscure ? 1 : minLines,
-        maxLines: obscure ? 1 : maxLines,
-        decoration: _dialogInputDecoration(label),
-      ),
-    );
-  }
-}
-
-InputDecoration _dialogInputDecoration(String label) {
-  return InputDecoration(
-    labelText: label,
-    filled: true,
-    fillColor: Colors.white,
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(8),
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(8),
-      borderSide: const BorderSide(color: Color(0xFFDDE5F0)),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(8),
-      borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.5),
-    ),
-  );
 }
 
 List<String> _splitLines(String text) => text
