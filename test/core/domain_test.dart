@@ -124,6 +124,23 @@ void main() {
       expect(restored.contentBlocks.last.text, '根目录已使用 42G');
     });
 
+    test('chat messages normalize null content blocks from dynamic state', () {
+      final message = Function.apply(
+        ChatMessage.new,
+        const [],
+        {
+          #id: 'msg-null-blocks',
+          #authorName: '秘书',
+          #content: '旧运行态消息',
+          #createdAt: DateTime(2026, 6, 29),
+          #contentBlocks: null,
+        },
+      ) as ChatMessage;
+
+      expect(message.contentBlocks, isEmpty);
+      expect(message.toJson()['contentBlocks'], isEmpty);
+    });
+
     test('audit entries persist structured metadata', () {
       final entry = AuditEntry(
         id: 'audit-raw-response',

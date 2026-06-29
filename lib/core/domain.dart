@@ -739,8 +739,8 @@ class ChatMessage {
     this.memberId,
     this.isUser = false,
     this.taskIds = const [],
-    this.contentBlocks = const [],
-  });
+    List<ChatMessageContentBlock>? contentBlocks = const [],
+  }) : _contentBlocks = contentBlocks;
 
   final String id;
   final String authorName;
@@ -752,7 +752,9 @@ class ChatMessage {
   final String? memberId;
   final bool isUser;
   final List<String> taskIds;
-  final List<ChatMessageContentBlock> contentBlocks;
+  final List<ChatMessageContentBlock>? _contentBlocks;
+
+  List<ChatMessageContentBlock> get contentBlocks => _contentBlocks ?? const [];
 
   ChatMessage copyWith({
     String? content,
