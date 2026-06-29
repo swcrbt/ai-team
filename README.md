@@ -29,6 +29,12 @@ AI Team 是一个本地优先的 Flutter 桌面应用，用聊天方式驱动多
 
 项目使用 Flutter 桌面端，当前主要验证 macOS。
 
+架构边界见 [docs/architecture.md](docs/architecture.md)。旧的公共导入
+`app.dart`、`core/domain.dart`、`core/orchestrator.dart` 和
+`core/model_gateway.dart` 保持兼容；新增代码优先使用更聚焦的
+`application`、`ui`、`core/workspace`、`core/commands`、`core/orchestration`
+和 `core/model` 模块。
+
 ```sh
 /Users/swcrbt/develop/flutter/bin/flutter --version
 /Users/swcrbt/develop/flutter/bin/flutter pub get

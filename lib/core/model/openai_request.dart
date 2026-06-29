@@ -1,0 +1,55 @@
+part of '../model_gateway.dart';
+
+Map<String, Object?> buildOpenAiCompatibleRequestBody({
+  required ModelProfile model,
+  required String systemPrompt,
+  required List<ChatMessage> messages,
+  List<ModelToolDefinition> tools = const [],
+  ModelToolChoice toolChoice = ModelToolChoice.auto,
+  List<ModelToolRound> toolRounds = const [],
+}) {
+  final reasoningEffort = model.reasoningEffort == null
+      ? null
+      : _normalizeOptionalText(model.reasoningEffort!);
+  final requestBody = <String, Object?>{
+    'model': model.modelName,
+    'stream': model.streaming,
+    'temperature': model.temperature,
+    'messages': [
+      {'role': 'system', 'content': systemPrompt},
+      ...messages.map((message) => {
+            'role': message.isUser ? 'user' : 'assistant',
+            'content': '${message.authorName}: ${message.content}',
+          }),
+      ..._toolRoundMessages(toolRounds),
+    ],
+  };
+  if (tools.isNotEmpty) {
+    requestBody['tools'] = tools.map((tool) => tool.toJson()).toList();
+    requestBody['tool_choice'] = toolChoice.name;
+  }
+  if (reasoningEffort == null) {
+    requestBody['max_tokens'] = model.maxTokens;
+  } else {
+    requestBody['reasoning_effort'] = reasoningEffort;
+    requestBody['max_completion_tokens'] = model.maxTokens;
+  }
+  return requestBody;
+}
+
+List<Map<String, Object?>> _toolRoundMessages(List<ModelToolRound> rounds) {
+  return [
+    for (final round in rounds) ...[
+      {
+        'role': 'assistant',
+        'content': null,
+        'tool_calls': round.calls.map((call) => call.toChatJson()).toList(),
+      },
+      ...round.results.map((result) => result.toChatJson()),
+    ],
+  ];
+}
+
+Uri openAiCompatibleChatCompletionsEndpoint(ModelProfile model) => Uri.parse(
+      '${model.baseUrl.replaceFirst(RegExp(r'/$'), '')}/chat/completions',
+    );
