@@ -209,7 +209,8 @@ void main() {
     expect(jsonEncode(messages[messages.length - 2]), contains('tool_calls'));
     expect(messages.last, containsPair('role', 'tool'));
     expect(messages.last, containsPair('tool_call_id', 'call-read'));
-    expect(messages.last, containsPair('content', '{"ok":true,"content":"hello"}'));
+    expect(messages.last,
+        containsPair('content', '{"ok":true,"content":"hello"}'));
   });
 
   test('parses real reasoning content from non-streaming responses', () async {
