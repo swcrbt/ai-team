@@ -79,3 +79,19 @@ two historical states:
 `get_goal` returning no active Codex goal is expected after `update_goal` marks
 the aggregate Codex goal complete. The final `G010` ledger entry contains the
 completed Codex goal snapshot and quality-gate evidence.
+
+## Stable Objective Rule
+
+Codex goal mode and Ultragoal must not maintain competing goal text. The only
+authoritative aggregate Codex objective for this recovery plan is the
+`codexObjective` value in `.omx/ultragoal/goals.json`:
+
+```text
+Complete the durable AI Team architecture refactor recovery plan in .omx/ultragoal/goals.json, including blocker-resolution stories and final verification, under the original no-downgrade constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.
+```
+
+Future recovery or follow-up work should create or reconcile Codex goal mode
+from that exact pointer objective only. Story-level objectives, old aliases, and
+newly enumerated checklists belong in `.omx/ultragoal/goals.json` and
+`.omx/ultragoal/ledger.jsonl`; they must not replace the aggregate Codex
+objective.
