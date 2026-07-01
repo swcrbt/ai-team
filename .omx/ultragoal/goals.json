@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-06-29T15:49:46.541Z",
-  "updatedAt": "2026-07-01T14:12:40.350Z",
+  "updatedAt": "2026-07-01T14:24:46.739Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -73,11 +73,13 @@
       "id": "G006-split-dialogs-and-ui-flow-tests",
       "title": "Split dialogs and UI flow tests",
       "objective": "Split lib/ui/dialogs/config_dialogs.dart by dialog responsibility and split test/ui/app_widget_test.dart into focused chat rendering, chat scroll, composer, management, dialogs, and orchestration UI tests without reducing coverage or changing user-visible behavior.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-01T13:06:37.308Z",
-      "updatedAt": "2026-07-01T13:06:37.308Z",
-      "evidence": "Recovery plan G4 identifies config_dialogs.dart and app_widget_test.dart as large coupled UI files after the first UI split."
+      "updatedAt": "2026-07-01T14:24:46.739Z",
+      "evidence": "Split config dialogs into focused team/model/role/member/workspace modules with config_dialogs.dart retained as compatibility barrel; split app_widget_test.dart into focused UI workflow suites for chat surfaces, message rendering, scroll positions, streaming scroll, composer shortcuts, management dialogs, and orchestration flows. Verification passed: /Users/swcrbt/develop/flutter/bin/dart analyze lib/ui test/ui; /Users/swcrbt/develop/flutter/bin/flutter test test/ui; /Users/swcrbt/develop/flutter/bin/flutter analyze.",
+      "startedAt": "2026-07-01T14:22:38.188Z",
+      "completedAt": "2026-07-01T14:24:46.739Z"
     },
     {
       "id": "G007-split-domain-tests-and-compatibility",
