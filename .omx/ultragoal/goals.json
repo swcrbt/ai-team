@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-06-29T15:49:46.541Z",
-  "updatedAt": "2026-07-01T14:24:46.739Z",
+  "updatedAt": "2026-07-01T14:30:43.167Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -85,11 +85,13 @@
       "id": "G007-split-domain-tests-and-compatibility",
       "title": "Split domain tests and compatibility coverage",
       "objective": "Split test/core/domain/domain_test.dart into focused domain test files for queued tasks, configuration export, secure persistence, local store paths, role command policy, secretary orchestration domain behavior, and patch proposals while preserving JSON compatibility and behavior coverage.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-01T13:06:45.888Z",
-      "updatedAt": "2026-07-01T13:06:45.888Z",
-      "evidence": "Recovery plan G5 identifies domain_test.dart as a 2301-line omnibus test after production domain modules were split."
+      "updatedAt": "2026-07-01T14:30:43.167Z",
+      "evidence": "Split test/core/domain/domain_test.dart into focused domain suites: queued collaboration/domain JSON, configuration export, secure local persistence, local store paths, role command policy, secretary orchestration, and patch proposals; extracted shared fake model gateways into domain_test_support.dart. Verification passed: /Users/swcrbt/develop/flutter/bin/flutter test test/core/domain test/core/model test/core/commands test/core/workspace; /Users/swcrbt/develop/flutter/bin/flutter analyze.",
+      "startedAt": "2026-07-01T14:27:15.397Z",
+      "completedAt": "2026-07-01T14:30:43.167Z"
     },
     {
       "id": "G008-final-gates-and-durable-closeout",
