@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-06-29T15:49:46.541Z",
-  "updatedAt": "2026-07-01T14:53:13.387Z",
+  "updatedAt": "2026-07-01T15:38:55.973Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -126,18 +126,18 @@
       "id": "G010-resolve-final-architecture-review-bl",
       "title": "Resolve final architecture review blockers",
       "objective": "Thin AppController and TeamOrchestrator coordinator responsibilities into focused application and orchestration services so final independent review can return APPROVE and CLEAR; preserve public imports and business behavior, then rerun required verification and final review.",
-      "status": "in_progress",
+      "status": "complete",
       "attempt": 1,
       "createdAt": "2026-07-01T14:51:44.085Z",
-      "updatedAt": "2026-07-01T14:53:13.387Z",
-      "evidence": "Final independent review was non-clean. Architect lane returned WATCH because AppController and TeamOrchestrator still concentrate process coupling; code-reviewer lane returned COMMENT rather than APPROVE. Required ultragoal gate forbids completing on COMMENT/WATCH.",
-      "startedAt": "2026-07-01T14:53:13.387Z"
+      "updatedAt": "2026-07-01T15:38:55.973Z",
+      "evidence": "G010 resolved final architecture review blockers in .omx/ultragoal/goals.json and .omx/ultragoal/ledger.jsonl. Commits 9e87594 and 7594b1a thin AppController/TeamOrchestrator, document the resolution, preserve compatibility imports and behavior, pass final analyze/test/build/diff gates, and have independent APPROVE/CLEAR review evidence.",
+      "startedAt": "2026-07-01T14:53:13.387Z",
+      "completedAt": "2026-07-01T15:38:55.973Z"
     }
   ],
   "codexObjective": "Complete the durable AI Team architecture refactor recovery plan in .omx/ultragoal/goals.json, including blocker-resolution stories and final verification, under the original no-downgrade constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
   "codexObjectiveAliases": [
     "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
     "用 goal 模式拆分并完整实现 /Users/swcrbt/develop/github/swcrbt/ai-team 的全量架构化重构，不降级范围，最终完成验证并提交。"
-  ],
-  "activeGoalId": "G010-resolve-final-architecture-review-bl"
+  ]
 }
