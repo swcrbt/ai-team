@@ -1,9 +1,14 @@
 import 'package:ai_team/application/conversation_sessions.dart';
+import 'package:ai_team/application/conversation_controller.dart';
 import 'package:ai_team/application/configuration_controller.dart';
+import 'package:ai_team/application/conversation_title_generator.dart';
+import 'package:ai_team/application/dispatch_controller.dart';
 import 'package:ai_team/application/streaming_draft_registry.dart';
 import 'package:ai_team/application/task_queue_controller.dart';
 import 'package:ai_team/application/workspace_command_controller.dart';
+import 'package:ai_team/core/commands.dart';
 import 'package:ai_team/core/domain.dart';
+import 'package:ai_team/core/orchestrator.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/model_gateway_fakes.dart';
@@ -59,6 +64,172 @@ void main() {
 
       expect(visibleIds.first, 'conv-member-frontend');
       expect(store.isPinned('conv-member-frontend'), isTrue);
+    });
+  });
+
+  group('ConversationController', () {
+    test('owns member chat session creation and selection', () {
+      var state = AppState.seed().copyWith(
+        conversations: AppState.seed()
+            .conversations
+            .where((conversation) => conversation.memberId != 'member-frontend')
+            .toList(),
+      );
+      var selectedId = 'conv-team-default';
+      String? activeId = 'team-default';
+      var notified = false;
+      final controller = ConversationController(
+        readState: () => state,
+        commit: (nextState) => state = nextState,
+        sessions: ConversationSessionStore(),
+        selectedConversationId: () => selectedId,
+        activeTeamId: () => activeId,
+        updateSelection: ({
+          required selectedConversationId,
+          required activeTeamId,
+        }) {
+          selectedId = selectedConversationId;
+          activeId = activeTeamId;
+        },
+        notify: () => notified = true,
+        clearDraftsForConversation: (_) {},
+      );
+
+      controller.startMemberChat(
+        state.teams.firstWhere((team) => team.id == 'team-default'),
+        'member-frontend',
+      );
+
+      final created = state.conversations.firstWhere(
+        (conversation) => conversation.memberId == 'member-frontend',
+      );
+      expect(created.title, '前端工程师');
+      expect(selectedId, created.id);
+      expect(activeId, 'team-default');
+      expect(notified, isTrue);
+    });
+
+    test('can close the selected conversation object when alternatives remain',
+        () {
+      var state = AppState.seed();
+      var selectedId = 'conv-member-frontend';
+      String? activeId = 'team-default';
+      var notified = false;
+      final sessions = ConversationSessionStore()..sync(state);
+      final controller = ConversationController(
+        readState: () => state,
+        commit: (nextState) => state = nextState,
+        sessions: sessions,
+        selectedConversationId: () => selectedId,
+        activeTeamId: () => activeId,
+        updateSelection: ({
+          required selectedConversationId,
+          required activeTeamId,
+        }) {
+          selectedId = selectedConversationId;
+          activeId = activeTeamId;
+        },
+        notify: () => notified = true,
+        clearDraftsForConversation: (_) {},
+      );
+
+      controller.closeConversation('conv-member-frontend');
+
+      expect(sessions.hiddenConversationIds, contains('conv-member-frontend'));
+      expect(selectedId, isNot('conv-member-frontend'));
+      expect(activeId, 'team-default');
+      expect(notified, isTrue);
+    });
+  });
+
+  group('DispatchController', () {
+    test('owns paused-conversation dispatch gate and error state', () async {
+      var state = AppState.seed().copyWith(
+        conversations: AppState.seed()
+            .conversations
+            .map((conversation) => conversation.id == 'conv-team-default'
+                ? conversation.copyWith(status: ConversationStatus.paused)
+                : conversation)
+            .toList(),
+      );
+      var notifyCount = 0;
+      final taskQueue = TaskQueueController(
+        readState: () => state,
+        commit: (nextState) => state = nextState,
+        gateway: FakeModelGateway(),
+      );
+      final workspaceCommands = WorkspaceCommandController(
+        readState: () => state,
+        commit: (nextState) => state = nextState,
+      );
+      final titleGenerator = ConversationTitleGenerator(
+        readState: () => state,
+        commit: (nextState) => state = nextState,
+        gateway: FakeModelGateway(),
+      );
+      final controller = DispatchController(
+        readState: () => state,
+        commit: (nextState) => state = nextState,
+        taskQueue: taskQueue,
+        workspaceCommands: workspaceCommands,
+        titleGenerator: titleGenerator,
+        orchestrator: TeamOrchestrator(FakeModelGateway()),
+        commandService: const CommandService(),
+        selectedConversationId: () => 'conv-team-default',
+        notify: () => notifyCount++,
+        onStreamingDraft: ({required conversationId, required message}) {},
+        clearStreamingDraftsForConversation: (_) {},
+      );
+
+      await controller.dispatch('不应发起模型调用');
+
+      expect(controller.isDispatching, isFalse);
+      expect(controller.error, contains('已暂停'));
+      expect(notifyCount, 1);
+      expect(
+        state.conversations
+            .firstWhere(
+                (conversation) => conversation.id == 'conv-team-default')
+            .messages,
+        hasLength(1),
+      );
+    });
+  });
+
+  group('ConversationTitleGenerator', () {
+    test('owns first-message title generation outside AppController', () async {
+      var state = AppState.seed().copyWith(
+        conversations: AppState.seed()
+            .conversations
+            .map((conversation) => conversation.id == 'conv-team-default'
+                ? conversation.copyWith(title: '', messages: const [])
+                : conversation)
+            .toList(),
+      );
+      final generator = ConversationTitleGenerator(
+        readState: () => state,
+        commit: (nextState) => state = nextState,
+        gateway: ScriptedTitleGateway(title: '登录修复'),
+      );
+
+      final conversation = state.conversations.firstWhere(
+        (conversation) => conversation.id == 'conv-team-default',
+      );
+
+      expect(generator.shouldGenerateAfterFirstUserMessage(conversation), true);
+
+      await generator.generateAfterFirstUserMessage(
+        conversationId: conversation.id,
+        firstUserMessage: '修复登录页',
+      );
+
+      expect(
+        state.conversations
+            .firstWhere(
+                (conversation) => conversation.id == 'conv-team-default')
+            .title,
+        '登录修复',
+      );
     });
   });
 

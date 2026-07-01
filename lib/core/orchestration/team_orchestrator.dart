@@ -3,9 +3,9 @@ import '../domain.dart';
 import '../model_gateway.dart';
 import 'assignment_helpers.dart';
 import 'assignment_runner.dart';
-import 'audit_and_private_dispatch.dart';
-import 'model_message_tools.dart';
+import 'member_chat_dispatcher.dart';
 import 'model_message_runner.dart';
+import 'secretary_private_dispatcher.dart';
 import 'secretary_summary_runner.dart';
 
 class TeamOrchestrator {
@@ -19,6 +19,12 @@ class TeamOrchestrator {
         ) {
     _assignmentRunner = AssignmentRunner(messageRunner: _messageRunner);
     _summaryRunner = SecretarySummaryRunner(messageRunner: _messageRunner);
+    _memberChatDispatcher = MemberChatDispatcher(
+      messageRunner: _messageRunner,
+    );
+    _secretaryPrivateDispatcher = SecretaryPrivateDispatcher(
+      assignmentRunner: _assignmentRunner,
+    );
   }
 
   final ModelGateway gateway;
@@ -26,6 +32,8 @@ class TeamOrchestrator {
   final ModelMessageRunner _messageRunner;
   late final AssignmentRunner _assignmentRunner;
   late final SecretarySummaryRunner _summaryRunner;
+  late final MemberChatDispatcher _memberChatDispatcher;
+  late final SecretaryPrivateDispatcher _secretaryPrivateDispatcher;
 
   CommandRunner get commandRunner => _commandRunner ?? defaultCommandRunner;
 
@@ -347,71 +355,14 @@ class TeamOrchestrator {
     ModelRequestCancellation? cancellation,
     void Function(AppState state)? onProgress,
     StreamingMessageDraftHandler? onStreamingDraft,
-  }) async {
-    final conversation =
-        state.conversations.firstWhere((item) => item.id == conversationId);
-    final memberId = conversation.memberId;
-    if (memberId == null) {
-      throw StateError('成员私聊会话缺少成员: ${conversation.id}');
-    }
-    final member = state.members.firstWhere((item) => item.id == memberId);
-    final team =
-        state.teams.firstWhere((item) => item.id == conversation.teamId);
-    final role = state.roles.firstWhere((item) => item.id == member.roleId);
-    final model = state.models.firstWhere((item) => item.id == member.modelId);
-    ensureModelReady(member: member, model: model);
-    final now = DateTime.now();
-    final messages = [
-      ...conversation.messages,
-      ChatMessage(
-        id: orchestrationId('msg'),
-        authorName: '我',
-        content: userText,
-        createdAt: now,
-        isUser: true,
-      ),
-    ];
-    var workingState = replaceConversation(
+  }) {
+    return _memberChatDispatcher.dispatchMemberChat(
       state,
-      conversation.copyWith(
-        messages: messages,
-        status: ConversationStatus.running,
-      ),
-    );
-    onProgress?.call(workingState);
-
-    cancellation?.throwIfCancelled();
-    final result = await _messageRunner.runVisibleMessage(
-      workingState: workingState,
-      conversation: conversation,
-      messages: messages,
-      authorName: member.name,
-      memberId: member.id,
-      model: model,
-      systemPrompt: role.renderSystemPrompt(
-        memberName: member.name,
-        teamName: team.name,
-      ),
-      requestMessages: messages,
+      conversationId: conversationId,
+      userText: userText,
       cancellation: cancellation,
       onProgress: onProgress,
       onStreamingDraft: onStreamingDraft,
-    );
-    workingState = result.workingState;
-    final updatedConversation = conversation.copyWith(
-      messages: messages,
-      status: ConversationStatus.idle,
-    );
-    return replaceConversation(workingState, updatedConversation).copyWith(
-      auditLog: [
-        ...workingState.auditLog,
-        AuditEntry(
-          id: orchestrationId('audit'),
-          action: 'member_chat_dispatched',
-          detail: 'member=${member.id} text=$userText',
-          createdAt: DateTime.now(),
-        ),
-      ],
     );
   }
 
@@ -422,119 +373,14 @@ class TeamOrchestrator {
     ModelRequestCancellation? cancellation,
     void Function(AppState state)? onProgress,
     StreamingMessageDraftHandler? onStreamingDraft,
-  }) async {
-    final conversation =
-        state.conversations.firstWhere((item) => item.id == conversationId);
-    final memberId = conversation.memberId;
-    if (memberId == null) {
-      throw StateError('命令结果只能回灌到成员私聊: ${conversation.id}');
-    }
-    if (request.memberId != null && request.memberId != memberId) {
-      throw StateError('命令请求成员与会话成员不匹配: ${request.id}');
-    }
-    final member = state.members.firstWhere((item) => item.id == memberId);
-    final team =
-        state.teams.firstWhere((item) => item.id == conversation.teamId);
-    final role = state.roles.firstWhere((item) => item.id == member.roleId);
-    final model = state.models.firstWhere((item) => item.id == member.modelId);
-    ensureModelReady(member: member, model: model);
-
-    final resultBlock = ChatMessageContentBlock.commandResult(
-      CommandResultAttachment(
-        requestId: request.id,
-        status: request.status,
-        workingDirectory: request.workingDirectory,
-        command: request.command,
-        output: request.output ?? '',
-      ),
-    );
-    final targetMessage = request.messageId == null
-        ? null
-        : conversation.messages
-            .where((message) => message.id == request.messageId)
-            .cast<ChatMessage?>()
-            .firstWhere((message) => message != null, orElse: () => null);
-    final visibleResultMessage = targetMessage == null
-        ? ChatMessage(
-            id: orchestrationId('msg'),
-            authorName: member.name,
-            memberId: member.id,
-            content: contentFromBlocks([resultBlock]),
-            contentBlocks: [resultBlock],
-            createdAt: DateTime.now(),
-          )
-        : messageWithBlocks(
-            targetMessage,
-            [
-              ...targetMessage.contentBlocks,
-              resultBlock,
-            ],
-            generationStatus: ChatMessageGenerationStatus.streaming,
-          );
-    final modelResultMessage = ChatMessage(
-      id: visibleResultMessage.id,
-      authorName: '系统',
-      content: formatCommandResultMessage(request),
-      createdAt: visibleResultMessage.createdAt,
-      isUser: true,
-    );
-    final visibleMessages = targetMessage == null
-        ? [
-            ...conversation.messages,
-            visibleResultMessage,
-          ]
-        : conversation.messages
-            .map((message) =>
-                message.id == targetMessage.id ? visibleResultMessage : message)
-            .toList();
-    var workingState = replaceConversation(
+  }) {
+    return _memberChatDispatcher.continueMemberChatAfterCommandResult(
       state,
-      conversation.copyWith(
-        messages: visibleMessages,
-        status: ConversationStatus.running,
-      ),
-    );
-    onProgress?.call(workingState);
-
-    final result = await _messageRunner.runVisibleMessage(
-      workingState: workingState,
-      conversation: conversation,
-      messages: visibleMessages,
-      authorName: member.name,
-      memberId: member.id,
-      model: model,
-      systemPrompt: [
-        role.renderSystemPrompt(
-          memberName: member.name,
-          teamName: team.name,
-        ),
-        '你刚收到一条已执行命令的结果。只能基于该结果回答用户问题，不要再调用工具或请求命令。',
-      ].join('\n'),
-      requestMessages: [
-        ...conversation.messages,
-        modelResultMessage,
-      ],
+      conversationId: conversationId,
+      request: request,
       cancellation: cancellation,
       onProgress: onProgress,
       onStreamingDraft: onStreamingDraft,
-      enableTools: false,
-      continueMessageId: visibleResultMessage.id,
-    );
-    workingState = result.workingState;
-    final updatedConversation = conversation.copyWith(
-      messages: visibleMessages,
-      status: ConversationStatus.idle,
-    );
-    return replaceConversation(workingState, updatedConversation).copyWith(
-      auditLog: [
-        ...workingState.auditLog,
-        AuditEntry(
-          id: orchestrationId('audit'),
-          action: 'command_result_continued',
-          detail: 'conversation=$conversationId command=${request.id}',
-          createdAt: DateTime.now(),
-        ),
-      ],
     );
   }
 
@@ -543,33 +389,9 @@ class TeamOrchestrator {
     required String conversationId,
     required String userText,
   }) {
-    final conversation = state.conversations.firstWhere(
-      (item) => item.id == conversationId,
-      orElse: () => const Conversation(
-        id: '',
-        title: '',
-        teamId: '',
-        messages: [],
-      ),
-    );
-    if (conversation.id.isEmpty || conversation.memberId == null) {
-      return const [];
-    }
-    final team = state.teams.firstWhere(
-      (item) => item.id == conversation.teamId,
-      orElse: () => const Team(
-        id: '',
-        name: '',
-        memberIds: [],
-        secretaryMemberId: '',
-      ),
-    );
-    if (team.id.isEmpty || conversation.memberId != team.secretaryMemberId) {
-      return const [];
-    }
-    return mentionedDispatchMembers(
-      state: state,
-      team: team,
+    return _secretaryPrivateDispatcher.dispatchTargets(
+      state,
+      conversationId: conversationId,
       userText: userText,
     );
   }
@@ -581,174 +403,14 @@ class TeamOrchestrator {
     ModelRequestCancellation? cancellation,
     void Function(AppState state)? onProgress,
     StreamingMessageDraftHandler? onStreamingDraft,
-  }) async {
-    final sourceConversation =
-        state.conversations.firstWhere((item) => item.id == conversationId);
-    final team = state.teams.firstWhere(
-      (item) => item.id == sourceConversation.teamId,
-    );
-    if (sourceConversation.memberId != team.secretaryMemberId) {
-      throw StateError('只有秘书私聊可以调度成员: $conversationId');
-    }
-    final secretary = state.members.firstWhere(
-      (item) => item.id == team.secretaryMemberId,
-    );
-    final targets = mentionedDispatchMembers(
-      state: state,
-      team: team,
-      userText: userText,
-    );
-    if (targets.isEmpty) {
-      throw StateError('秘书私聊调度缺少目标成员');
-    }
-
-    final now = DateTime.now();
-    final waitingMessage = ChatMessage(
-      id: orchestrationId('msg'),
-      authorName: secretary.name,
-      memberId: secretary.id,
-      content: '已分配给${targets.map((member) => member.name).join('、')}，等待回复中',
-      createdAt: DateTime.now(),
-      generationStatus: ChatMessageGenerationStatus.streaming,
-    );
-    final sourceMessages = [
-      ...sourceConversation.messages,
-      ChatMessage(
-        id: orchestrationId('msg'),
-        authorName: '我',
-        content: userText,
-        createdAt: now,
-        isUser: true,
-      ),
-      waitingMessage,
-    ];
-    var workingState = replaceConversation(
+  }) {
+    return _secretaryPrivateDispatcher.dispatch(
       state,
-      sourceConversation.copyWith(
-        messages: sourceMessages,
-        status: ConversationStatus.running,
-      ),
+      conversationId: conversationId,
+      userText: userText,
+      cancellation: cancellation,
+      onProgress: onProgress,
+      onStreamingDraft: onStreamingDraft,
     );
-    onProgress?.call(workingState);
-
-    final summaries = <String>[];
-    for (final target in targets) {
-      cancellation?.throwIfCancelled();
-      workingState = ensureMemberConversation(
-        workingState,
-        teamId: team.id,
-        member: target,
-      );
-      final targetConversation = workingState.conversations.firstWhere(
-        (item) => item.teamId == team.id && item.memberId == target.id,
-      );
-      final targetMessages = [
-        ...targetConversation.messages,
-        ChatMessage(
-          id: orchestrationId('msg-assignment'),
-          authorName: secretary.name,
-          memberId: secretary.id,
-          content: '任务分配：$userText',
-          createdAt: DateTime.now(),
-        ),
-      ];
-      workingState = replaceConversation(
-        workingState,
-        targetConversation.copyWith(
-          messages: targetMessages,
-          status: ConversationStatus.running,
-        ),
-      );
-      onProgress?.call(workingState);
-      final targetModel = workingState.models.firstWhere(
-        (model) => model.id == target.modelId,
-      );
-
-      try {
-        final result = await _assignmentRunner.run(
-          state: workingState,
-          workingState: workingState,
-          conversation: targetConversation,
-          team: team,
-          assignment: ParsedAssignment(member: target, instruction: userText),
-          messages: targetConversation.messages,
-          visibleMessages: targetMessages,
-          cancellation: cancellation,
-          onProgress: onProgress,
-          onStreamingDraft: onStreamingDraft,
-        );
-        workingState = result.workingState;
-        if (result.message.content.trim().isEmpty &&
-            (result.message.thinkingContent?.trim().isEmpty ?? true)) {
-          throw const ModelGatewayException('成员未返回内容');
-        }
-        summaries.add(formatSecretaryPrivateDispatchSuccess(
-          memberName: target.name,
-          content: result.message.content,
-        ));
-        workingState = replaceConversation(
-          workingState,
-          targetConversation.copyWith(
-            messages: targetMessages,
-            status: ConversationStatus.idle,
-          ),
-        );
-        workingState = appendSecretaryPrivateDispatchAudit(
-          workingState,
-          secretary: secretary,
-          target: target,
-          sourceConversation: sourceConversation,
-          targetConversation: targetConversation,
-          userText: userText,
-          status: 'completed',
-          targetModel: targetModel,
-          responseChars: result.message.content.length,
-        );
-      } catch (error) {
-        cancellation?.throwIfCancelled();
-        summaries.add('- ${target.name}：调度失败：$error');
-        workingState = replaceConversation(
-          workingState,
-          targetConversation.copyWith(
-            messages: [
-              ...targetMessages,
-              systemMessage('任务失败：$error'),
-            ],
-            status: ConversationStatus.failed,
-          ),
-        );
-        workingState = appendSecretaryPrivateDispatchAudit(
-          workingState,
-          secretary: secretary,
-          target: target,
-          sourceConversation: sourceConversation,
-          targetConversation: targetConversation,
-          userText: userText,
-          status: 'failed',
-          targetModel: targetModel,
-          responseChars: 0,
-          error: error.toString(),
-        );
-      }
-      onProgress?.call(workingState);
-    }
-
-    final summaryMessage = waitingMessage.copyWith(
-      content: [
-        '已私聊调度成员并汇总结果：',
-        ...summaries,
-      ].join('\n'),
-      generationStatus: ChatMessageGenerationStatus.complete,
-    );
-    replaceMessageInList(sourceMessages, summaryMessage);
-    workingState = replaceConversation(
-      workingState,
-      sourceConversation.copyWith(
-        messages: sourceMessages,
-        status: ConversationStatus.idle,
-      ),
-    );
-    onProgress?.call(workingState);
-    return workingState;
   }
 }
