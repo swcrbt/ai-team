@@ -23,10 +23,11 @@ refactor is complete.
   conversation sessions, and workspace/command operations.
 - UI management pages and chat widgets are split into focused modules.
 
-## Remaining Blockers
+## Remaining Blockers At Baseline
 
-These are not behavior regressions, but they still block calling the architecture
-refactor complete under the no-downgrade goal.
+These were the blockers found during the recovery baseline audit. They were not
+behavior regressions, but they blocked calling the architecture refactor complete
+under the no-downgrade goal at that point in the recovery.
 
 - `lib/application/app_controller.dart` is still too broad. It mixes facade API,
   configuration validation, task queue mutation, conversation lifecycle,
@@ -49,3 +50,15 @@ residual risks. The target is not smaller code for its own sake; each split must
 make ownership, dependency direction, or test failure locality clearer while
 preserving persisted state, model behavior, command behavior, patch behavior,
 and UI workflows.
+
+## Resolution Note
+
+The baseline blockers were resolved by the recovery stories that followed this
+audit:
+
+- Application and orchestration coupling were reduced further in `9e87594` by
+  extracting conversation/session, dispatch lifecycle, title generation, member
+  chat dispatch, and secretary private dispatch components.
+- Dialog, UI workflow, and domain compatibility test blockers were resolved by
+  the focused UI/dialog and domain-test split commits recorded in
+  `.omx/ultragoal/ledger.jsonl`.
