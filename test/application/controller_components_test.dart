@@ -170,7 +170,8 @@ void main() {
       expect(task.priority, 3);
       expect(
         state.conversations
-            .firstWhere((conversation) => conversation.id == task.conversationId)
+            .firstWhere(
+                (conversation) => conversation.id == task.conversationId)
             .messages
             .where((message) => message.isUser),
         hasLength(1),

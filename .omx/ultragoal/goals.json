@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-06-29T15:49:46.541Z",
-  "updatedAt": "2026-07-01T14:30:43.167Z",
+  "updatedAt": "2026-07-01T14:51:44.085Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -14,12 +14,29 @@
       "status": "in_progress",
       "attempt": 1,
       "createdAt": "2026-06-29T15:49:46.541Z",
-      "updatedAt": "2026-07-01T13:02:56.716Z",
+      "updatedAt": "2026-07-01T14:50:59.280Z",
       "startedAt": "2026-06-29T16:10:57.012Z",
-      "steeringStatus": "blocked",
-      "blockedReason": "The old story cannot be truthfully checkpointed complete because its Codex objective mismatched the durable pointer objective; recovery subgoals replace it without deleting audit history.",
-      "steeringEvidence": "Previous ledger records objective-mismatch blocker after code commits; recovery run uses a new aligned Codex aggregate goal.",
-      "steeringRationale": "The old story cannot be truthfully checkpointed complete because its Codex objective mismatched the durable pointer objective; recovery subgoals replace it without deleting audit history."
+      "steeringStatus": "superseded",
+      "blockedReason": "The old G001 cannot be truthfully checkpointed under its mismatched objective. Superseding it with explicit ledger-repair work is narrower than manual state editing and keeps all original no-downgrade constraints intact.",
+      "steeringEvidence": "G001 kept an old objective-mismatch blocked flag while G002-G008 hold the aligned recovery evidence and commits. The previous CLI attempt lacked replacement children, so it only refreshed the blocked flag. This directive supplies an explicit replacement bookkeeping story.",
+      "steeringRationale": "Use the supported steering path to preserve G001 audit history and make the aligned recovery ledger schedulable without manual JSON editing.",
+      "supersededBy": [
+        "G009-reconcile-legacy-g001-ledger-state"
+      ]
+    },
+    {
+      "id": "G009-reconcile-legacy-g001-ledger-state",
+      "title": "Reconcile legacy G001 ledger state",
+      "objective": "Preserve the old G001 objective-mismatch evidence as superseded ledger history and verify the aligned recovery stories remain the active implementation path under the aggregate Codex goal.",
+      "status": "complete",
+      "attempt": 0,
+      "createdAt": "2026-07-01T14:50:59.280Z",
+      "updatedAt": "2026-07-01T14:51:20.082Z",
+      "evidence": "Verified G001 is now steeringStatus=superseded with replacement G009 while the aggregate Codex goal remains active and aligned. The legacy objective-mismatch evidence remains in .omx/ultragoal/ledger.jsonl; G002-G008 remain the recovery implementation path.",
+      "supersedes": [
+        "G001-ai-team-goal-mode-full-architecture"
+      ],
+      "completedAt": "2026-07-01T14:51:20.082Z"
     },
     {
       "id": "G002-recover-aligned-architecture-goal-st",
@@ -97,11 +114,23 @@
       "id": "G008-final-gates-and-durable-closeout",
       "title": "Final gates and durable closeout",
       "objective": "Run changed-file cleanup review, full flutter analyze, full flutter test, flutter build macos --debug, git diff --check, independent code review and architecture review; commit the final recovery work; only then complete the active Codex aggregate goal and checkpoint ultragoal with quality-gate evidence.",
+      "status": "review_blocked",
+      "attempt": 1,
+      "createdAt": "2026-07-01T13:06:55.209Z",
+      "updatedAt": "2026-07-01T14:51:44.085Z",
+      "evidence": "Final independent review was non-clean. Architect lane returned WATCH because AppController and TeamOrchestrator still concentrate process coupling; code-reviewer lane returned COMMENT rather than APPROVE. Required ultragoal gate forbids completing on COMMENT/WATCH.",
+      "startedAt": "2026-07-01T14:31:52.660Z",
+      "reviewBlockedAt": "2026-07-01T14:51:44.085Z"
+    },
+    {
+      "id": "G010-resolve-final-architecture-review-bl",
+      "title": "Resolve final architecture review blockers",
+      "objective": "Thin AppController and TeamOrchestrator coordinator responsibilities into focused application and orchestration services so final independent review can return APPROVE and CLEAR; preserve public imports and business behavior, then rerun required verification and final review.",
       "status": "pending",
       "attempt": 0,
-      "createdAt": "2026-07-01T13:06:55.209Z",
-      "updatedAt": "2026-07-01T13:06:55.209Z",
-      "evidence": "Recovery plan G6 requires final verification, review, commit, Codex goal complete, and .omx/ultragoal complete before reporting completion."
+      "createdAt": "2026-07-01T14:51:44.085Z",
+      "updatedAt": "2026-07-01T14:51:44.085Z",
+      "evidence": "Final independent review was non-clean. Architect lane returned WATCH because AppController and TeamOrchestrator still concentrate process coupling; code-reviewer lane returned COMMENT rather than APPROVE. Required ultragoal gate forbids completing on COMMENT/WATCH."
     }
   ],
   "codexObjective": "Complete the durable AI Team architecture refactor recovery plan in .omx/ultragoal/goals.json, including blocker-resolution stories and final verification, under the original no-downgrade constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",

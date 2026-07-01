@@ -209,7 +209,8 @@ class AppController extends ChangeNotifier {
   }
 
   Team teamForConversation(String conversationId) {
-    return requireTeam(state, conversationByIdOrThrow(state, conversationId).teamId);
+    final conversation = conversationByIdOrThrow(state, conversationId);
+    return requireTeam(state, conversation.teamId);
   }
 
   bool isConversationDispatching(String conversationId) {
@@ -1011,7 +1012,8 @@ class AppController extends ChangeNotifier {
     String conversationId,
     ConversationStatus status,
   ) {
-    final updated = conversationByIdOrThrow(state, conversationId).copyWith(status: status);
+    final updated =
+        conversationByIdOrThrow(state, conversationId).copyWith(status: status);
     _commit(
       state.copyWith(
         conversations: state.conversations

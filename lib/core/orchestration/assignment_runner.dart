@@ -185,9 +185,7 @@ TeamMember? findReplacementMember({
     if (aExecuted != bExecuted) {
       return aExecuted ? 1 : -1;
     }
-    return team.memberIds
-        .indexOf(a.id)
-        .compareTo(team.memberIds.indexOf(b.id));
+    return team.memberIds.indexOf(a.id).compareTo(team.memberIds.indexOf(b.id));
   });
   return candidates.first;
 }

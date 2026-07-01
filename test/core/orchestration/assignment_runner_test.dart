@@ -3,8 +3,7 @@ import 'package:ai_team/core/orchestration/assignment_runner.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('replacement selection prefers same-role priority before execution',
-      () {
+  test('replacement selection prefers same-role priority before execution', () {
     final seed = AppState.seed();
     const backupFrontend = TeamMember(
       id: 'member-frontend-backup',
@@ -48,7 +47,8 @@ void main() {
     expect(replacement?.id, executedFrontend.id);
   });
 
-  test('replacement selection prefers unexecuted member when priority ties', () {
+  test('replacement selection prefers unexecuted member when priority ties',
+      () {
     final seed = AppState.seed();
     const backupFrontend = TeamMember(
       id: 'member-frontend-backup',
