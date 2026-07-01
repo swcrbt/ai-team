@@ -1,8 +1,12 @@
 import 'package:ai_team/application/conversation_sessions.dart';
+import 'package:ai_team/application/configuration_controller.dart';
 import 'package:ai_team/application/streaming_draft_registry.dart';
+import 'package:ai_team/application/task_queue_controller.dart';
 import 'package:ai_team/application/workspace_command_controller.dart';
 import 'package:ai_team/core/domain.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../support/model_gateway_fakes.dart';
 
 void main() {
   group('StreamingDraftRegistry', () {
@@ -83,6 +87,101 @@ void main() {
         state.commandRequests.single.status,
         CommandRequestStatus.approved,
       );
+    });
+  });
+
+  group('ConfigurationController', () {
+    test('owns configuration validation and state mutation outside controller',
+        () {
+      var state = AppState.seed();
+      var selectedId = 'conv-team-default';
+      String? activeId = 'team-default';
+      var notified = false;
+      final controller = ConfigurationController(
+        readState: () => state,
+        commit: (nextState) => state = nextState,
+        currentTeam: () =>
+            state.teams.firstWhere((team) => team.id == activeId),
+        activeTeamId: () => activeId,
+        selectedConversationId: () => selectedId,
+        updateSelection: ({
+          required activeTeamId,
+          required selectedConversationId,
+        }) {
+          activeId = activeTeamId;
+          selectedId = selectedConversationId;
+        },
+        notify: () => notified = true,
+      );
+
+      expect(
+        () => controller.addModel(
+          const ModelProfile(
+            id: 'model-invalid',
+            name: '',
+            baseUrl: 'not-a-url',
+            modelName: '',
+            apiKey: '',
+          ),
+        ),
+        throwsArgumentError,
+      );
+
+      final team = controller.addTeam(
+        name: '  移动端小队  ',
+        memberIds: const ['member-frontend', 'member-secretary'],
+      );
+
+      expect(team.name, '移动端小队');
+      expect(team.memberIds, ['member-secretary', 'member-frontend']);
+      expect(
+        state.conversations.map((conversation) => conversation.teamId),
+        contains(team.id),
+      );
+
+      controller.deleteTeam(team.id);
+
+      expect(
+        state.teams.map((item) => item.id),
+        isNot(contains(team.id)),
+      );
+      expect(notified, isFalse);
+    });
+  });
+
+  group('TaskQueueController', () {
+    test('owns queue creation and task note mutation outside AppController',
+        () async {
+      var state = AppState.seed();
+      final controller = TaskQueueController(
+        readState: () => state,
+        commit: (nextState) => state = nextState,
+        gateway: ScriptedTitleGateway(title: '登录页修复'),
+      );
+
+      await controller.enqueueConversationTask(
+        'conv-team-default',
+        '修复登录页',
+        priority: 3,
+      );
+
+      final task = state.queuedTasks.single;
+      expect(task.title, '登录页修复');
+      expect(task.priority, 3);
+      expect(
+        state.conversations
+            .firstWhere((conversation) => conversation.id == task.conversationId)
+            .messages
+            .where((message) => message.isUser),
+        hasLength(1),
+      );
+
+      controller.appendTaskNote(task.id, '补充移动端');
+      controller.updateTaskStatus(task.id, QueuedTaskStatus.running);
+
+      final updated = state.queuedTasks.single;
+      expect(updated.notes, ['补充移动端']);
+      expect(updated.status, QueuedTaskStatus.running);
     });
   });
 }

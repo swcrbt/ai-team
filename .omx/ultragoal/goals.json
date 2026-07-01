@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-06-29T15:49:46.541Z",
-  "updatedAt": "2026-07-01T13:14:36.154Z",
+  "updatedAt": "2026-07-01T13:53:40.825Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -49,11 +49,13 @@
       "id": "G004-split-remaining-application-responsi",
       "title": "Split remaining application responsibilities",
       "objective": "Refactor lib/application/app_controller.dart so AppController remains the public facade but delegates configuration validation, conversation/session lifecycle, task queue operations, dispatch lifecycle, and title generation to focused application components with targeted tests under test/application.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-01T13:05:34.909Z",
-      "updatedAt": "2026-07-01T13:05:34.909Z",
-      "evidence": "Recovery plan G2 identifies AppController as 1779 lines with mixed facade, validation, queue, session, dispatch, persistence, workspace, and command responsibilities."
+      "updatedAt": "2026-07-01T13:53:40.825Z",
+      "evidence": "Split application responsibilities: added ConfigurationController, TaskQueueController, and shared state_lookup; AppController now delegates configuration validation/state mutation and queue mutation/title generation while preserving public API. AppController line count reduced from 1779 to 1217. Added component tests in test/application/controller_components_test.dart. Verified /Users/swcrbt/develop/flutter/bin/flutter test test/application and /Users/swcrbt/develop/flutter/bin/flutter analyze.",
+      "startedAt": "2026-07-01T13:53:22.501Z",
+      "completedAt": "2026-07-01T13:53:40.825Z"
     },
     {
       "id": "G005-refine-orchestration-boundaries",

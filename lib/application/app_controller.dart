@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 
@@ -14,9 +13,12 @@ import '../core/orchestrator.dart';
 import '../core/workspace/workspace_service.dart';
 import 'app_controller_helpers.dart';
 import 'chat_streaming.dart';
+import 'configuration_controller.dart';
 import 'conversation_sessions.dart';
 import 'state_persistence_queue.dart';
+import 'state_lookup.dart';
 import 'streaming_draft_registry.dart';
+import 'task_queue_controller.dart';
 import 'workspace_command_controller.dart';
 
 class AppController extends ChangeNotifier {
@@ -39,6 +41,26 @@ class AppController extends ChangeNotifier {
       commit: _commit,
       workspaceService: workspaceService,
       commandService: this.commandService,
+    );
+    _configuration = ConfigurationController(
+      readState: () => state,
+      commit: _commit,
+      currentTeam: () => currentTeam,
+      activeTeamId: () => activeTeamId,
+      selectedConversationId: () => selectedConversationId,
+      updateSelection: ({
+        required activeTeamId,
+        required selectedConversationId,
+      }) {
+        this.activeTeamId = activeTeamId;
+        this.selectedConversationId = selectedConversationId;
+      },
+      notify: notifyListeners,
+    );
+    _taskQueue = TaskQueueController(
+      readState: () => state,
+      commit: _commit,
+      gateway: orchestrator.gateway,
     );
     final conversation = state.conversations.firstWhere(
       (item) => item.id == selectedConversationId,
@@ -70,6 +92,8 @@ class AppController extends ChangeNotifier {
   final StatePersistenceQueue _persistenceQueue = StatePersistenceQueue();
   late final StreamingDraftRegistry _streamingDraftRegistry;
   late final WorkspaceCommandController _workspaceCommands;
+  late final ConfigurationController _configuration;
+  late final TaskQueueController _taskQueue;
 
   Set<String> get hiddenConversationIds =>
       _conversationSessions.hiddenConversationIds;
@@ -111,13 +135,13 @@ class AppController extends ChangeNotifier {
   Team get currentTeam {
     final activeId = activeTeamId;
     if (activeId != null) {
-      return _requireTeam(activeId);
+      return requireTeam(state, activeId);
     }
     final conversation = state.conversations.firstWhere(
       (item) => item.id == selectedConversationId,
       orElse: () => state.conversations.first,
     );
-    return _requireTeam(conversation.teamId);
+    return requireTeam(state, conversation.teamId);
   }
 
   List<PatchProposal> get patchProposals => state.patchProposals;
@@ -148,21 +172,14 @@ class AppController extends ChangeNotifier {
       });
   }
 
-  List<QueuedTask> get tasksForCurrentConversation => state.queuedTasks
-      .where((task) => task.conversationId == currentConversation.id)
-      .toList();
+  List<QueuedTask> get tasksForCurrentConversation =>
+      _taskQueue.tasksForConversation(currentConversation.id);
 
   List<QueuedTask> tasksForConversation(String conversationId) =>
-      state.queuedTasks
-          .where((task) => task.conversationId == conversationId)
-          .toList();
+      _taskQueue.tasksForConversation(conversationId);
 
   List<QueuedTask> get pendingTasksForCurrentConversation {
-    final tasks = tasksForCurrentConversation
-        .where((task) => task.status == QueuedTaskStatus.pending)
-        .toList();
-    tasks.sort(queuedTaskSort);
-    return tasks;
+    return _taskQueue.pendingTasksForConversation(currentConversation.id);
   }
 
   QueuedTask? get currentRunningTask {
@@ -170,7 +187,7 @@ class AppController extends ChangeNotifier {
     if (id == null) {
       return null;
     }
-    return _taskByIdOrNull(id);
+    return _taskQueue.taskByIdOrNull(id);
   }
 
   Conversation get currentConversation => state.conversations.firstWhere(
@@ -181,18 +198,18 @@ class AppController extends ChangeNotifier {
       );
 
   Conversation conversationById(String conversationId) =>
-      _conversationById(conversationId);
+      conversationByIdOrThrow(state, conversationId);
 
   List<TeamMember> membersForConversation(String conversationId) {
-    final conversation = _conversationById(conversationId);
-    final team = _requireTeam(conversation.teamId);
+    final conversation = conversationByIdOrThrow(state, conversationId);
+    final team = requireTeam(state, conversation.teamId);
     return state.members
         .where((member) => team.memberIds.contains(member.id))
         .toList();
   }
 
   Team teamForConversation(String conversationId) {
-    return _requireTeam(_conversationById(conversationId).teamId);
+    return requireTeam(state, conversationByIdOrThrow(state, conversationId).teamId);
   }
 
   bool isConversationDispatching(String conversationId) {
@@ -200,7 +217,7 @@ class AppController extends ChangeNotifier {
   }
 
   Conversation get teamConversation => _activeConversationForObject(
-        _teamConversationFor(currentTeam.id),
+        requireTeamConversation(state, currentTeam.id),
       );
 
   List<Conversation> get visibleConversations {
@@ -242,16 +259,16 @@ class AppController extends ChangeNotifier {
   }
 
   void startTeamChat(String teamId) {
-    final team = _requireTeam(teamId);
+    final team = requireTeam(state, teamId);
     final conversation = _activeConversationForObject(
-      _teamConversationFor(team.id),
+      requireTeamConversation(state, team.id),
     );
     _activateConversation(conversation.id);
     notifyListeners();
   }
 
   void startMemberChat(String memberId) {
-    final member = _requireMember(memberId);
+    final member = requireMember(state, memberId);
     Conversation? conversation;
     for (final item in state.conversations) {
       if (item.teamId == currentTeam.id && item.memberId == memberId) {
@@ -276,7 +293,7 @@ class AppController extends ChangeNotifier {
   }
 
   Conversation createConversationLikeCurrent() {
-    final source = _conversationById(selectedConversationId);
+    final source = conversationByIdOrThrow(state, selectedConversationId);
     if (source.messages.isEmpty) {
       _activateConversation(source.id);
       notifyListeners();
@@ -303,7 +320,7 @@ class AppController extends ChangeNotifier {
   }
 
   void deleteConversationSession(String conversationId) {
-    final conversation = _conversationByIdOrNull(conversationId);
+    final conversation = conversationByIdOrNull(state, conversationId);
     if (conversation == null) {
       return;
     }
@@ -400,7 +417,7 @@ class AppController extends ChangeNotifier {
   }
 
   void closeConversation(String conversationId) {
-    final conversation = _conversationByIdOrNull(conversationId);
+    final conversation = conversationByIdOrNull(state, conversationId);
     if (conversation == null) {
       return;
     }
@@ -413,7 +430,7 @@ class AppController extends ChangeNotifier {
     }
     _conversationSessions.closeConversationObject(state, conversation);
     final selectedConversation =
-        _conversationByIdOrNull(selectedConversationId);
+        conversationByIdOrNull(state, selectedConversationId);
     if (selectedConversation == null ||
         _conversationSessions.isHidden(selectedConversationId)) {
       final nextConversation = visibleConversations.first;
@@ -426,172 +443,23 @@ class AppController extends ChangeNotifier {
     String text, {
     int priority = 0,
   }) async {
-    final trimmed = text.trim();
-    if (trimmed.isEmpty) {
-      return;
-    }
-    final conversation = currentConversation;
-    final team = _requireTeam(conversation.teamId);
-    final secretary = state.members.firstWhere(
-      (member) => member.id == team.secretaryMemberId,
+    await _taskQueue.enqueueConversationTask(
+      currentConversation.id,
+      text,
+      priority: priority,
     );
-    final secretaryRole = _requireRole(secretary.roleId);
-    final secretaryModel = _requireModel(secretary.modelId);
-    final now = DateTime.now();
-    final generating = ChatMessage(
-      id: 'msg-${now.microsecondsSinceEpoch}',
-      authorName: secretary.name,
-      memberId: secretary.id,
-      content: '正在生成任务',
-      createdAt: now,
-    );
-    _appendMessage(conversation.id, generating);
-    try {
-      final title = await orchestrator.gateway.complete(
-        model: secretaryModel,
-        systemPrompt: secretaryRole.renderSystemPrompt(
-          memberName: secretary.name,
-          teamName: team.name,
-        ),
-        messages: [
-          ChatMessage(
-            id: 'msg-title-source-${now.microsecondsSinceEpoch}',
-            authorName: '我',
-            content: '请为这条任务生成一句简短标题：$trimmed',
-            createdAt: now,
-            isUser: true,
-          ),
-        ],
-      );
-      final createdAt = DateTime.now();
-      final taskId = 'task-${createdAt.microsecondsSinceEpoch}';
-      final userMessage = ChatMessage(
-        id: 'msg-${createdAt.microsecondsSinceEpoch}',
-        authorName: '我',
-        content: trimmed,
-        createdAt: createdAt,
-        isUser: true,
-        taskIds: [taskId],
-      );
-      final latestConversation = _conversationById(conversation.id);
-      _commit(
-        state.copyWith(
-          queuedTasks: [
-            ...state.queuedTasks,
-            QueuedTask(
-              id: taskId,
-              conversationId: conversation.id,
-              title: title.trim(),
-              originalText: trimmed,
-              priority: priority,
-              status: QueuedTaskStatus.pending,
-              createdAt: createdAt,
-              updatedAt: createdAt,
-              messageIds: [userMessage.id],
-            ),
-          ],
-          conversations: state.conversations
-              .map(
-                (item) => item.id == conversation.id
-                    ? latestConversation.copyWith(
-                        messages: [
-                          ...latestConversation.messages
-                              .where((message) => message.id != generating.id),
-                          userMessage,
-                        ],
-                      )
-                    : item,
-              )
-              .toList(),
-        ),
-      );
-    } catch (exception) {
-      _replaceMessageContent(
-        generating.id,
-        '任务标题生成失败：$exception',
-      );
-    }
   }
 
   void updateTaskPriority(String taskId, int priority) {
-    _commit(
-      state.copyWith(
-        queuedTasks: state.queuedTasks
-            .map(
-              (task) => task.id == taskId
-                  ? task.copyWith(
-                      priority: priority,
-                      updatedAt: DateTime.now(),
-                    )
-                  : task,
-            )
-            .toList(),
-      ),
-    );
+    _taskQueue.updateTaskPriority(taskId, priority);
   }
 
   void appendTaskNote(String taskId, String note) {
-    final trimmed = note.trim();
-    if (trimmed.isEmpty) {
-      return;
-    }
-    final task = state.queuedTasks.firstWhere((item) => item.id == taskId);
-    final message = ChatMessage(
-      id: 'msg-${DateTime.now().microsecondsSinceEpoch}',
-      authorName: '系统',
-      content: '已为任务追加备注',
-      createdAt: DateTime.now(),
-      taskIds: [taskId],
-    );
-    _commit(
-      state.copyWith(
-        queuedTasks: state.queuedTasks
-            .map(
-              (item) => item.id == taskId
-                  ? item.copyWith(
-                      notes: [...item.notes, trimmed],
-                      messageIds: [...item.messageIds, message.id],
-                      updatedAt: DateTime.now(),
-                    )
-                  : item,
-            )
-            .toList(),
-        conversations: state.conversations
-            .map(
-              (conversation) => conversation.id == task.conversationId
-                  ? conversation.copyWith(
-                      messages: [...conversation.messages, message],
-                    )
-                  : conversation,
-            )
-            .toList(),
-      ),
-    );
+    _taskQueue.appendTaskNote(taskId, note);
   }
 
   void deleteTask(String taskId) {
-    final task = state.queuedTasks.firstWhere((item) => item.id == taskId);
-    _commit(
-      state.copyWith(
-        queuedTasks:
-            state.queuedTasks.where((item) => item.id != taskId).toList(),
-        conversations: state.conversations
-            .map(
-              (conversation) => conversation.id == task.conversationId
-                  ? conversation.copyWith(
-                      messages: conversation.messages
-                          .where(
-                            (message) =>
-                                !message.taskIds.contains(taskId) &&
-                                !task.messageIds.contains(message.id),
-                          )
-                          .toList(),
-                    )
-                  : conversation,
-            )
-            .toList(),
-      ),
-    );
+    _taskQueue.deleteTask(taskId);
   }
 
   Future<void> runNextQueuedTask() async {
@@ -607,7 +475,7 @@ class AppController extends ChangeNotifier {
     error = null;
     final cancellation = ModelRequestCancellation();
     _activeCancellation = cancellation;
-    _updateTaskStatus(next.id, QueuedTaskStatus.running);
+    _taskQueue.updateTaskStatus(next.id, QueuedTaskStatus.running);
     try {
       final updated = await orchestrator.dispatchQueuedTask(
         state,
@@ -618,21 +486,21 @@ class AppController extends ChangeNotifier {
       );
       if (!cancellation.isCancelled) {
         _commit(updated);
-        _updateTaskStatus(next.id, QueuedTaskStatus.completed);
+        _taskQueue.updateTaskStatus(next.id, QueuedTaskStatus.completed);
       }
     } on ModelGatewayException catch (exception) {
       if (cancellation.isCancelled) {
-        _updateTaskStatus(next.id, QueuedTaskStatus.paused);
+        _taskQueue.updateTaskStatus(next.id, QueuedTaskStatus.paused);
       } else {
         error = exception.toString();
-        _updateTaskStatus(next.id, QueuedTaskStatus.failed);
+        _taskQueue.updateTaskStatus(next.id, QueuedTaskStatus.failed);
       }
     } catch (exception) {
       if (cancellation.isCancelled) {
-        _updateTaskStatus(next.id, QueuedTaskStatus.paused);
+        _taskQueue.updateTaskStatus(next.id, QueuedTaskStatus.paused);
       } else {
         error = exception.toString();
-        _updateTaskStatus(next.id, QueuedTaskStatus.failed);
+        _taskQueue.updateTaskStatus(next.id, QueuedTaskStatus.failed);
       }
     } finally {
       if (_runningTaskId == next.id) {
@@ -651,16 +519,16 @@ class AppController extends ChangeNotifier {
     if (_runningTaskId == taskId) {
       _activeCancellation?.cancel();
     }
-    _updateTaskStatus(taskId, QueuedTaskStatus.paused);
+    _taskQueue.updateTaskStatus(taskId, QueuedTaskStatus.paused);
   }
 
   Future<void> resumeTask(String taskId) async {
-    _updateTaskStatus(taskId, QueuedTaskStatus.pending);
+    _taskQueue.updateTaskStatus(taskId, QueuedTaskStatus.pending);
     await runNextQueuedTask();
   }
 
   bool _canDispatchConversation(String conversationId) {
-    final status = _conversationById(conversationId).status;
+    final status = conversationByIdOrThrow(state, conversationId).status;
     if (status == ConversationStatus.paused) {
       error = '当前会话已暂停，请先点击继续。';
       return false;
@@ -692,7 +560,7 @@ class AppController extends ChangeNotifier {
     _requestedCancellationStatus = null;
     _notifyListeners();
     try {
-      final conversation = _conversationById(conversationId);
+      final conversation = conversationByIdOrThrow(state, conversationId);
       final shouldGenerateTitle =
           _shouldGenerateConversationTitleAfterFirstUserMessage(conversation);
       if (conversation.memberId == null) {
@@ -751,7 +619,7 @@ class AppController extends ChangeNotifier {
         return;
       }
       error = exception.toString();
-      final conversation = _conversationById(conversationId);
+      final conversation = conversationByIdOrThrow(state, conversationId);
       final failed = conversation.copyWith(
         status: ConversationStatus.failed,
         messages: [
@@ -796,16 +664,16 @@ class AppController extends ChangeNotifier {
     required String conversationId,
     required String firstUserMessage,
   }) async {
-    final conversation = _conversationById(conversationId);
+    final conversation = conversationByIdOrThrow(state, conversationId);
     final titleMember = _titleMemberForConversation(conversation);
-    final role = _requireRole(titleMember.roleId);
-    final model = _requireModel(titleMember.modelId);
+    final role = requireRole(state, titleMember.roleId);
+    final model = requireModel(state, titleMember.modelId);
     try {
       final generated = await orchestrator.gateway.complete(
         model: model,
         systemPrompt: role.renderSystemPrompt(
           memberName: titleMember.name,
-          teamName: _requireTeam(conversation.teamId).name,
+          teamName: requireTeam(state, conversation.teamId).name,
         ),
         messages: [
           ChatMessage(
@@ -819,13 +687,13 @@ class AppController extends ChangeNotifier {
       );
       final normalizedTitle = normalizeGeneratedConversationTitle(
         generated,
-        conversation: _conversationById(conversationId),
+        conversation: conversationByIdOrThrow(state, conversationId),
         firstUserMessage: firstUserMessage,
       );
       if (normalizedTitle == null) {
         return;
       }
-      final latestConversation = _conversationById(conversationId);
+      final latestConversation = conversationByIdOrThrow(state, conversationId);
       _commit(
         state.copyWith(
           conversations: state.conversations
@@ -844,10 +712,10 @@ class AppController extends ChangeNotifier {
 
   TeamMember _titleMemberForConversation(Conversation conversation) {
     if (conversation.memberId != null) {
-      return _requireMember(conversation.memberId!);
+      return requireMember(state, conversation.memberId!);
     }
-    final team = _requireTeam(conversation.teamId);
-    return _requireMember(team.secretaryMemberId);
+    final team = requireTeam(state, conversation.teamId);
+    return requireMember(state, team.secretaryMemberId);
   }
 
   void pauseConversation() {
@@ -883,41 +751,11 @@ class AppController extends ChangeNotifier {
     required List<String> memberIds,
     TeamCollaborationMode collaborationMode = TeamCollaborationMode.serial,
   }) {
-    final secretary = state.members.firstWhere(
-      (member) => member.isSecretary,
-      orElse: () => throw StateError('缺少默认秘书成员'),
-    );
-    final normalizedMemberIds = _normalizeTeamMemberIds(
-      secretaryMemberId: secretary.id,
+    return _configuration.addTeam(
+      name: name,
       memberIds: memberIds,
-    );
-    final timestamp = DateTime.now().microsecondsSinceEpoch;
-    final team = Team(
-      id: 'team-$timestamp',
-      name: _validateTeamName(name),
-      memberIds: normalizedMemberIds,
-      secretaryMemberId: secretary.id,
       collaborationMode: collaborationMode,
     );
-    _commit(
-      state.copyWith(
-        teams: [...state.teams, team],
-        conversations: [
-          ...state.conversations,
-          createTeamConversation(team),
-        ],
-        auditLog: [
-          ...state.auditLog,
-          AuditEntry(
-            id: 'audit-$timestamp',
-            action: 'team_added',
-            detail: team.name,
-            createdAt: DateTime.now(),
-          ),
-        ],
-      ),
-    );
-    return team;
   }
 
   void updateTeam({
@@ -926,268 +764,52 @@ class AppController extends ChangeNotifier {
     required List<String> memberIds,
     required TeamCollaborationMode collaborationMode,
   }) {
-    final existing = _requireTeam(teamId);
-    final updatedTeam = existing.copyWith(
-      name: _validateTeamName(name),
-      memberIds: _normalizeTeamMemberIds(
-        secretaryMemberId: existing.secretaryMemberId,
-        memberIds: memberIds,
-      ),
+    _configuration.updateTeam(
+      teamId: teamId,
+      name: name,
+      memberIds: memberIds,
       collaborationMode: collaborationMode,
     );
-    final updatedMemberIds = updatedTeam.memberIds.toSet();
-    final retainedConversations = state.conversations.where((conversation) {
-      if (conversation.teamId != teamId || conversation.memberId == null) {
-        return true;
-      }
-      return updatedMemberIds.contains(conversation.memberId);
-    }).toList();
-
-    _commit(
-      state.copyWith(
-        teams: state.teams
-            .map((team) => team.id == teamId ? updatedTeam : team)
-            .toList(),
-        conversations: retainedConversations,
-        auditLog: [
-          ...state.auditLog,
-          AuditEntry(
-            id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
-            action: 'team_updated',
-            detail: updatedTeam.name,
-            createdAt: DateTime.now(),
-          ),
-        ],
-      ),
-    );
-    final validConversationIds =
-        state.conversations.map((conversation) => conversation.id).toSet();
-    if (!validConversationIds.contains(selectedConversationId)) {
-      selectedConversationId = _teamConversationFor(teamId).id;
-      activeTeamId = teamId;
-      notifyListeners();
-    }
   }
 
   void deleteTeam(String teamId) {
-    final team = _requireTeam(teamId);
-    if (state.teams.length <= 1) {
-      throw StateError('至少保留一个团队');
-    }
-    final removedConversationIds = state.conversations
-        .where((conversation) => conversation.teamId == teamId)
-        .map((conversation) => conversation.id)
-        .toSet();
-    final remainingTeams =
-        state.teams.where((item) => item.id != teamId).toList();
-    final fallbackTeam = remainingTeams.first;
-
-    _commit(
-      state.copyWith(
-        teams: remainingTeams,
-        conversations: state.conversations
-            .where((conversation) => conversation.teamId != teamId)
-            .toList(),
-        queuedTasks: state.queuedTasks
-            .where(
-                (task) => !removedConversationIds.contains(task.conversationId))
-            .toList(),
-        taskAssignments: state.taskAssignments
-            .where((assignment) =>
-                !removedConversationIds.contains(assignment.conversationId))
-            .toList(),
-        auditLog: [
-          ...state.auditLog,
-          AuditEntry(
-            id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
-            action: 'team_deleted',
-            detail: team.name,
-            createdAt: DateTime.now(),
-          ),
-        ],
-      ),
-    );
-    if (activeTeamId == teamId ||
-        removedConversationIds.contains(selectedConversationId)) {
-      activeTeamId = fallbackTeam.id;
-      selectedConversationId = _teamConversationFor(fallbackTeam.id).id;
-      notifyListeners();
-    }
+    _configuration.deleteTeam(teamId);
   }
 
   void addModel(ModelProfile model) {
-    _validateModel(model);
-    _commit(state.copyWith(models: [...state.models, model]));
+    _configuration.addModel(model);
   }
 
   void updateModel(ModelProfile model) {
-    _validateModel(model);
-    _requireModel(model.id);
-    _commit(
-      state.copyWith(
-        models: state.models
-            .map((item) => item.id == model.id ? model : item)
-            .toList(),
-        auditLog: [
-          ...state.auditLog,
-          AuditEntry(
-            id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
-            action: 'model_updated',
-            detail: model.name,
-            createdAt: DateTime.now(),
-          ),
-        ],
-      ),
-    );
+    _configuration.updateModel(model);
   }
 
   void deleteModel(String modelId) {
-    final model = _requireModel(modelId);
-    if (state.members.any((member) => member.modelId == modelId)) {
-      throw StateError('模型正在被团队成员使用，不能删除');
-    }
-    _commit(
-      state.copyWith(
-        models: state.models.where((item) => item.id != modelId).toList(),
-        auditLog: [
-          ...state.auditLog,
-          AuditEntry(
-            id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
-            action: 'model_deleted',
-            detail: model.name,
-            createdAt: DateTime.now(),
-          ),
-        ],
-      ),
-    );
+    _configuration.deleteModel(modelId);
   }
 
   void addRole(RoleTemplate role) {
-    _validateRole(role);
-    _commit(state.copyWith(roles: [...state.roles, role]));
+    _configuration.addRole(role);
   }
 
   void updateRole(RoleTemplate role) {
-    _validateRole(role);
-    _requireRole(role.id);
-    _commit(
-      state.copyWith(
-        roles: state.roles
-            .map((item) => item.id == role.id ? role : item)
-            .toList(),
-        auditLog: [
-          ...state.auditLog,
-          AuditEntry(
-            id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
-            action: 'role_updated',
-            detail: role.name,
-            createdAt: DateTime.now(),
-          ),
-        ],
-      ),
-    );
+    _configuration.updateRole(role);
   }
 
   void deleteRole(String roleId) {
-    final role = _requireRole(roleId);
-    if (state.members.any((member) => member.roleId == roleId)) {
-      throw StateError('角色正在被团队成员使用，不能删除');
-    }
-    _commit(
-      state.copyWith(
-        roles: state.roles.where((item) => item.id != roleId).toList(),
-        auditLog: [
-          ...state.auditLog,
-          AuditEntry(
-            id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
-            action: 'role_deleted',
-            detail: role.name,
-            createdAt: DateTime.now(),
-          ),
-        ],
-      ),
-    );
+    _configuration.deleteRole(roleId);
   }
 
   void addMember(TeamMember member) {
-    _validateMember(member);
-    final updatedTeam = currentTeam.copyWith(
-      memberIds: [...currentTeam.memberIds, member.id],
-    );
-    _commit(
-      state.copyWith(
-        members: [...state.members, member],
-        teams: state.teams
-            .map((team) => team.id == updatedTeam.id ? updatedTeam : team)
-            .toList(),
-      ),
-    );
+    _configuration.addMember(member);
   }
 
   void updateMember(TeamMember member) {
-    _validateMember(member);
-    final existing = _requireMember(member.id);
-    _commit(
-      state.copyWith(
-        members: state.members
-            .map((item) => item.id == member.id
-                ? member.copyWith(isSecretary: existing.isSecretary)
-                : item)
-            .toList(),
-        conversations: state.conversations
-            .map((conversation) => conversation.memberId == member.id
-                ? Conversation(
-                    id: conversation.id,
-                    title: member.name,
-                    teamId: conversation.teamId,
-                    memberId: conversation.memberId,
-                    messages: conversation.messages,
-                    currentRound: conversation.currentRound,
-                    status: conversation.status,
-                  )
-                : conversation)
-            .toList(),
-        auditLog: [
-          ...state.auditLog,
-          AuditEntry(
-            id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
-            action: 'member_updated',
-            detail: member.name,
-            createdAt: DateTime.now(),
-          ),
-        ],
-      ),
-    );
+    _configuration.updateMember(member);
   }
 
   void deleteMember(String memberId) {
-    final member = _requireMember(memberId);
-    if (member.isSecretary || currentTeam.secretaryMemberId == memberId) {
-      throw StateError('默认秘书不能删除');
-    }
-    _commit(
-      state.copyWith(
-        members: state.members.where((item) => item.id != memberId).toList(),
-        conversations: state.conversations
-            .where((conversation) => conversation.memberId != memberId)
-            .toList(),
-        teams: state.teams
-            .map((team) => team.copyWith(
-                  memberIds:
-                      team.memberIds.where((id) => id != memberId).toList(),
-                ))
-            .toList(),
-        auditLog: [
-          ...state.auditLog,
-          AuditEntry(
-            id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
-            action: 'member_deleted',
-            detail: member.name,
-            createdAt: DateTime.now(),
-          ),
-        ],
-      ),
-    );
+    _configuration.deleteMember(memberId);
   }
 
   void addWorkspacePath(String path) {
@@ -1389,7 +1011,7 @@ class AppController extends ChangeNotifier {
     String conversationId,
     ConversationStatus status,
   ) {
-    final updated = _conversationById(conversationId).copyWith(status: status);
+    final updated = conversationByIdOrThrow(state, conversationId).copyWith(status: status);
     _commit(
       state.copyWith(
         conversations: state.conversations
@@ -1399,14 +1021,14 @@ class AppController extends ChangeNotifier {
     );
   }
 
-  Conversation _conversationById(String conversationId) {
+  Conversation conversationByIdOrThrow(state, String conversationId) {
     return state.conversations.firstWhere(
       (conversation) => conversation.id == conversationId,
       orElse: () => throw StateError('会话不存在: $conversationId'),
     );
   }
 
-  Conversation? _conversationByIdOrNull(String conversationId) {
+  Conversation? conversationByIdOrNull(state, String conversationId) {
     for (final conversation in state.conversations) {
       if (conversation.id == conversationId) {
         return conversation;
@@ -1415,78 +1037,13 @@ class AppController extends ChangeNotifier {
     return null;
   }
 
-  QueuedTask? _taskByIdOrNull(String taskId) {
+  QueuedTask? queuedTaskByIdOrNull(state, String taskId) {
     for (final task in state.queuedTasks) {
       if (task.id == taskId) {
         return task;
       }
     }
     return null;
-  }
-
-  void _updateTaskStatus(String taskId, QueuedTaskStatus status) {
-    _commit(
-      state.copyWith(
-        queuedTasks: state.queuedTasks
-            .map(
-              (task) => task.id == taskId
-                  ? task.copyWith(
-                      status: status,
-                      updatedAt: DateTime.now(),
-                    )
-                  : task,
-            )
-            .toList(),
-      ),
-    );
-  }
-
-  void _appendMessage(String conversationId, ChatMessage message) {
-    _commit(
-      state.copyWith(
-        conversations: state.conversations
-            .map(
-              (conversation) => conversation.id == conversationId
-                  ? conversation.copyWith(
-                      messages: [...conversation.messages, message],
-                    )
-                  : conversation,
-            )
-            .toList(),
-      ),
-    );
-  }
-
-  void _replaceMessageContent(String messageId, String content) {
-    _commit(
-      state.copyWith(
-        conversations: state.conversations
-            .map(
-              (conversation) => conversation.copyWith(
-                messages: conversation.messages
-                    .map(
-                      (message) => message.id == messageId
-                          ? ChatMessage(
-                              id: message.id,
-                              authorName: message.authorName,
-                              content: content,
-                              thinkingContent: message.thinkingContent,
-                              generationStatus: message.generationStatus,
-                              generationDurationMs:
-                                  message.generationDurationMs,
-                              createdAt: message.createdAt,
-                              memberId: message.memberId,
-                              isUser: message.isUser,
-                              taskIds: message.taskIds,
-                            )
-                          : message,
-                    )
-                    .toList(),
-              ),
-            )
-            .toList(),
-      ),
-    );
   }
 
   void _cancelActiveDispatch(
@@ -1508,7 +1065,7 @@ class AppController extends ChangeNotifier {
     final content = status == ConversationStatus.paused
         ? '任务已暂停，继续后可以重新发起下一轮协作。'
         : '任务已停止，本轮未完成的模型请求已取消。';
-    final conversation = _conversationById(conversationId);
+    final conversation = conversationByIdOrThrow(state, conversationId);
     final now = DateTime.now();
     final updated = conversation.copyWith(
       status: status,
@@ -1598,14 +1155,14 @@ class AppController extends ChangeNotifier {
     }
     TeamMember member;
     if (conversation.memberId != null) {
-      member = _requireMember(conversation.memberId!);
+      member = requireMember(state, conversation.memberId!);
     } else {
       member = currentMembers.firstWhere(
         (item) => !item.isSecretary,
         orElse: () => currentMembers.first,
       );
     }
-    final role = _requireRole(member.roleId);
+    final role = requireRole(state, member.roleId);
     return [
       ...assignments,
       TaskAssignment(
@@ -1656,124 +1213,5 @@ class AppController extends ChangeNotifier {
 
   void _syncConversationOrder() {
     _conversationSessions.sync(state);
-  }
-
-  ModelProfile _requireModel(String modelId) {
-    return state.models.firstWhere(
-      (model) => model.id == modelId,
-      orElse: () => throw StateError('模型不存在: $modelId'),
-    );
-  }
-
-  Team _requireTeam(String teamId) {
-    return state.teams.firstWhere(
-      (team) => team.id == teamId,
-      orElse: () => throw StateError('团队不存在: $teamId'),
-    );
-  }
-
-  Conversation _teamConversationFor(String teamId) {
-    return state.conversations.firstWhere(
-      (conversation) =>
-          conversation.teamId == teamId && conversation.memberId == null,
-      orElse: () => throw StateError('团队会话不存在: $teamId'),
-    );
-  }
-
-  RoleTemplate _requireRole(String roleId) {
-    return state.roles.firstWhere(
-      (role) => role.id == roleId,
-      orElse: () => throw StateError('角色不存在: $roleId'),
-    );
-  }
-
-  TeamMember _requireMember(String memberId) {
-    return state.members.firstWhere(
-      (member) => member.id == memberId,
-      orElse: () => throw StateError('成员不存在: $memberId'),
-    );
-  }
-
-  String _validateTeamName(String name) {
-    final trimmedName = name.trim();
-    if (trimmedName.isEmpty) {
-      throw ArgumentError('团队名称不能为空');
-    }
-    return trimmedName;
-  }
-
-  List<String> _normalizeTeamMemberIds({
-    required String secretaryMemberId,
-    required List<String> memberIds,
-  }) {
-    final normalizedMemberIds = <String>[
-      secretaryMemberId,
-      ...memberIds.where((id) => id != secretaryMemberId),
-    ];
-    for (final memberId in normalizedMemberIds) {
-      _requireMember(memberId);
-    }
-    return LinkedHashSet<String>.from(normalizedMemberIds).toList();
-  }
-
-  void _validateModel(ModelProfile model) {
-    if (model.name.trim().isEmpty) {
-      throw ArgumentError('模型名称不能为空');
-    }
-    if (model.modelName.trim().isEmpty) {
-      throw ArgumentError('模型标识不能为空');
-    }
-    if (model.apiKey.trim().isEmpty) {
-      throw ArgumentError('API Key 不能为空');
-    }
-    final uri = Uri.tryParse(model.baseUrl.trim());
-    if (uri == null ||
-        !uri.hasScheme ||
-        (uri.scheme != 'http' && uri.scheme != 'https') ||
-        uri.host.isEmpty) {
-      throw ArgumentError('Base URL 必须是有效的 http 或 https 地址');
-    }
-    if (model.temperature < 0 || model.temperature > 2) {
-      throw ArgumentError('温度必须在 0 到 2 之间');
-    }
-    if (model.maxTokens <= 0) {
-      throw ArgumentError('最大 Token 必须大于 0');
-    }
-    final reasoningEffort = model.reasoningEffort?.trim();
-    if (reasoningEffort != null &&
-        reasoningEffort.isNotEmpty &&
-        !reasoningEffortValues.contains(reasoningEffort)) {
-      throw ArgumentError('深度思考档位无效');
-    }
-  }
-
-  void _validateRole(RoleTemplate role) {
-    if (role.name.trim().isEmpty) {
-      throw ArgumentError('角色名称不能为空');
-    }
-    if (role.identityPrompt.trim().isEmpty) {
-      throw ArgumentError('角色身份提示词不能为空');
-    }
-    if (role.goalPrompt.trim().isEmpty) {
-      throw ArgumentError('角色目标提示词不能为空');
-    }
-    if (role.constraintPrompt.trim().isEmpty) {
-      throw ArgumentError('角色约束提示词不能为空');
-    }
-    if (role.outputFormatPrompt.trim().isEmpty) {
-      throw ArgumentError('角色输出格式提示词不能为空');
-    }
-    if (role.commandPolicy.allowedCommands
-        .every((command) => command.trim().isEmpty)) {
-      throw ArgumentError('至少需要一个允许命令');
-    }
-  }
-
-  void _validateMember(TeamMember member) {
-    if (member.name.trim().isEmpty) {
-      throw ArgumentError('成员名称不能为空');
-    }
-    _requireRole(member.roleId);
-    _requireModel(member.modelId);
   }
 }
