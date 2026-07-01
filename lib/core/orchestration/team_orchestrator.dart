@@ -2,9 +2,11 @@ import '../commands/command_service.dart';
 import '../domain.dart';
 import '../model_gateway.dart';
 import 'assignment_helpers.dart';
+import 'assignment_runner.dart';
 import 'audit_and_private_dispatch.dart';
 import 'model_message_tools.dart';
 import 'model_message_runner.dart';
+import 'secretary_summary_runner.dart';
 
 class TeamOrchestrator {
   TeamOrchestrator(
@@ -14,11 +16,16 @@ class TeamOrchestrator {
         _messageRunner = ModelMessageRunner(
           gateway: gateway,
           commandRunner: commandRunner,
-        );
+        ) {
+    _assignmentRunner = AssignmentRunner(messageRunner: _messageRunner);
+    _summaryRunner = SecretarySummaryRunner(messageRunner: _messageRunner);
+  }
 
   final ModelGateway gateway;
   final CommandRunner? _commandRunner;
   final ModelMessageRunner _messageRunner;
+  late final AssignmentRunner _assignmentRunner;
+  late final SecretarySummaryRunner _summaryRunner;
 
   CommandRunner get commandRunner => _commandRunner ?? defaultCommandRunner;
 
@@ -215,7 +222,7 @@ class TeamOrchestrator {
     final executedMemberIds = <String>{};
     if (team.collaborationMode == TeamCollaborationMode.serial) {
       for (var index = 0; index < parsed.assignments.length; index++) {
-        final outcome = await _runAssignmentWithRecovery(
+        final outcome = await _assignmentRunner.runWithRecovery(
           state: workingState,
           workingState: workingState,
           conversation: conversation,
@@ -240,8 +247,7 @@ class TeamOrchestrator {
             completedAt: DateTime.now(),
           ),
         );
-        final incremental = await _runSecretarySummary(
-          state: workingState,
+        final incremental = await _summaryRunner.run(
           workingState: workingState,
           conversation: conversation,
           team: team,
@@ -267,7 +273,7 @@ class TeamOrchestrator {
     } else {
       final planContextMessages = [...messages];
       for (var index = 0; index < parsed.assignments.length; index++) {
-        final outcome = await _runAssignmentWithRecovery(
+        final outcome = await _assignmentRunner.runWithRecovery(
           state: workingState,
           workingState: workingState,
           conversation: conversation,
@@ -295,8 +301,7 @@ class TeamOrchestrator {
       }
     }
 
-    final finalSummary = await _runSecretarySummary(
-      state: workingState,
+    final finalSummary = await _summaryRunner.run(
       workingState: workingState,
       conversation: conversation,
       team: team,
@@ -333,222 +338,6 @@ class TeamOrchestrator {
         ),
       ],
     );
-  }
-
-  Future<ModelMessageResult> _runSecretarySummary({
-    required AppState state,
-    required AppState workingState,
-    required Conversation conversation,
-    required Team team,
-    required TeamMember secretary,
-    required RoleTemplate secretaryRole,
-    required ModelProfile secretaryModel,
-    required List<ChatMessage> messages,
-    required String purpose,
-    ModelRequestCancellation? cancellation,
-    void Function(AppState state)? onProgress,
-    StreamingMessageDraftHandler? onStreamingDraft,
-  }) async {
-    cancellation?.throwIfCancelled();
-    return _messageRunner.runVisibleMessage(
-      workingState: workingState,
-      conversation: conversation,
-      messages: messages,
-      authorName: secretary.name,
-      memberId: secretary.id,
-      model: secretaryModel,
-      systemPrompt: secretarySystemPrompt(
-        role: secretaryRole,
-        secretary: secretary,
-        team: team,
-        purpose: purpose,
-      ),
-      requestMessages: messages,
-      cancellation: cancellation,
-      onProgress: onProgress,
-      onStreamingDraft: onStreamingDraft,
-    );
-  }
-
-  Future<AssignmentOutcome> _runAssignmentWithRecovery({
-    required AppState state,
-    required AppState workingState,
-    required Conversation conversation,
-    required Team team,
-    required ParsedAssignment assignment,
-    required List<ChatMessage> messages,
-    required List<ChatMessage> visibleMessages,
-    required Set<String> executedMemberIds,
-    ModelRequestCancellation? cancellation,
-    void Function(AppState state)? onProgress,
-    StreamingMessageDraftHandler? onStreamingDraft,
-  }) async {
-    final processMessages = <ChatMessage>[];
-    try {
-      final result = await _runAssignment(
-        state: state,
-        workingState: workingState,
-        conversation: conversation,
-        team: team,
-        assignment: assignment,
-        messages: messages,
-        visibleMessages: visibleMessages,
-        cancellation: cancellation,
-        onProgress: onProgress,
-        onStreamingDraft: onStreamingDraft,
-      );
-      executedMemberIds.add(assignment.member.id);
-      return AssignmentOutcome(
-        message: result.message,
-        processMessages: processMessages,
-        workingState: result.workingState,
-      );
-    } catch (firstError) {
-      cancellation?.throwIfCancelled();
-      processMessages.add(systemMessage('执行失败，正在重试：$firstError'));
-      try {
-        final result = await _runAssignment(
-          state: state,
-          workingState: workingState,
-          conversation: conversation,
-          team: team,
-          assignment: assignment,
-          messages: messages,
-          visibleMessages: visibleMessages,
-          cancellation: cancellation,
-          onProgress: onProgress,
-          onStreamingDraft: onStreamingDraft,
-        );
-        executedMemberIds.add(assignment.member.id);
-        return AssignmentOutcome(
-          message: result.message,
-          processMessages: processMessages,
-          workingState: result.workingState,
-        );
-      } catch (secondError) {
-        cancellation?.throwIfCancelled();
-        final replacement = _findReplacementMember(
-          state: state,
-          team: team,
-          failedMember: assignment.member,
-          executedMemberIds: executedMemberIds,
-        );
-        if (replacement == null) {
-          processMessages.add(systemMessage('任务失败：$secondError'));
-          return AssignmentOutcome(
-            message: systemMessage('${assignment.member.name} 执行失败，无法转派。'),
-            processMessages: processMessages,
-            workingState: workingState,
-            failed: true,
-          );
-        }
-        processMessages.add(
-          systemMessage(
-            '${assignment.member.name} 重试失败，已转派给 ${replacement.name}',
-          ),
-        );
-        final result = await _runAssignment(
-          state: state,
-          workingState: workingState,
-          conversation: conversation,
-          team: team,
-          assignment: ParsedAssignment(
-            member: replacement,
-            instruction: assignment.instruction,
-          ),
-          messages: messages,
-          visibleMessages: visibleMessages,
-          cancellation: cancellation,
-          onProgress: onProgress,
-          onStreamingDraft: onStreamingDraft,
-        );
-        executedMemberIds.add(replacement.id);
-        return AssignmentOutcome(
-          message: result.message,
-          processMessages: processMessages,
-          workingState: result.workingState,
-        );
-      }
-    }
-  }
-
-  Future<ModelMessageResult> _runAssignment({
-    required AppState state,
-    required AppState workingState,
-    required Conversation conversation,
-    required Team team,
-    required ParsedAssignment assignment,
-    required List<ChatMessage> messages,
-    required List<ChatMessage> visibleMessages,
-    ModelRequestCancellation? cancellation,
-    void Function(AppState state)? onProgress,
-    StreamingMessageDraftHandler? onStreamingDraft,
-  }) async {
-    final member = assignment.member;
-    final role = state.roles.firstWhere((item) => item.id == member.roleId);
-    final model = state.models.firstWhere((item) => item.id == member.modelId);
-    ensureModelReady(member: member, model: model);
-    cancellation?.throwIfCancelled();
-    return _messageRunner.runVisibleMessage(
-      workingState: workingState,
-      conversation: conversation,
-      messages: visibleMessages,
-      authorName: member.name,
-      memberId: member.id,
-      model: model,
-      systemPrompt: role.renderSystemPrompt(
-        memberName: member.name,
-        teamName: team.name,
-      ),
-      requestMessages: [
-        ...messages,
-        ChatMessage(
-          id: orchestrationId('msg-assignment'),
-          authorName: '秘书',
-          content: '任务分配：${assignment.instruction}',
-          createdAt: DateTime.now(),
-          isUser: true,
-        ),
-      ],
-      cancellation: cancellation,
-      onProgress: onProgress,
-      onStreamingDraft: onStreamingDraft,
-    );
-  }
-
-  TeamMember? _findReplacementMember({
-    required AppState state,
-    required Team team,
-    required TeamMember failedMember,
-    required Set<String> executedMemberIds,
-  }) {
-    final candidates = state.members
-        .where(
-          (member) =>
-              team.memberIds.contains(member.id) &&
-              member.id != failedMember.id &&
-              !member.isSecretary &&
-              member.roleId == failedMember.roleId,
-        )
-        .toList();
-    if (candidates.isEmpty) {
-      return null;
-    }
-    candidates.sort((a, b) {
-      final priority = b.executionPriority.compareTo(a.executionPriority);
-      if (priority != 0) {
-        return priority;
-      }
-      final aExecuted = executedMemberIds.contains(a.id);
-      final bExecuted = executedMemberIds.contains(b.id);
-      if (aExecuted != bExecuted) {
-        return aExecuted ? 1 : -1;
-      }
-      return team.memberIds
-          .indexOf(a.id)
-          .compareTo(team.memberIds.indexOf(b.id));
-    });
-    return candidates.first;
   }
 
   Future<AppState> dispatchMemberChat(
@@ -876,7 +665,7 @@ class TeamOrchestrator {
       );
 
       try {
-        final result = await _runAssignment(
+        final result = await _assignmentRunner.run(
           state: workingState,
           workingState: workingState,
           conversation: targetConversation,

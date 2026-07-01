@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-06-29T15:49:46.541Z",
-  "updatedAt": "2026-07-01T13:53:40.825Z",
+  "updatedAt": "2026-07-01T14:12:40.350Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -61,11 +61,13 @@
       "id": "G005-refine-orchestration-boundaries",
       "title": "Refine orchestration boundaries",
       "objective": "Refactor remaining TeamOrchestrator responsibilities by extracting secretary summary, assignment recovery, member dispatch, command continuation, and audit/private dispatch policy where doing so reduces mixed workflow logic; preserve serial/parallel assignment, reassignment, private secretary dispatch, command continuation, diagnostics, and audit behavior with focused tests.",
-      "status": "pending",
-      "attempt": 0,
+      "status": "complete",
+      "attempt": 1,
       "createdAt": "2026-07-01T13:05:43.901Z",
-      "updatedAt": "2026-07-01T13:05:43.901Z",
-      "evidence": "Recovery plan G3 identifies TeamOrchestrator as still near 1000 lines after the first runner extraction."
+      "updatedAt": "2026-07-01T14:12:40.350Z",
+      "evidence": "Split orchestration subflows: added AssignmentRunner and SecretarySummaryRunner, exported focused orchestration modules, and replaced TeamOrchestrator private assignment retry/reassignment and summary methods with runner delegation. TeamOrchestrator reduced to 754 lines. Added assignment runner tests. Verified /Users/swcrbt/develop/flutter/bin/flutter test test/core/orchestration test/core/domain and /Users/swcrbt/develop/flutter/bin/flutter analyze.",
+      "startedAt": "2026-07-01T14:04:19.372Z",
+      "completedAt": "2026-07-01T14:12:40.350Z"
     },
     {
       "id": "G006-split-dialogs-and-ui-flow-tests",
