@@ -62,3 +62,20 @@ audit:
 - Dialog, UI workflow, and domain compatibility test blockers were resolved by
   the focused UI/dialog and domain-test split commits recorded in
   `.omx/ultragoal/ledger.jsonl`.
+
+## Post-Completion Goal Status Note
+
+After the final checkpoint, `omx ultragoal status` reports `artifact goals:
+complete` and `artifactComplete: true`. The raw microgoal count still includes
+two historical states:
+
+- `G001` remains `in_progress` because the original objective-mismatched story
+  is preserved as audit history; it has `steeringStatus: superseded` and is
+  replaced by completed `G009`.
+- `G008` remains `review_blocked` because the first final review was
+  intentionally recorded as a failed gate; completed `G010` is the blocker
+  resolution story with the final `APPROVE` and `CLEAR` evidence.
+
+`get_goal` returning no active Codex goal is expected after `update_goal` marks
+the aggregate Codex goal complete. The final `G010` ledger entry contains the
+completed Codex goal snapshot and quality-gate evidence.
