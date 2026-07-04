@@ -54,7 +54,7 @@ void main() {
               (container.decoration! as BoxDecoration).border != null,
         );
     final messageBubbleDecoration = messageBubble.decoration! as BoxDecoration;
-    expect(messageBubbleDecoration.borderRadius, BorderRadius.zero);
+    expect(messageBubbleDecoration.borderRadius, BorderRadius.circular(8));
     final messageRegion = tester.widget<MouseRegion>(
       find
           .ancestor(
@@ -133,7 +133,7 @@ void main() {
             return false;
           }
           final decoration = widget.decoration;
-          return widget.constraints?.maxWidth == 680 &&
+          return widget.constraints?.maxWidth == 760 &&
               widget.padding == const EdgeInsets.all(14) &&
               decoration is BoxDecoration &&
               decoration.color == Colors.white;
@@ -528,7 +528,7 @@ print("safe");
           return false;
         }
         final decoration = widget.decoration;
-        return widget.constraints?.maxWidth == 680 &&
+        return widget.constraints?.maxWidth == 760 &&
             widget.padding == const EdgeInsets.all(14) &&
             decoration is BoxDecoration &&
             decoration.color == Colors.white;

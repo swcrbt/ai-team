@@ -74,13 +74,18 @@ void main() {
       AiTeamApp(initialState: state, modelGateway: FakeModelGateway()),
     );
 
-    expect(find.text('补丁确认'), findsOneWidget);
-    expect(find.textContaining('+new docs'), findsOneWidget);
+    expect(find.text('Diff review · 补丁确认'), findsOneWidget);
+    expect(find.text('+1 -1'), findsOneWidget);
+    expect(find.text('确认应用'), findsOneWidget);
+    expect(find.text('new docs'), findsOneWidget);
 
-    await tester.tap(find.widgetWithText(OutlinedButton, '拒绝'));
+    final rejectButton = find.widgetWithText(OutlinedButton, '拒绝');
+    await tester.ensureVisible(rejectButton);
+    await tester.pumpAndSettle();
+    await tester.tap(rejectButton);
     await tester.pumpAndSettle();
 
-    expect(find.text('补丁确认'), findsNothing);
+    expect(find.text('Diff review · 补丁确认'), findsNothing);
   });
 
   testWidgets('chat workspace shows scoped pending command requests', (

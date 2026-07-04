@@ -122,7 +122,7 @@ class _MessageBubbleState extends State<MessageBubble> {
     final thinkingSection = thinkingContent == null
         ? null
         : ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 680),
+            constraints: const BoxConstraints(maxWidth: 760),
             child: _MessageThinkingDisclosure(
               partitionKey: message.id,
               content: thinkingContent,
@@ -139,14 +139,14 @@ class _MessageBubbleState extends State<MessageBubble> {
             ),
           );
     final bubble = Container(
-      constraints: const BoxConstraints(maxWidth: 680),
+      constraints: const BoxConstraints(maxWidth: 760),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: alignRight ? const Color(0xFFE8F1FF) : Colors.white,
         border: Border.all(
           color: alignRight ? const Color(0xFFCFE0FF) : const Color(0xFFE5E7EB),
         ),
-        borderRadius: BorderRadius.zero,
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -279,7 +279,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                 radius: 18,
                 backgroundColor: Color(0xFF2563EB),
                 child: Text(
-                  '我',
+                  '你',
                   style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
@@ -649,64 +649,100 @@ class _MessageThinkingDisclosure extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        InkWell(
-          onTap: onToggle,
-          borderRadius: BorderRadius.circular(4),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Icon(
-                  expanded
-                      ? Icons.keyboard_arrow_down_rounded
-                      : Icons.keyboard_arrow_right_rounded,
-                  size: 20,
-                  color: Colors.grey.shade600,
-                ),
-              ],
-            ),
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFFEFF6FF), Color(0xFFFAFCFF)],
           ),
+          border: Border.all(color: const Color(0xFFBFDBFE)),
+          borderRadius: BorderRadius.circular(6),
         ),
-        if (expanded) ...[
-          const SizedBox(height: 4),
-          const Divider(height: 1, thickness: 1, color: Color(0xFFE5E7EB)),
-          const SizedBox(height: 8),
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 240),
-            child: SingleChildScrollView(
-              child: streaming
-                  ? _StreamingPartitionedText(
-                      key: ValueKey('streaming-thinking-$partitionKey'),
-                      partitionKey: partitionKey,
-                      content: content,
-                      diagnostics: diagnostics,
-                      isThinking: true,
-                    )
-                  : SelectableText(
-                      content,
-                      style: TextStyle(
-                        color: Colors.grey.shade700,
-                        height: 1.45,
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            InkWell(
+              onTap: onToggle,
+              child: Container(
+                constraints: const BoxConstraints(minHeight: 32),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  border: expanded
+                      ? const Border(
+                          bottom: BorderSide(color: Color(0xFFDBEAFE)),
+                        )
+                      : null,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF1D4ED8),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
                     ),
+                    const Text(
+                      'provider returned',
+                      style: TextStyle(
+                        color: Color(0xFF64748B),
+                        fontFamily: 'monospace',
+                        fontSize: 11,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Icon(
+                      expanded
+                          ? Icons.keyboard_arrow_down_rounded
+                          : Icons.keyboard_arrow_right_rounded,
+                      size: 20,
+                      color: const Color(0xFF1D4ED8),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
-        ],
-      ],
+            if (expanded)
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 240),
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 9,
+                  ),
+                  child: streaming
+                      ? _StreamingPartitionedText(
+                          key: ValueKey('streaming-thinking-$partitionKey'),
+                          partitionKey: partitionKey,
+                          content: content,
+                          diagnostics: diagnostics,
+                          isThinking: true,
+                        )
+                      : SelectableText(
+                          content,
+                          style: const TextStyle(
+                            color: Color(0xFF334155),
+                            height: 1.45,
+                          ),
+                        ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
