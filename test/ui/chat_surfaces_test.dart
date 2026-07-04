@@ -157,9 +157,12 @@ void main() {
 
     expect(find.text('会话安全状态'), findsOneWidget);
     expect(find.text('成员状态'), findsOneWidget);
+    expect(find.text('3 名'), findsWidgets);
     expect(find.text('命令审批'), findsOneWidget);
     expect(find.text('补丁确认'), findsWidgets);
     expect(find.text('审计摘要'), findsOneWidget);
+    expect(find.text('最新'), findsOneWidget);
+    expect(find.text('newest'), findsNothing);
     expect(find.textContaining('1 条等待确认'), findsOneWidget);
     expect(find.textContaining('1 个补丁等待确认'), findsOneWidget);
   });

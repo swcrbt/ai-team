@@ -1023,7 +1023,7 @@ class _SafetyStatusDrawer extends StatelessWidget {
                   _SafetyLine(
                     label: '成员状态',
                     value: members.map((member) => member.name).join('、'),
-                    badge: '${members.length}',
+                    badge: '${members.length} 名',
                     color: const Color(0xFF047857),
                   ),
                   _SafetyLine(
@@ -1057,7 +1057,7 @@ class _SafetyStatusDrawer extends StatelessWidget {
                     value: latestAudit == null
                         ? '暂无审计记录'
                         : '${latestAudit.action} · ${messageTimeText(latestAudit.createdAt)}',
-                    badge: 'newest',
+                    badge: '最新',
                     color: const Color(0xFF475569),
                   ),
                 ],
