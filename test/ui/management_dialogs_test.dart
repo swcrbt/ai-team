@@ -927,7 +927,8 @@ void main() {
           originalContent: 'old',
           proposedContent: 'new',
           memberName: '前端工程师',
-          diff: '--- lib/ui/chat_view.dart\n'
+          diff:
+              '--- lib/ui/chat_view.dart\n'
               '+++ lib/ui/chat_view.dart\n'
               '@@\n'
               '-old composer\n'
@@ -979,5 +980,23 @@ void main() {
     expect(find.textContaining('fixed composer'), findsWidgets);
     await tester.tap(find.text('关闭'));
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('project patch empty state uses localized copy', (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('项目'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('补丁确认'), findsOneWidget);
+    expect(find.text('0 待确认'), findsOneWidget);
+    expect(find.text('0 pending'), findsNothing);
+    expect(find.text('暂无待确认补丁'), findsOneWidget);
+    expect(find.text('模型生成的 Diff 会先停在这里等待确认。'), findsOneWidget);
   });
 }

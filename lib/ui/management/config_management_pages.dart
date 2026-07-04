@@ -505,9 +505,9 @@ class _TeamObjectCard extends StatelessWidget {
                       onPressed: controller.state.teams.length <= 1
                           ? null
                           : () => runConfigAction(
-                                context,
-                                () => controller.deleteTeam(team.id),
-                              ),
+                              context,
+                              () => controller.deleteTeam(team.id),
+                            ),
                       icon: const Icon(Icons.delete_outline_rounded),
                     ),
                   ],
@@ -1237,14 +1237,16 @@ class _CommandApprovalPanel extends StatelessWidget {
     return _Panel(
       title: '命令审批',
       action: _ProjectStatusPill(
-        label: commandRequests.any(
-          (request) => request.status == CommandRequestStatus.pending,
-        )
+        label:
+            commandRequests.any(
+              (request) => request.status == CommandRequestStatus.pending,
+            )
             ? '等待确认'
             : '无待处理',
-        tone: commandRequests.any(
-          (request) => request.status == CommandRequestStatus.pending,
-        )
+        tone:
+            commandRequests.any(
+              (request) => request.status == CommandRequestStatus.pending,
+            )
             ? _ProjectTone.amber
             : _ProjectTone.green,
       ),
@@ -1261,15 +1263,15 @@ class _CommandApprovalPanel extends StatelessWidget {
                     request: request,
                     onAllow: request.status == CommandRequestStatus.pending
                         ? () => controller.updateCommandRequestStatus(
-                              request.id,
-                              CommandRequestStatus.approved,
-                            )
+                            request.id,
+                            CommandRequestStatus.approved,
+                          )
                         : null,
                     onBlock: request.status == CommandRequestStatus.pending
                         ? () => controller.updateCommandRequestStatus(
-                              request.id,
-                              CommandRequestStatus.denied,
-                            )
+                            request.id,
+                            CommandRequestStatus.denied,
+                          )
                         : null,
                   ),
               ],
@@ -1366,7 +1368,7 @@ class _PatchConfirmationPanel extends StatelessWidget {
       return const _Panel(
         title: '补丁确认',
         action: Text(
-          '0 pending',
+          '0 待确认',
           style: TextStyle(
             color: Color(0xFF64748B),
             fontFamily: 'monospace',
@@ -1377,7 +1379,7 @@ class _PatchConfirmationPanel extends StatelessWidget {
         child: _EmptyState(
           icon: Icons.difference_rounded,
           title: '暂无待确认补丁',
-          subtitle: '模型生成的 diff 会先停在这里等待确认。',
+          subtitle: '模型生成的 Diff 会先停在这里等待确认。',
         ),
       );
     }
@@ -1410,10 +1412,7 @@ class _PatchConfirmationPanel extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: _PatchMetric(
-                  value: stats.hunks.toString(),
-                  label: '片段',
-                ),
+                child: _PatchMetric(value: stats.hunks.toString(), label: '片段'),
               ),
             ],
           ),
@@ -1559,13 +1558,13 @@ class _ProjectDiffLine extends StatelessWidget {
     final background = added
         ? const Color(0xFFECFDF3)
         : deleted
-            ? const Color(0xFFFFF1F2)
-            : Colors.white;
+        ? const Color(0xFFFFF1F2)
+        : Colors.white;
     final foreground = added
         ? const Color(0xFF047857)
         : deleted
-            ? const Color(0xFFBE123C)
-            : const Color(0xFF64748B);
+        ? const Color(0xFFBE123C)
+        : const Color(0xFF64748B);
     return Container(
       constraints: const BoxConstraints(minHeight: 28),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -1722,10 +1721,7 @@ class _AuditSummaryPanel extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: _AuditKpi(
-                  value: modelCalls.length,
-                  label: '模型调用',
-                ),
+                child: _AuditKpi(value: modelCalls.length, label: '模型调用'),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -2057,8 +2053,8 @@ _ProjectDiffStats _projectDiffStats(String diff) {
     files: gitFileHeaders > 0
         ? gitFileHeaders
         : plusFileHeaders == 0
-            ? 1
-            : plusFileHeaders,
+        ? 1
+        : plusFileHeaders,
     hunks: hunks == 0 ? 1 : hunks,
   );
 }

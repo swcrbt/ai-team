@@ -29,11 +29,8 @@ class _ChatPatchConfirmationCardState extends State<ChatPatchConfirmationCard> {
     return _InteractionMessageShell(
       authorName: widget.patch.memberName,
       child: _InteractionCard(
-        title: 'Diff review · 补丁确认',
-        titleTrailing: const _StatusPill(
-          label: '待确认',
-          tone: _StatusTone.amber,
-        ),
+        title: 'Diff 审阅 · 补丁确认',
+        titleTrailing: const _StatusPill(label: '待确认', tone: _StatusTone.amber),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -86,7 +83,7 @@ class _ChatPatchConfirmationCardState extends State<ChatPatchConfirmationCard> {
                           ? Icons.unfold_less_rounded
                           : Icons.unfold_more_rounded,
                     ),
-                    label: Text(expanded ? '收起 diff' : '展开 diff'),
+                    label: Text(expanded ? '收起 Diff' : '展开 Diff'),
                   ),
                   OutlinedButton.icon(
                     onPressed: widget.onReject,
@@ -313,8 +310,8 @@ class _DiffLine extends StatelessWidget {
     final type = line.startsWith('+') && !line.startsWith('+++')
         ? _DiffLineType.added
         : line.startsWith('-') && !line.startsWith('---')
-            ? _DiffLineType.deleted
-            : _DiffLineType.neutral;
+        ? _DiffLineType.deleted
+        : _DiffLineType.neutral;
     final background = switch (type) {
       _DiffLineType.added => const Color(0xFFECFDF3),
       _DiffLineType.deleted => const Color(0xFFFFF1F2),

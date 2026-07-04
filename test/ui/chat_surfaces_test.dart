@@ -76,7 +76,8 @@ void main() {
       AiTeamApp(initialState: state, modelGateway: FakeModelGateway()),
     );
 
-    expect(find.text('Diff review · 补丁确认'), findsOneWidget);
+    expect(find.text('Diff 审阅 · 补丁确认'), findsOneWidget);
+    expect(find.text('Diff review · 补丁确认'), findsNothing);
     expect(find.text('+1 -1'), findsOneWidget);
     expect(find.text('片段'), findsOneWidget);
     expect(find.text('hunks'), findsNothing);
@@ -89,7 +90,7 @@ void main() {
     await tester.tap(rejectButton);
     await tester.pumpAndSettle();
 
-    expect(find.text('Diff review · 补丁确认'), findsNothing);
+    expect(find.text('Diff 审阅 · 补丁确认'), findsNothing);
   });
 
   testWidgets('chat workspace shows scoped pending command requests', (
@@ -277,20 +278,21 @@ void main() {
           ChatMessageContentBlock.text('根目录已使用 42G'),
         ],
       );
-      final request = CommandRequest.pending(
-        id: 'command-df',
-        memberName: '秘书',
-        command: 'df -h /',
-        workingDirectory: '/',
-        decision: CommandDecision.allowed,
-        conversationId: 'conv-member-secretary',
-        memberId: 'member-secretary',
-        toolCallId: 'call-df',
-        messageId: 'msg-command-result',
-      ).copyWith(
-        status: CommandRequestStatus.executed,
-        output: 'Filesystem 42Gi /',
-      );
+      final request =
+          CommandRequest.pending(
+            id: 'command-df',
+            memberName: '秘书',
+            command: 'df -h /',
+            workingDirectory: '/',
+            decision: CommandDecision.allowed,
+            conversationId: 'conv-member-secretary',
+            memberId: 'member-secretary',
+            toolCallId: 'call-df',
+            messageId: 'msg-command-result',
+          ).copyWith(
+            status: CommandRequestStatus.executed,
+            output: 'Filesystem 42Gi /',
+          );
       final seed = AppState.seed();
       final conversation = seed.conversations.firstWhere(
         (conversation) => conversation.id == 'conv-member-secretary',
