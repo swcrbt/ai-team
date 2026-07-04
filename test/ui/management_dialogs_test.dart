@@ -693,6 +693,30 @@ void main() {
     expect(find.byTooltip('打开私聊'), findsWidgets);
   });
 
+  testWidgets('settings storage panel exposes directory actions', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('设置'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('持久化存储、导入导出和应用级配置'), findsOneWidget);
+    expect(find.text('本机配置、持久化目录和导入导出'), findsNothing);
+    expect(find.text('持久化存储目录'), findsOneWidget);
+    expect(find.text('用于 state、审计、会话与缓存；保存前会确认迁移。'), findsOneWidget);
+    expect(find.byTooltip('选择目录'), findsNWidgets(4));
+    expect(find.byTooltip('打开目录'), findsNWidgets(4));
+    expect(find.byTooltip('清空目录'), findsNWidgets(4));
+    expect(find.widgetWithText(OutlinedButton, '恢复默认'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, '保存目录'), findsOneWidget);
+  });
+
   testWidgets('management object lists drive the selected detail panel', (
     tester,
   ) async {

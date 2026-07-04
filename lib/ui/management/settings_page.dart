@@ -44,7 +44,7 @@ class SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     return ManagementPageFrame(
       title: '设置',
-      subtitle: '本机配置、持久化目录和导入导出',
+      subtitle: '持久化存储、导入导出和应用级配置',
       child: Column(
         children: [
           _StorageDirectoryPanel(
@@ -155,21 +155,14 @@ class _StorageDirectoryPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return _SettingsPanel(
       title: '持久化存储目录',
-      action: Wrap(
-        spacing: 8,
-        children: [
-          OutlinedButton(
-            onPressed: onDefaults,
-            child: const Text('恢复默认'),
-          ),
-          FilledButton(
-            onPressed: onSave,
-            child: const Text('保存目录'),
-          ),
-        ],
-      ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          const Text(
+            '用于 state、审计、会话与缓存；保存前会确认迁移。',
+            style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+          ),
+          const SizedBox(height: 10),
           _StorageDirectoryRow(
             label: '状态目录',
             description: 'state.json 和模型配置',
@@ -205,6 +198,26 @@ class _StorageDirectoryPanel extends StatelessWidget {
             onPick: onPick,
             onOpen: onOpen,
             onClear: onClear,
+          ),
+          const SizedBox(height: 4),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: onDefaults,
+                  icon: const Icon(Icons.restore_rounded, size: 17),
+                  label: const Text('恢复默认'),
+                ),
+                FilledButton.icon(
+                  onPressed: onSave,
+                  icon: const Icon(Icons.save_outlined, size: 17),
+                  label: const Text('保存目录'),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -272,22 +285,59 @@ class _StorageDirectoryRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          IconButton(
+          _DirectoryActionButton(
             tooltip: '选择目录',
             onPressed: () => onPick(kind),
-            icon: const Icon(Icons.folder_open_rounded),
+            icon: Icons.folder_open_rounded,
+            label: '选择',
           ),
-          IconButton(
+          _DirectoryActionButton(
             tooltip: '打开目录',
             onPressed: path.isEmpty ? null : () => onOpen(kind),
-            icon: const Icon(Icons.open_in_new_rounded),
+            icon: Icons.open_in_new_rounded,
+            label: '打开',
           ),
-          IconButton(
+          _DirectoryActionButton(
             tooltip: '清空目录',
             onPressed: () => onClear(kind),
-            icon: const Icon(Icons.backspace_outlined),
+            icon: Icons.backspace_outlined,
+            label: '清空',
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _DirectoryActionButton extends StatelessWidget {
+  const _DirectoryActionButton({
+    required this.tooltip,
+    required this.onPressed,
+    required this.icon,
+    required this.label,
+  });
+
+  final String tooltip;
+  final VoidCallback? onPressed;
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: TextButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 16),
+        label: Text(label),
+        style: TextButton.styleFrom(
+          visualDensity: VisualDensity.compact,
+          minimumSize: const Size(0, 34),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          foregroundColor: const Color(0xFF475569),
+          disabledForegroundColor: const Color(0xFF94A3B8),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        ),
       ),
     );
   }
