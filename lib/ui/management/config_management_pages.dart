@@ -1706,7 +1706,7 @@ class _AuditSummaryPanel extends StatelessWidget {
     return _Panel(
       title: '审计摘要',
       action: const Text(
-        'newest first',
+        '最新优先',
         style: TextStyle(
           color: Color(0xFF64748B),
           fontFamily: 'monospace',
@@ -1718,18 +1718,18 @@ class _AuditSummaryPanel extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: _AuditKpi(value: auditLog.length, label: 'events'),
+                child: _AuditKpi(value: auditLog.length, label: '事件'),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: _AuditKpi(
                   value: modelCalls.length,
-                  label: 'model calls',
+                  label: '模型调用',
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: _AuditKpi(value: blocked.length, label: 'blocked'),
+                child: _AuditKpi(value: blocked.length, label: '阻断'),
               ),
             ],
           ),

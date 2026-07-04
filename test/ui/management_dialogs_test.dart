@@ -950,6 +950,12 @@ void main() {
     expect(find.text('补丁确认'), findsOneWidget);
     expect(find.text('项目边界'), findsOneWidget);
     expect(find.text('审计摘要'), findsOneWidget);
+    expect(find.text('最新优先'), findsOneWidget);
+    expect(find.text('事件'), findsOneWidget);
+    expect(find.text('模型调用'), findsOneWidget);
+    expect(find.text('阻断'), findsWidgets);
+    expect(find.text('newest first'), findsNothing);
+    expect(find.text('model calls'), findsNothing);
     expect(find.text('等待确认'), findsWidgets);
     expect(find.widgetWithText(FilledButton, '允许'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, '阻断'), findsOneWidget);
