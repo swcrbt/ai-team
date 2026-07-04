@@ -192,7 +192,7 @@ class _StorageDirectoryPanel extends StatelessWidget {
           ),
           _StorageDirectoryRow(
             label: '缓存目录',
-            description: '临时响应和本地缓存',
+            description: '临时响应和缓存',
             path: directories.cacheDirectory,
             kind: _StorageDirectoryKind.cache,
             onPick: onPick,

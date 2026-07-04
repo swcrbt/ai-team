@@ -24,7 +24,7 @@ Future<void> showWorkspacePatchDialog(
     builder: (context) => StatefulBuilder(
       builder: (context, setDialogState) => ConfigDialog(
         title: '创建补丁提案',
-        subtitle: '从本地工作区读取文件并生成受控补丁提案。',
+        subtitle: '从项目中读取文件并生成受控补丁提案。',
         icon: Icons.difference_rounded,
         width: 580,
         body: Column(
@@ -37,7 +37,7 @@ Future<void> showWorkspacePatchDialog(
                 children: [
                   DropdownButtonFormField<String>(
                     initialValue: workspaceId,
-                    decoration: dialogInputDecoration('工作区'),
+                    decoration: dialogInputDecoration('项目'),
                     items: controller.state.workspaces
                         .map(
                           (workspace) => DropdownMenuItem(
@@ -75,9 +75,9 @@ Future<void> showWorkspacePatchDialog(
                 controller: proposedContent,
                 minLines: 8,
                 maxLines: 12,
-                decoration: dialogInputDecoration('目标文件内容').copyWith(
-                  alignLabelWithHint: true,
-                ),
+                decoration: dialogInputDecoration(
+                  '目标文件内容',
+                ).copyWith(alignLabelWithHint: true),
               ),
             ),
           ],
@@ -138,8 +138,8 @@ Future<void> showWorkspaceFilesDialog(
     context: context,
     builder: (context) => StatefulBuilder(
       builder: (context, setDialogState) => ConfigDialog(
-        title: '工作区文件',
-        subtitle: '浏览当前本地工作区中可用于读取和补丁提案的文件。',
+        title: '项目文件',
+        subtitle: '浏览当前项目中可用于读取和补丁提案的文件。',
         icon: Icons.folder_open_rounded,
         width: 580,
         body: SizedBox(
@@ -148,7 +148,7 @@ Future<void> showWorkspaceFilesDialog(
             children: [
               DropdownButtonFormField<String>(
                 initialValue: workspaceId,
-                decoration: dialogInputDecoration('工作区'),
+                decoration: dialogInputDecoration('项目'),
                 items: controller.state.workspaces
                     .map(
                       (workspace) => DropdownMenuItem(
@@ -159,8 +159,9 @@ Future<void> showWorkspaceFilesDialog(
                     .toList(),
                 onChanged: (value) => setDialogState(() {
                   workspaceId = value!;
-                  filesFuture =
-                      controller.listWorkspaceFiles(workspaceId: workspaceId);
+                  filesFuture = controller.listWorkspaceFiles(
+                    workspaceId: workspaceId,
+                  );
                 }),
               ),
               const SizedBox(height: 12),
@@ -188,10 +189,8 @@ Future<void> showWorkspaceFilesDialog(
                       }
                       return ListView.separated(
                         itemCount: files.length,
-                        separatorBuilder: (context, index) => const Divider(
-                          height: 1,
-                          color: Color(0xFFE5E7EB),
-                        ),
+                        separatorBuilder: (context, index) =>
+                            const Divider(height: 1, color: Color(0xFFE5E7EB)),
                         itemBuilder: (context, index) => ListTile(
                           dense: true,
                           leading: const Icon(Icons.description_rounded),
@@ -237,7 +236,7 @@ Future<void> showCommandDialog(
     builder: (context) => StatefulBuilder(
       builder: (context, setDialogState) => ConfigDialog(
         title: '创建命令请求',
-        subtitle: '为成员创建需要审批或执行的本地命令请求。',
+        subtitle: '为成员创建需要审批或执行的命令请求。',
         icon: Icons.terminal_rounded,
         body: DialogSection(
           title: '命令信息',
@@ -295,7 +294,7 @@ Future<void> showExportDialog(
     builder: (context) => StatefulBuilder(
       builder: (context, setDialogState) => ConfigDialog(
         title: '导入 / 导出配置',
-        subtitle: '管理本机配置文件，密钥导出需要明确确认。',
+        subtitle: '管理应用配置文件，密钥导出需要明确确认。',
         icon: Icons.ios_share_rounded,
         width: 560,
         body: Column(
@@ -313,7 +312,7 @@ Future<void> showExportDialog(
                   onChanged: (value) =>
                       setDialogState(() => includeSecrets = value!),
                   title: const Text('导出时包含 API Key'),
-                  subtitle: const Text('包含密钥的文件只适合本机迁移，请谨慎保存。'),
+                  subtitle: const Text('包含密钥的文件只适合受控迁移，请谨慎保存。'),
                   controlAffinity: ListTileControlAffinity.leading,
                 ),
               ),
@@ -337,7 +336,7 @@ Future<void> showExportDialog(
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  '导入会读取选择的 JSON 配置；导出会保存当前本机配置。',
+                  '导入会读取选择的 JSON 配置；导出会保存当前应用配置。',
                   style: TextStyle(color: Color(0xFF667085)),
                 ),
               ),

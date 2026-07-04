@@ -826,6 +826,29 @@ void main() {
     expect(find.text('包含密钥时必须在弹窗中显式确认。'), findsOneWidget);
   });
 
+  testWidgets('settings import export dialog uses app configuration copy', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('导入 / 导出配置'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('导入 / 导出配置'), findsOneWidget);
+    expect(find.text('管理应用配置文件，密钥导出需要明确确认。'), findsOneWidget);
+    expect(find.text('包含密钥的文件只适合受控迁移，请谨慎保存。'), findsOneWidget);
+    expect(find.text('导入会读取选择的 JSON 配置；导出会保存当前应用配置。'), findsOneWidget);
+    expect(find.textContaining('本机'), findsNothing);
+    expect(find.textContaining('本地'), findsNothing);
+  });
+
   testWidgets('management object lists drive the selected detail panel', (
     tester,
   ) async {
@@ -927,8 +950,7 @@ void main() {
           originalContent: 'old',
           proposedContent: 'new',
           memberName: '前端工程师',
-          diff:
-              '--- lib/ui/chat_view.dart\n'
+          diff: '--- lib/ui/chat_view.dart\n'
               '+++ lib/ui/chat_view.dart\n'
               '@@\n'
               '-old composer\n'
