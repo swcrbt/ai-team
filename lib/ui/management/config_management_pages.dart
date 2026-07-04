@@ -708,7 +708,7 @@ _TeamCardSpec _teamCardSpec(Team team) {
 String _providerLabel(ModelProfile model) {
   final baseUrl = model.baseUrl.toLowerCase();
   if (baseUrl.contains('localhost') || baseUrl.contains('127.0.0.1')) {
-    return '本地端点';
+    return '兼容端点';
   }
   return 'OpenAI-compatible';
 }

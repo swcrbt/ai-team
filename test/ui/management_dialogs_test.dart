@@ -891,6 +891,8 @@ void main() {
       find.byKey(const ValueKey('model-detail-model-local')),
       findsOneWidget,
     );
+    expect(find.text('本地端点'), findsNothing);
+    expect(find.text('兼容端点'), findsWidgets);
 
     await tester.tap(find.byTooltip('角色'));
     await tester.pumpAndSettle();
