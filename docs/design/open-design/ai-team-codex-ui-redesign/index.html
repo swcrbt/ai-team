@@ -171,7 +171,7 @@
     .session-top { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
     .session-meta { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-    .chat-pane { background: var(--workbench-bg); display: grid; grid-template-rows: 64px minmax(0, 1fr) 164px; position: relative; min-width: 0; min-height: 0; height: 960px; overflow: hidden; }
+    .chat-pane { background: var(--workbench-bg); display: grid; grid-template-rows: 64px minmax(0, 1fr) 142px; position: relative; min-width: 0; min-height: 0; height: 960px; overflow: hidden; }
     .chat-header { background: oklch(99% 0.002 250); }
     .header-left, .header-actions { display: flex; align-items: center; gap: 12px; min-width: 0; }
     .avatar-stack { display: flex; }
@@ -227,15 +227,12 @@
     .patch-metric { border: 1px solid var(--border); border-radius: var(--r6); padding: 8px; background: var(--surface); }
     .patch-metric strong { display: block; font-family: var(--font-mono); font-size: 16px; }
     .review-actions { padding: 10px; border-top: 1px solid var(--border); justify-content: space-between; }
-    .return-bottom { position: absolute; right: 22px; bottom: 178px; z-index: 3; height: 30px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--fg); display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 8px 20px oklch(20% 0.012 250 / 10%); }
-    .composer { border-top: 1px solid var(--border); background: oklch(99% 0.002 250); padding: 14px 18px 16px; display: grid; grid-template-rows: 1fr 34px; gap: 10px; }
-    .composer-box { border: 1px solid var(--border-strong); border-radius: var(--r8); background: var(--surface); padding: 10px 104px 44px 12px; min-height: 86px; position: relative; }
+    .return-bottom { position: absolute; right: 22px; bottom: 156px; z-index: 3; height: 30px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--fg); display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 8px 20px oklch(20% 0.012 250 / 10%); }
+    .composer { border-top: 1px solid var(--border); background: oklch(99% 0.002 250); padding: 14px 18px 16px; display: block; }
+    .composer-box { border: 1px solid var(--border-strong); border-radius: var(--r8); background: var(--surface); padding: 10px 202px 52px 12px; min-height: 112px; position: relative; }
     .composer-text { color: var(--fg); min-height: 42px; }
-    .composer-foot { min-height: 34px; display: flex; align-items: center; justify-content: space-between; color: var(--muted); }
-    .composer-channel { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
-    .composer-tools { display: flex; gap: 8px; align-items: center; }
     .send-btn { position: absolute; right: 10px; bottom: 10px; height: 32px; min-width: 76px; border: 0; border-radius: var(--r6); background: var(--blue); color: white; font-weight: 720; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
-    .token-widget { position: relative; display: inline-flex; align-items: center; gap: 8px; min-width: 86px; justify-content: flex-end; }
+    .token-widget { position: absolute; right: 96px; bottom: 8px; height: 36px; display: inline-flex; align-items: center; gap: 8px; min-width: 96px; justify-content: flex-end; }
     .token-ring { --percent: 39; width: 34px; height: 34px; border-radius: 50%; background: conic-gradient(var(--blue) calc(var(--percent) * 1%), var(--surface-2) 0); display: grid; place-items: center; position: relative; border: 1px solid var(--border); }
     .token-ring::after { content: ""; position: absolute; inset: 5px; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); }
     .token-ring span { position: relative; z-index: 1; font: 10px var(--font-mono); color: var(--fg); }
@@ -298,6 +295,25 @@
     .team-management-row.active { background: var(--blue-soft); }
     .team-name { min-width: 0; display: grid; gap: 3px; }
     .team-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .manager-layout { padding: 12px; min-height: 0; display: grid; grid-template-columns: 1.18fr 0.82fr; gap: 12px; overflow: hidden; }
+    .manager-layout.three { grid-template-columns: 1fr 1fr 1fr; }
+    .manager-panel { border: 1px solid var(--border); border-radius: var(--r6); background: oklch(99% 0.002 250); overflow: hidden; display: grid; grid-template-rows: 34px 1fr; min-width: 0; }
+    .manager-panel > header { padding: 0 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .manager-body { padding: 10px; display: grid; gap: 8px; align-content: start; min-height: 0; overflow: hidden; }
+    .manager-table { border: 1px solid var(--border); border-radius: var(--r6); overflow: hidden; background: var(--surface); }
+    .manager-row { min-height: 38px; padding: 8px 10px; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: 1.1fr 0.8fr 0.9fr auto; gap: 10px; align-items: center; }
+    .manager-row:last-child { border-bottom: 0; }
+    .manager-row.head { min-height: 30px; background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 680; }
+    .manager-row.active { background: var(--blue-soft); }
+    .manager-row > * { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .manager-field { min-height: 34px; border: 1px solid var(--border); border-radius: var(--r6); padding: 7px 9px; display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--surface); }
+    .manager-field > :last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .slot-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+    .slot-card { min-height: 64px; border: 1px solid var(--border); border-radius: var(--r6); background: var(--surface); padding: 8px; display: grid; gap: 4px; }
+    .permission-grid { border: 1px solid var(--border); border-radius: var(--r6); overflow: hidden; background: var(--surface); }
+    .permission-row { min-height: 32px; padding: 0 9px; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+    .permission-row:last-child { border-bottom: 0; }
+    .prompt-preview { min-height: 136px; border: 1px solid var(--border); border-radius: var(--r6); background: var(--surface); padding: 10px; font-family: var(--font-mono); font-size: 12px; color: oklch(34% 0.02 250); overflow: hidden; }
     .route-board { padding: 22px; display: grid; grid-template-rows: 54px 1fr; gap: 16px; background: var(--workbench-bg); }
     .route-board > header { display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border); border-radius: var(--r8); background: var(--surface); padding: 0 16px; }
     .route-board h3 { margin: 0; font-size: 16px; }
@@ -470,8 +486,11 @@
             </div>
           </div>
           <footer class="composer" data-od-id="fixed-bottom-composer">
-            <div class="composer-box"><div class="composer-text">让 Reviewer Lin 再看一遍补丁摘要，并把命令审批留在安全状态抽屉里。</div><button class="send-btn"><svg class="icon"><use href="#i-send"/></svg>发送</button></div>
-            <div class="composer-foot"><span class="composer-channel">当前会话 · Team Desk</span><div class="composer-tools"><div class="token-widget" data-od-id="context-token-meter"><div class="token-popover"><div class="token-popover-row"><strong>上下文</strong><span class="mono">12.4k / 32k</span></div><div class="token-bar"><span></span></div><div class="token-popover-row"><span>输入 tokens</span><strong class="mono">8.2k</strong></div><div class="token-popover-row"><span>输出 tokens</span><strong class="mono">4.2k</strong></div><div class="token-popover-row"><span>命中缓存</span><strong class="mono">3.6k</strong></div></div><div class="token-ring" style="--percent: 39"><span>39%</span></div><div class="token-label"><strong>12.4k</strong><span>tokens</span></div></div><span class="status green"><span class="dot"></span>safe</span></div></div>
+            <div class="composer-box">
+              <div class="composer-text">让 Reviewer Lin 再看一遍补丁摘要，并把命令审批留在安全状态抽屉里。</div>
+              <div class="token-widget" data-od-id="context-token-meter"><div class="token-popover"><div class="token-popover-row"><strong>上下文</strong><span class="mono">12.4k / 32k</span></div><div class="token-bar"><span></span></div><div class="token-popover-row"><span>输入 tokens</span><strong class="mono">8.2k</strong></div><div class="token-popover-row"><span>输出 tokens</span><strong class="mono">4.2k</strong></div><div class="token-popover-row"><span>命中缓存</span><strong class="mono">3.6k</strong></div></div><div class="token-ring" style="--percent: 39"><span>39%</span></div><div class="token-label"><strong>12.4k</strong><span>tokens</span></div></div>
+              <button class="send-btn"><svg class="icon"><use href="#i-send"/></svg>发送</button>
+            </div>
           </footer>
         </section>
       </div></div>
@@ -513,8 +532,11 @@
           </div>
           <button class="return-bottom"><svg class="icon"><use href="#i-chevron"/></svg>回到底部</button>
           <footer class="composer" data-od-id="private-fixed-bottom-composer">
-            <div class="composer-box"><div class="composer-text">这里是给 Lin 的私聊回复，发送动作固定在输入框右下角。</div><button class="send-btn"><svg class="icon"><use href="#i-send"/></svg>发送</button></div>
-            <div class="composer-foot"><span class="composer-channel">当前会话 · 私聊 / Reviewer Lin</span><div class="composer-tools"><div class="token-widget" data-od-id="private-context-token-meter"><div class="token-popover"><div class="token-popover-row"><strong>上下文</strong><span class="mono">4.8k / 32k</span></div><div class="token-bar"><span style="width:15%"></span></div><div class="token-popover-row"><span>输入 tokens</span><strong class="mono">3.1k</strong></div><div class="token-popover-row"><span>输出 tokens</span><strong class="mono">1.7k</strong></div><div class="token-popover-row"><span>命中缓存</span><strong class="mono">0.8k</strong></div></div><div class="token-ring" style="--percent: 15"><span>15%</span></div><div class="token-label"><strong>4.8k</strong><span>tokens</span></div></div><span class="status green"><span class="dot"></span>safe</span></div></div>
+            <div class="composer-box">
+              <div class="composer-text">这里是给 Lin 的私聊回复，发送动作固定在输入框右下角。</div>
+              <div class="token-widget" data-od-id="private-context-token-meter"><div class="token-popover"><div class="token-popover-row"><strong>上下文</strong><span class="mono">4.8k / 32k</span></div><div class="token-bar"><span style="width:15%"></span></div><div class="token-popover-row"><span>输入 tokens</span><strong class="mono">3.1k</strong></div><div class="token-popover-row"><span>输出 tokens</span><strong class="mono">1.7k</strong></div><div class="token-popover-row"><span>命中缓存</span><strong class="mono">0.8k</strong></div></div><div class="token-ring" style="--percent: 15"><span>15%</span></div><div class="token-label"><strong>4.8k</strong><span>tokens</span></div></div>
+              <button class="send-btn"><svg class="icon"><use href="#i-send"/></svg>发送</button>
+            </div>
           </footer>
         </section>
       </div></div>
@@ -563,7 +585,7 @@
     </section>
 
     <section data-od-id="management-detail-board">
-      <div class="board-label"><h2>团队管理详图</h2><span>team collection page only</span></div>
+      <div class="board-label"><h2>团队管理详图</h2><span>team collection page</span></div>
       <div class="board-scroll"><div class="artboard management-detail">
         <nav class="wide-nav" data-od-id="detail-main-sidebar">
           <div class="wide-brand"><div class="wide-logo">ai</div><span>ai-team</span></div>
@@ -577,17 +599,171 @@
             <div class="wide-nav-item"><svg class="icon"><use href="#i-audit"/></svg><span>审计</span></div>
             <div class="wide-nav-item"><svg class="icon"><use href="#i-settings"/></svg><span>设置</span></div>
           </div>
-          <div class="caption">当前页：团队集合管理</div>
+          <div class="caption">当前页：团队管理</div>
         </nav>
         <section class="detail-main" data-od-id="team-management-page">
-          <header class="admin-header"><h3>团队管理 · 团体集合</h3><div class="header-actions"><span class="status blue"><span class="dot"></span>3 groups</span><button class="primary-btn">保存更改</button></div></header>
+          <header class="admin-header"><h3>团队管理</h3><div class="header-actions"><span class="status blue"><span class="dot"></span>3 个团队</span><button class="primary-btn">新建团队</button></div></header>
           <div class="detail-content">
             <article class="detail-page" data-od-id="team-settings-detail">
-              <header><h3><span class="mono">01</span><svg class="icon"><use href="#i-team"/></svg>团队</h3><button class="primary-btn">新建团体</button></header>
-              <div class="setting-stack">
-                <section class="setting-group"><header><strong>团体列表</strong><span class="caption">3 groups</span></header><div class="team-management-row active"><div class="team-name"><strong>Core Review</strong><span class="caption">Kai, Lin, Secretary · 串行审阅</span></div><span class="status green"><span class="dot"></span>启用</span></div><div class="team-management-row"><div class="team-name"><strong>Bug Bash</strong><span class="caption">Runner, Reviewer · 并行排查</span></div><span class="status blue"><span class="dot"></span>模板</span></div><div class="team-management-row"><div class="team-name"><strong>Release Gate</strong><span class="caption">Architect, QA, Secretary · 发布检查</span></div><span class="status amber"><span class="dot"></span>草稿</span></div></section>
-                <section class="setting-group"><header><strong>团体操作</strong><span class="caption">collection</span></header><div class="setting-row"><span>创建方式</span><strong>空白 / 从模板</strong></div><div class="setting-row"><span>批量操作</span><strong>复制 · 停用 · 归档</strong></div><div class="setting-row"><span>排序</span><strong>最近使用优先</strong></div></section>
-                <section class="setting-group"><header><strong>选中团体摘要</strong><button class="ghost-btn">编辑成员</button></header><div class="setting-row"><span>成员数</span><strong>3 members</strong></div><div class="setting-row"><span>默认秘书</span><strong>Secretary</strong></div><div class="setting-row"><span>可见范围</span><strong>共享 prior chat</strong></div></section>
+              <header><h3><svg class="icon"><use href="#i-team"/></svg>团队对象</h3><div class="command-actions"><button class="ghost-btn">复制</button><button class="ghost-btn">停用</button><button class="primary-btn">保存</button></div></header>
+              <div class="manager-layout">
+                <section class="manager-panel">
+                  <header><strong>团队列表</strong><span class="caption">按最近使用排序</span></header>
+                  <div class="manager-body">
+                    <div class="manager-table">
+                      <div class="manager-row head"><span>团队</span><span>协作模式</span><span>成员</span><span>状态</span></div>
+                      <div class="manager-row active"><strong>Core Review</strong><span>串行审阅</span><span>Kai, Lin, Sec</span><span class="status green"><span class="dot"></span>启用</span></div>
+                      <div class="manager-row"><strong>Bug Bash</strong><span>并行排查</span><span>Runner, QA</span><span class="status blue"><span class="dot"></span>模板</span></div>
+                      <div class="manager-row"><strong>Release Gate</strong><span>发布检查</span><span>Architect, QA, Sec</span><span class="status amber"><span class="dot"></span>草稿</span></div>
+                      <div class="manager-row"><strong>Docs Sweep</strong><span>顺序汇总</span><span>Writer, Reviewer</span><span class="status green"><span class="dot"></span>启用</span></div>
+                    </div>
+                    <div class="manager-field"><span>默认打开</span><strong>上次使用团队</strong></div>
+                    <div class="manager-field"><span>批量管理</span><strong>复制 · 归档 · 设为模板</strong></div>
+                  </div>
+                </section>
+                <section class="manager-panel">
+                  <header><strong>Core Review 详情</strong><button class="ghost-btn">编辑团队</button></header>
+                  <div class="manager-body">
+                    <div class="manager-field"><span>团队名称</span><strong>Core Review</strong></div>
+                    <div class="manager-field"><span>协作策略</span><strong>串行审阅</strong></div>
+                    <div class="manager-field"><span>默认秘书</span><strong>Secretary</strong></div>
+                    <div class="slot-grid">
+                      <div class="slot-card"><strong>Kai</strong><span class="caption">架构师 · 首轮方案</span></div>
+                      <div class="slot-card"><strong>Lin</strong><span class="caption">Reviewer · 补丁审阅</span></div>
+                      <div class="slot-card"><strong>Secretary</strong><span class="caption">汇总 · 转发私聊</span></div>
+                      <div class="slot-card"><strong>空位</strong><span class="caption">可拖入成员</span></div>
+                    </div>
+                    <div class="permission-grid">
+                      <div class="permission-row"><span>共享群聊上下文</span><strong>开启</strong></div>
+                      <div class="permission-row"><span>命令执行</span><strong>需用户确认</strong></div>
+                      <div class="permission-row"><span>补丁应用</span><strong>需确认</strong></div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </article>
+          </div>
+        </section>
+      </div></div>
+    </section>
+
+    <section data-od-id="model-management-board">
+      <div class="board-label"><h2>模型管理页</h2><span>dedicated sidebar destination after team management</span></div>
+      <div class="board-scroll"><div class="artboard management-detail">
+        <nav class="wide-nav" data-od-id="model-management-sidebar">
+          <div class="wide-brand"><div class="wide-logo">ai</div><span>ai-team</span></div>
+          <div class="wide-nav-list">
+            <div class="wide-nav-item"><svg class="icon"><use href="#i-chat"/></svg><span>消息</span></div>
+            <div class="wide-nav-item"><svg class="icon"><use href="#i-team"/></svg><span>团队</span></div>
+            <div class="wide-nav-item active"><svg class="icon"><use href="#i-model"/></svg><span>模型</span></div>
+            <div class="wide-nav-item"><svg class="icon"><use href="#i-role"/></svg><span>角色</span></div>
+            <div class="wide-nav-item"><svg class="icon"><use href="#i-member"/></svg><span>成员</span></div>
+            <div class="wide-nav-item"><svg class="icon"><use href="#i-project"/></svg><span>项目</span></div>
+            <div class="wide-nav-item"><svg class="icon"><use href="#i-audit"/></svg><span>审计</span></div>
+            <div class="wide-nav-item"><svg class="icon"><use href="#i-settings"/></svg><span>设置</span></div>
+          </div>
+          <div class="caption">当前页：模型管理</div>
+        </nav>
+        <section class="detail-main" data-od-id="model-management-page">
+          <header class="admin-header"><h3>模型管理</h3><div class="header-actions"><span class="status green"><span class="dot"></span>2 个可用</span><button class="primary-btn">新增模型</button></div></header>
+          <div class="detail-content">
+            <article class="detail-page">
+              <header><h3><svg class="icon"><use href="#i-model"/></svg>模型配置</h3><div class="command-actions"><button class="ghost-btn">测试连接</button><button class="primary-btn">保存</button></div></header>
+              <div class="manager-layout three">
+                <section class="manager-panel"><header><strong>Profile 列表</strong><span class="caption">provider + model</span></header><div class="manager-body"><div class="manager-table"><div class="manager-row head"><span>名称</span><span>Provider</span><span>模型名</span><span>状态</span></div><div class="manager-row active"><strong>Codex 主模型</strong><span>OpenAI</span><span>gpt-5-codex</span><span class="status green"><span class="dot"></span>ready</span></div><div class="manager-row"><strong>Fast Review</strong><span>兼容端点</span><span>review-fast</span><span class="status blue"><span class="dot"></span>备用</span></div><div class="manager-row"><strong>Local Draft</strong><span>本地</span><span>draft-large</span><span class="status amber"><span class="dot"></span>未测</span></div></div></div></section>
+                <section class="manager-panel"><header><strong>连接设置</strong><span class="caption">不显示密钥明文</span></header><div class="manager-body"><div class="manager-field"><span>API 类型</span><strong>OpenAI-compatible</strong></div><div class="manager-field"><span>Base URL</span><span class="mono">https://api.example.com/v1</span></div><div class="manager-field"><span>Stream</span><strong>开启</strong></div><div class="manager-field"><span>超时</span><strong>90s</strong></div><div class="permission-grid"><div class="permission-row"><span>工具调用</span><strong>开启</strong></div><div class="permission-row"><span>返回思考区</span><strong>仅真实字段</strong></div><div class="permission-row"><span>审计诊断</span><strong>写入</strong></div></div></div></section>
+                <section class="manager-panel"><header><strong>预算与诊断</strong><button class="ghost-btn">查看日志</button></header><div class="manager-body"><div class="manager-field"><span>上下文上限</span><strong class="mono">32k</strong></div><div class="manager-field"><span>默认输出</span><strong class="mono">4k</strong></div><div class="manager-field"><span>缓存命中</span><strong>单次显示</strong></div><div class="manager-table"><div class="manager-row head"><span>检查项</span><span>值</span><span>来源</span><span>结果</span></div><div class="manager-row"><strong>latency</strong><span>842ms</span><span>probe</span><span class="status green"><span class="dot"></span>pass</span></div><div class="manager-row"><strong>finish</strong><span>stop</span><span>last call</span><span class="status green"><span class="dot"></span>ok</span></div></div></div></section>
+              </div>
+            </article>
+          </div>
+        </section>
+      </div></div>
+    </section>
+
+    <section data-od-id="role-management-board">
+      <div class="board-label"><h2>角色管理页</h2><span>role prompts, permissions, output policy</span></div>
+      <div class="board-scroll"><div class="artboard management-detail">
+        <nav class="wide-nav" data-od-id="role-management-sidebar">
+          <div class="wide-brand"><div class="wide-logo">ai</div><span>ai-team</span></div>
+          <div class="wide-nav-list">
+            <div class="wide-nav-item"><svg class="icon"><use href="#i-chat"/></svg><span>消息</span></div>
+            <div class="wide-nav-item"><svg class="icon"><use href="#i-team"/></svg><span>团队</span></div>
+            <div class="wide-nav-item"><svg class="icon"><use href="#i-model"/></svg><span>模型</span></div>
+            <div class="wide-nav-item active"><svg class="icon"><use href="#i-role"/></svg><span>角色</span></div>
+            <div class="wide-nav-item"><svg class="icon"><use href="#i-member"/></svg><span>成员</span></div>
+            <div class="wide-nav-item"><svg class="icon"><use href="#i-project"/></svg><span>项目</span></div>
+            <div class="wide-nav-item"><svg class="icon"><use href="#i-audit"/></svg><span>审计</span></div>
+            <div class="wide-nav-item"><svg class="icon"><use href="#i-settings"/></svg><span>设置</span></div>
+          </div>
+          <div class="caption">当前页：角色管理</div>
+        </nav>
+        <section class="detail-main" data-od-id="role-management-page">
+          <header class="admin-header"><h3>角色管理</h3><div class="header-actions"><span class="status blue"><span class="dot"></span>7 个角色</span><button class="primary-btn">新增角色</button></div></header>
+          <div class="detail-content">
+            <article class="detail-page">
+              <header><h3><svg class="icon"><use href="#i-role"/></svg>角色定义</h3><div class="command-actions"><button class="ghost-btn">预览输出</button><button class="primary-btn">发布版本</button></div></header>
+              <div class="manager-layout three">
+                <section class="manager-panel"><header><strong>角色列表</strong><span class="caption">role id</span></header><div class="manager-body"><div class="manager-table"><div class="manager-row head"><span>角色</span><span>用途</span><span>权限</span><span>状态</span></div><div class="manager-row active"><strong>架构师</strong><span>方案规划</span><span>读项目</span><span class="status green"><span class="dot"></span>启用</span></div><div class="manager-row"><strong>Reviewer</strong><span>审阅 diff</span><span>读补丁</span><span class="status green"><span class="dot"></span>启用</span></div><div class="manager-row"><strong>秘书</strong><span>汇总转发</span><span>调度</span><span class="status blue"><span class="dot"></span>系统</span></div></div></div></section>
+                <section class="manager-panel"><header><strong>提示词模板</strong><span class="mono caption">v3</span></header><div class="manager-body"><div class="manager-field"><span>角色名</span><strong>架构师</strong></div><div class="manager-field"><span>输出风格</span><strong>先结论后证据</strong></div><div class="prompt-preview">你是架构师。先识别边界和风险，再给出最小可执行方案。不要伪造模型思考，不要把命令执行放进用户消息。</div></div></section>
+                <section class="manager-panel"><header><strong>权限与发布</strong><button class="ghost-btn">比较版本</button></header><div class="manager-body"><div class="permission-grid"><div class="permission-row"><span>读取项目文件</span><strong>允许</strong></div><div class="permission-row"><span>请求命令</span><strong>需确认</strong></div><div class="permission-row"><span>应用补丁</span><strong>禁止直写</strong></div><div class="permission-row"><span>私聊可见</span><strong>按成员</strong></div></div><div class="manager-field"><span>当前版本</span><strong class="mono">role.architect.v3</strong></div><div class="manager-field"><span>发布记录</span><strong>4 次</strong></div></div></section>
+              </div>
+            </article>
+          </div>
+        </section>
+      </div></div>
+    </section>
+
+    <section data-od-id="member-management-board">
+      <div class="board-label"><h2>成员管理页</h2><span>member instances, bindings, participation</span></div>
+      <div class="board-scroll"><div class="artboard management-detail">
+        <nav class="wide-nav" data-od-id="member-management-sidebar">
+          <div class="wide-brand"><div class="wide-logo">ai</div><span>ai-team</span></div>
+          <div class="wide-nav-list">
+            <div class="wide-nav-item"><svg class="icon"><use href="#i-chat"/></svg><span>消息</span></div>
+            <div class="wide-nav-item"><svg class="icon"><use href="#i-team"/></svg><span>团队</span></div>
+            <div class="wide-nav-item"><svg class="icon"><use href="#i-model"/></svg><span>模型</span></div>
+            <div class="wide-nav-item"><svg class="icon"><use href="#i-role"/></svg><span>角色</span></div>
+            <div class="wide-nav-item active"><svg class="icon"><use href="#i-member"/></svg><span>成员</span></div>
+            <div class="wide-nav-item"><svg class="icon"><use href="#i-project"/></svg><span>项目</span></div>
+            <div class="wide-nav-item"><svg class="icon"><use href="#i-audit"/></svg><span>审计</span></div>
+            <div class="wide-nav-item"><svg class="icon"><use href="#i-settings"/></svg><span>设置</span></div>
+          </div>
+          <div class="caption">当前页：成员管理</div>
+        </nav>
+        <section class="detail-main" data-od-id="member-management-page">
+          <header class="admin-header"><h3>成员管理</h3><div class="header-actions"><span class="status green"><span class="dot"></span>5 个成员</span><button class="primary-btn">新增成员</button></div></header>
+          <div class="detail-content">
+            <article class="detail-page">
+              <header><h3><svg class="icon"><use href="#i-member"/></svg>成员实例</h3><div class="command-actions"><button class="ghost-btn">打开私聊</button><button class="primary-btn">保存绑定</button></div></header>
+              <div class="manager-layout">
+                <section class="manager-panel">
+                  <header><strong>成员列表</strong><span class="caption">model + role binding</span></header>
+                  <div class="manager-body">
+                    <div class="manager-table">
+                      <div class="manager-row head"><span>成员</span><span>模型</span><span>角色</span><span>状态</span></div>
+                      <div class="manager-row active"><strong>Kai</strong><span>Codex 主模型</span><span>架构师</span><span class="status green"><span class="dot"></span>在线</span></div>
+                      <div class="manager-row"><strong>Lin</strong><span>Codex 主模型</span><span>Reviewer</span><span class="status amber"><span class="dot"></span>待审批</span></div>
+                      <div class="manager-row"><strong>Secretary</strong><span>Fast Review</span><span>秘书</span><span class="status blue"><span class="dot"></span>允许中</span></div>
+                      <div class="manager-row"><strong>QA Runner</strong><span>Fast Review</span><span>测试</span><span class="status green"><span class="dot"></span>在线</span></div>
+                    </div>
+                    <div class="manager-field"><span>私聊入口</span><strong>每个成员独立</strong></div>
+                  </div>
+                </section>
+                <section class="manager-panel">
+                  <header><strong>Kai 绑定</strong><button class="ghost-btn">重置</button></header>
+                  <div class="manager-body">
+                    <div class="manager-field"><span>显示名称</span><strong>Kai</strong></div>
+                    <div class="manager-field"><span>角色</span><strong>架构师</strong></div>
+                    <div class="manager-field"><span>模型</span><strong>Codex 主模型</strong></div>
+                    <div class="slot-grid">
+                      <div class="slot-card"><strong>Core Review</strong><span class="caption">第一轮发言</span></div>
+                      <div class="slot-card"><strong>Bug Bash</strong><span class="caption">方案支持</span></div>
+                      <div class="slot-card"><strong>私聊</strong><span class="caption">允许用户直达</span></div>
+                      <div class="slot-card"><strong>审计</strong><span class="caption">成员行为记录</span></div>
+                    </div>
+                    <div class="permission-grid"><div class="permission-row"><span>读取文件</span><strong>允许</strong></div><div class="permission-row"><span>请求命令</span><strong>需确认</strong></div><div class="permission-row"><span>代表用户发送</span><strong>禁止</strong></div></div>
+                  </div>
+                </section>
               </div>
             </article>
           </div>

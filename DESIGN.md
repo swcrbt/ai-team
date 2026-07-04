@@ -27,8 +27,8 @@
 
 ## Information architecture
 - Primary navigation: compact dark icon rail for messages, teams, models, roles, members, project, audit, and settings. Each entry has a designed 20px linear icon with default, hover, active, and disabled states.
-- Core routes/screens: Group Chat Command Center, Member Private Chat, Team Setup and Routing, Model Profiles, Role Profiles, Member Directory, Project Safety and Patch Review, Audit Console, App Settings, Sidebar Icon System.
-- Content hierarchy: active work first, safety confirmation second, historical/audit evidence third. The message sidebar is only for group/private conversations; model and project objects remain sidebar destinations, not conversation rows.
+- Core routes/screens: Group Chat Command Center, Member Private Chat, Team Management, Model Management, Role Management, Member Management, Project Safety and Patch Review, Audit Console, App Settings, Sidebar Icon System.
+- Content hierarchy: active work first, safety confirmation second, historical/audit evidence third. The message sidebar is only for group/private conversations; model and project objects remain sidebar destinations, not conversation rows. Team, model, role, and member management are separate sidebar pages in that order, not sections inside one settings page.
 
 ## Design principles
 - Principle 1: keep command, patch, member, and audit state close to the action that created it, but do not keep a right-side safety panel permanently resident in chat.
@@ -45,7 +45,7 @@
 
 ## Components
 - Existing components to reuse: Flutter Material 3 widgets, existing sidebars, chat pane, split send button, shared dialog frame, management panels, and audit rows.
-- New/changed components: fixed-bottom chat composer with lower-right send action, circular token meter with input/output/cache-hit token breakdown, returned-thinking panel inside messages, command approval state card, diff review card, team collection management page, conversation status pills for pending approval and allowed-running states, on-demand safety drawer, safety-oriented project review panel, audit detail drawer, sidebar icon components, compact state pills, concrete page layouts for every sidebar entry.
+- New/changed components: fixed-bottom chat composer with lower-right send action, circular token meter placed inside the composer directly left of the send button, input/output/cache-hit token breakdown popover, returned-thinking panel inside messages, command approval state card, diff review card, dedicated team/model/role/member management pages, conversation status pills for pending approval and allowed-running states, on-demand safety drawer, safety-oriented project review panel, audit detail drawer, sidebar icon components, compact state pills, concrete page layouts for every sidebar entry.
 - Variants and states: sidebar icon default/hover/active/disabled, command pending/approved/executed/denied/failed as separate system or assistant message variants rather than simultaneous state panels or user-authored execution bubbles, patch pending/applied/rejected, diff collapsed/expanded/applied, model streaming/stopped/failed, empty project.
 - Token/component ownership: keep tokens local to `lib/ui` theme unless a broader design-system refactor is approved.
 
@@ -58,7 +58,7 @@
 
 ## Responsive behavior
 - Supported breakpoints/devices: desktop-first macOS; narrow desktop windows should collapse secondary panels before hiding primary chat.
-- Layout adaptations: icon rail stays fixed, conversation sidebars can shrink or collapse, safety status opens as a temporary drawer, and the chat composer remains fixed to the bottom of the chat surface.
+- Layout adaptations: icon rail stays fixed, conversation sidebars can shrink or collapse, safety status opens as a temporary drawer, and the chat composer remains fixed to the bottom of the chat surface. Composer footer metadata is not shown; the token meter lives in the input surface immediately before the send button.
 - Touch/hover differences: desktop hover affordances are allowed, but all actions need keyboard/click access.
 
 ## Interaction states
@@ -66,7 +66,7 @@
 - Empty: no project, no audit, and no command request states should provide one clear primary action.
 - Error: model/command/project errors show source, recoverable action, and audit reference.
 - Success: applied patches and executed commands enter audit immediately.
-- Management: the team detail mockup manages the collection of team/group objects only; model, role, and member detail pages should be separate sidebar destinations rather than columns inside the team management detail.
+- Management: the team detail mockup manages team objects only, including team roster, collaboration strategy, default secretary, and team-level permissions. Model, role, and member detail pages are separate sidebar destinations and separate Open Design boards.
 - Disabled: blocked actions state why, especially missing project or secretary constraints.
 - Offline/slow network: model request diagnostics and retry/stop states stay visible.
 
