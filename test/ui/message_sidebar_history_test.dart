@@ -33,6 +33,9 @@ void main() {
       await tester.tap(find.text('默认开发团队'));
       await tester.pumpAndSettle();
 
+      expect(find.textContaining('名成员'), findsWidgets);
+      expect(find.textContaining('位成员'), findsNothing);
+
       final conversationList = tester.widget<ListView>(
         find.byKey(const ValueKey('conversation-list')),
       );

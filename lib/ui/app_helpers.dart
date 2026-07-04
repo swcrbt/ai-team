@@ -30,7 +30,7 @@ String conversationMeta(AppController controller, Conversation conversation) {
   final status = statusText(conversation.status);
   final members = controller.membersForConversation(conversation.id);
   if (conversation.memberId == null) {
-    return '${members.length} 位成员 · 第 ${conversation.currentRound} 轮 · $status';
+    return '${members.length} 名成员 · 第 ${conversation.currentRound} 轮 · $status';
   }
   final member = members.firstWhere((item) => item.id == conversation.memberId);
   return '${roleName(controller.state, member.roleId)} · ${modelName(controller.state, member.modelId)} · $status';
