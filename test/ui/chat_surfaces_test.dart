@@ -1,8 +1,9 @@
 import 'app_widget_test_support.dart';
 
 void main() {
-  testWidgets('desktop workspace separates chat and settings surfaces',
-      (tester) async {
+  testWidgets('desktop workspace separates chat and settings surfaces', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       AiTeamApp(
         initialState: AppState.seed(),
@@ -53,8 +54,9 @@ void main() {
     expect(find.text('补丁确认'), findsNothing);
   });
 
-  testWidgets('chat workspace shows pending patch confirmations',
-      (tester) async {
+  testWidgets('chat workspace shows pending patch confirmations', (
+    tester,
+  ) async {
     final state = AppState.seed().copyWith(
       patchProposals: const [
         PatchProposal(
@@ -69,10 +71,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      AiTeamApp(
-        initialState: state,
-        modelGateway: FakeModelGateway(),
-      ),
+      AiTeamApp(initialState: state, modelGateway: FakeModelGateway()),
     );
 
     expect(find.text('补丁确认'), findsOneWidget);
@@ -84,8 +83,9 @@ void main() {
     expect(find.text('补丁确认'), findsNothing);
   });
 
-  testWidgets('chat workspace shows scoped pending command requests',
-      (tester) async {
+  testWidgets('chat workspace shows scoped pending command requests', (
+    tester,
+  ) async {
     final state = AppState.seed().copyWith(
       commandRequests: [
         CommandRequest.pending(
@@ -102,10 +102,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      AiTeamApp(
-        initialState: state,
-        modelGateway: FakeModelGateway(),
-      ),
+      AiTeamApp(initialState: state, modelGateway: FakeModelGateway()),
     );
 
     expect(find.text('命令请求 · 待审批'), findsOneWidget);
@@ -115,110 +112,156 @@ void main() {
     expect(find.widgetWithText(OutlinedButton, '拒绝'), findsOneWidget);
   });
 
-  testWidgets('chat workspace shows approved command requests without approval',
-      (tester) async {
+  testWidgets('chat header opens on-demand safety status drawer', (
+    tester,
+  ) async {
     final state = AppState.seed().copyWith(
       commandRequests: [
         CommandRequest.pending(
-          id: 'command-chat-approved',
+          id: 'command-chat-df',
           memberName: '秘书',
           command: 'df -h /',
           workingDirectory: '/',
-          decision: CommandDecision.allowed,
+          decision: CommandDecision.requiresConfirmation,
           conversationId: 'conv-member-secretary',
           memberId: 'member-secretary',
           toolCallId: 'call-df',
         ),
       ],
+      patchProposals: const [
+        PatchProposal(
+          id: 'patch-chat',
+          filePath: 'lib/ui/chat/chat_pane.dart',
+          originalContent: 'old',
+          proposedContent: 'new',
+          memberName: '前端工程师',
+          diff: '--- old\n+++ new\n@@\n-old\n+new\n',
+        ),
+      ],
     );
 
     await tester.pumpWidget(
-      AiTeamApp(
-        initialState: state,
-        modelGateway: FakeModelGateway(),
-      ),
+      AiTeamApp(initialState: state, modelGateway: FakeModelGateway()),
     );
 
-    expect(find.text('命令请求 · 待审批'), findsNothing);
-    expect(find.text('命令已允许'), findsOneWidget);
-    expect(find.textContaining('df -h /'), findsWidgets);
-    expect(find.widgetWithText(FilledButton, '执行'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, '允许'), findsNothing);
-    expect(find.widgetWithText(OutlinedButton, '拒绝'), findsNothing);
+    expect(find.text('会话安全状态'), findsNothing);
+
+    await tester.tap(find.byTooltip('安全状态'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('会话安全状态'), findsOneWidget);
+    expect(find.text('成员状态'), findsOneWidget);
+    expect(find.text('命令审批'), findsOneWidget);
+    expect(find.text('补丁确认'), findsWidgets);
+    expect(find.text('审计摘要'), findsOneWidget);
+    expect(find.textContaining('1 条等待确认'), findsOneWidget);
+    expect(find.textContaining('1 个补丁等待确认'), findsOneWidget);
   });
 
   testWidgets(
-      'chat message renders command result collapsed in the same bubble',
-      (tester) async {
-    final message = ChatMessage(
-      id: 'msg-command-result',
-      authorName: '秘书',
-      memberId: 'member-secretary',
-      content: '我先查看一下\n根目录已使用 42G',
-      createdAt: DateTime(2026, 6, 29),
-      contentBlocks: const [
-        ChatMessageContentBlock.text('我先查看一下'),
-        ChatMessageContentBlock.commandResult(
-          CommandResultAttachment(
-            requestId: 'command-df',
-            status: CommandRequestStatus.executed,
-            workingDirectory: '/',
+    'chat workspace shows approved command requests without approval',
+    (tester) async {
+      final state = AppState.seed().copyWith(
+        commandRequests: [
+          CommandRequest.pending(
+            id: 'command-chat-approved',
+            memberName: '秘书',
             command: 'df -h /',
-            output: 'Filesystem 42Gi /',
+            workingDirectory: '/',
+            decision: CommandDecision.allowed,
+            conversationId: 'conv-member-secretary',
+            memberId: 'member-secretary',
+            toolCallId: 'call-df',
           ),
-        ),
-        ChatMessageContentBlock.text('根目录已使用 42G'),
-      ],
-    );
-    final request = CommandRequest.pending(
-      id: 'command-df',
-      memberName: '秘书',
-      command: 'df -h /',
-      workingDirectory: '/',
-      decision: CommandDecision.allowed,
-      conversationId: 'conv-member-secretary',
-      memberId: 'member-secretary',
-      toolCallId: 'call-df',
-      messageId: 'msg-command-result',
-    ).copyWith(
-        status: CommandRequestStatus.executed, output: 'Filesystem 42Gi /');
-    final seed = AppState.seed();
-    final conversation = seed.conversations.firstWhere(
-      (conversation) => conversation.id == 'conv-member-secretary',
-    );
-    final state = seed.copyWith(
-      conversations: seed.conversations
-          .map(
-            (item) => item.id == conversation.id
-                ? conversation.copyWith(messages: [message])
-                : item,
-          )
-          .toList(),
-      commandRequests: [request],
-    );
+        ],
+      );
 
-    await tester.pumpWidget(
-      AiTeamApp(
-        initialState: state,
-        modelGateway: FakeModelGateway(),
-      ),
-    );
+      await tester.pumpWidget(
+        AiTeamApp(initialState: state, modelGateway: FakeModelGateway()),
+      );
 
-    expect(find.text('我先查看一下'), findsOneWidget);
-    expect(find.text('根目录已使用 42G'), findsOneWidget);
-    expect(find.text('命令执行结果'), findsOneWidget);
-    expect(find.textContaining('Filesystem 42Gi'), findsNothing);
-    expect(find.text('命令已执行'), findsNothing);
+      expect(find.text('命令请求 · 待审批'), findsNothing);
+      expect(find.text('命令已允许'), findsOneWidget);
+      expect(find.textContaining('df -h /'), findsWidgets);
+      expect(find.widgetWithText(FilledButton, '执行'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, '允许'), findsNothing);
+      expect(find.widgetWithText(OutlinedButton, '拒绝'), findsNothing);
+    },
+  );
 
-    await tester.tap(find.text('命令执行结果'));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'chat message renders command result collapsed in the same bubble',
+    (tester) async {
+      final message = ChatMessage(
+        id: 'msg-command-result',
+        authorName: '秘书',
+        memberId: 'member-secretary',
+        content: '我先查看一下\n根目录已使用 42G',
+        createdAt: DateTime(2026, 6, 29),
+        contentBlocks: const [
+          ChatMessageContentBlock.text('我先查看一下'),
+          ChatMessageContentBlock.commandResult(
+            CommandResultAttachment(
+              requestId: 'command-df',
+              status: CommandRequestStatus.executed,
+              workingDirectory: '/',
+              command: 'df -h /',
+              output: 'Filesystem 42Gi /',
+            ),
+          ),
+          ChatMessageContentBlock.text('根目录已使用 42G'),
+        ],
+      );
+      final request = CommandRequest.pending(
+        id: 'command-df',
+        memberName: '秘书',
+        command: 'df -h /',
+        workingDirectory: '/',
+        decision: CommandDecision.allowed,
+        conversationId: 'conv-member-secretary',
+        memberId: 'member-secretary',
+        toolCallId: 'call-df',
+        messageId: 'msg-command-result',
+      ).copyWith(
+        status: CommandRequestStatus.executed,
+        output: 'Filesystem 42Gi /',
+      );
+      final seed = AppState.seed();
+      final conversation = seed.conversations.firstWhere(
+        (conversation) => conversation.id == 'conv-member-secretary',
+      );
+      final state = seed.copyWith(
+        conversations: seed.conversations
+            .map(
+              (item) => item.id == conversation.id
+                  ? conversation.copyWith(messages: [message])
+                  : item,
+            )
+            .toList(),
+        commandRequests: [request],
+      );
 
-    expect(find.textContaining('df -h /'), findsWidgets);
-    expect(find.textContaining('Filesystem 42Gi'), findsOneWidget);
-  });
+      await tester.pumpWidget(
+        AiTeamApp(initialState: state, modelGateway: FakeModelGateway()),
+      );
 
-  testWidgets('legacy unscoped pending commands remain visible in project',
-      (tester) async {
+      expect(find.text('我先查看一下'), findsOneWidget);
+      expect(find.text('根目录已使用 42G'), findsOneWidget);
+      expect(find.text('命令执行结果'), findsOneWidget);
+      expect(find.textContaining('Filesystem 42Gi'), findsNothing);
+      expect(find.text('命令已执行'), findsNothing);
+
+      await tester.tap(find.text('命令执行结果'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('df -h /'), findsWidgets);
+      expect(find.textContaining('Filesystem 42Gi'), findsOneWidget);
+    },
+  );
+
+  testWidgets('legacy unscoped pending commands remain visible in project', (
+    tester,
+  ) async {
     final state = AppState.seed().copyWith(
       commandRequests: [
         CommandRequest.pending(
@@ -232,10 +275,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      AiTeamApp(
-        initialState: state,
-        modelGateway: FakeModelGateway(),
-      ),
+      AiTeamApp(initialState: state, modelGateway: FakeModelGateway()),
     );
 
     expect(find.text('待确认命令'), findsNothing);
@@ -248,23 +288,24 @@ void main() {
   });
 
   testWidgets(
-      'desktop chat sidebar does not show quick avatars above group chat',
-      (tester) async {
-    await tester.pumpWidget(
-      AiTeamApp(
-        initialState: AppState.seed(),
-        modelGateway: FakeModelGateway(),
-      ),
-    );
+    'desktop chat sidebar does not show quick avatars above group chat',
+    (tester) async {
+      await tester.pumpWidget(
+        AiTeamApp(
+          initialState: AppState.seed(),
+          modelGateway: FakeModelGateway(),
+        ),
+      );
 
-    expect(find.text('群聊'), findsOneWidget);
-    expect(
-      find.byWidgetPredicate(
-        (widget) => widget.runtimeType.toString() == '_QuickAvatar',
-      ),
-      findsNothing,
-    );
-  });
+      expect(find.text('群聊'), findsOneWidget);
+      expect(
+        find.byWidgetPredicate(
+          (widget) => widget.runtimeType.toString() == '_QuickAvatar',
+        ),
+        findsNothing,
+      );
+    },
+  );
 
   testWidgets('chat header omits continue and stop controls', (tester) async {
     await tester.pumpWidget(

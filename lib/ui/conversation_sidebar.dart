@@ -96,7 +96,7 @@ class _ConversationListState extends State<ConversationList> {
                 enabled: false,
                 decoration: InputDecoration(
                   prefixIcon: const Icon(Icons.search_rounded, size: 17),
-                  hintText: '搜索会话',
+                  hintText: '搜索会话、成员、文件',
                   isDense: true,
                   filled: true,
                   fillColor: Colors.white,
@@ -259,14 +259,8 @@ Future<void> _showConversationContextMenu(
       position.dy,
     ),
     items: [
-      PopupMenuItem(
-        value: 'pin',
-        child: Text(isPinned ? '取消置顶' : '置顶'),
-      ),
-      const PopupMenuItem(
-        value: 'delete',
-        child: Text('删除'),
-      ),
+      PopupMenuItem(value: 'pin', child: Text(isPinned ? '取消置顶' : '置顶')),
+      const PopupMenuItem(value: 'delete', child: Text('删除')),
     ],
   );
   if (action == 'pin') {

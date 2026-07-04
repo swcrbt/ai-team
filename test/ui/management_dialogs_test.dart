@@ -11,14 +11,30 @@ void main() {
 
     final sidebarBackground = tester.widget<ColoredBox>(
       find
-          .ancestor(
-            of: find.byTooltip('消息'),
-            matching: find.byType(ColoredBox),
-          )
+          .ancestor(of: find.byTooltip('消息'), matching: find.byType(ColoredBox))
           .first,
     );
 
     expect(sidebarBackground.color, const Color(0xFF050505));
+  });
+
+  testWidgets('left sidebar keeps all primary entries in design order', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    final labels = ['消息', '团队', '模型', '角色', '成员', '项目', '审计', '设置'];
+    for (var index = 0; index < labels.length - 1; index++) {
+      expect(
+        tester.getTopLeft(find.byTooltip(labels[index])).dy,
+        lessThan(tester.getTopLeft(find.byTooltip(labels[index + 1])).dy),
+      );
+    }
   });
 
   testWidgets('sidebar team button opens team management', (tester) async {
@@ -39,46 +55,48 @@ void main() {
   });
 
   testWidgets(
-      'message sidebar preserves private chat history after starting team chat',
-      (tester) async {
-    await tester.pumpWidget(
-      AiTeamApp(
-        initialState: AppState.seed(),
-        modelGateway: FakeModelGateway(),
-      ),
-    );
+    'message sidebar preserves private chat history after starting team chat',
+    (tester) async {
+      await tester.pumpWidget(
+        AiTeamApp(
+          initialState: AppState.seed(),
+          modelGateway: FakeModelGateway(),
+        ),
+      );
 
-    expect(find.text('私聊'), findsOneWidget);
-    expect(find.text('秘书'), findsWidgets);
-    expect(find.text('前端工程师'), findsWidgets);
-    expect(find.text('测试工程师'), findsWidgets);
+      expect(find.text('私聊'), findsOneWidget);
+      expect(find.text('秘书'), findsWidgets);
+      expect(find.text('前端工程师'), findsWidgets);
+      expect(find.text('测试工程师'), findsWidgets);
 
-    await tester.tap(find.byTooltip('团队'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, '发起聊天'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('团队'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '发起聊天'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('群聊'), findsOneWidget);
-    expect(find.text('私聊'), findsOneWidget);
-    expect(find.text('秘书'), findsWidgets);
-    expect(find.text('前端工程师'), findsWidgets);
-    expect(find.text('测试工程师'), findsWidgets);
-    expect(find.textContaining('群聊 · 默认开发团队'), findsOneWidget);
+      expect(find.text('群聊'), findsOneWidget);
+      expect(find.text('私聊'), findsOneWidget);
+      expect(find.text('秘书'), findsWidgets);
+      expect(find.text('前端工程师'), findsWidgets);
+      expect(find.text('测试工程师'), findsWidgets);
+      expect(find.textContaining('群聊 · 默认开发团队'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('成员'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('打开私聊').at(1));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('成员'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('打开私聊').at(1));
+      await tester.pumpAndSettle();
 
-    expect(find.text('私聊'), findsOneWidget);
-    expect(find.text('秘书'), findsWidgets);
-    expect(find.text('前端工程师'), findsWidgets);
-    expect(find.text('测试工程师'), findsWidgets);
-    expect(find.textContaining('私聊 · 前端工程师'), findsOneWidget);
-  });
+      expect(find.text('私聊'), findsOneWidget);
+      expect(find.text('秘书'), findsWidgets);
+      expect(find.text('前端工程师'), findsWidgets);
+      expect(find.text('测试工程师'), findsWidgets);
+      expect(find.textContaining('私聊 · 前端工程师'), findsOneWidget);
+    },
+  );
 
-  testWidgets('chat header action menu starts a new scoped session',
-      (tester) async {
+  testWidgets('chat header action menu starts a new scoped session', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       AiTeamApp(
         initialState: AppState.seed(),
@@ -101,8 +119,9 @@ void main() {
     expect(conversationRowCount(tester), initialRows);
   });
 
-  testWidgets('chat header history menu switches current object sessions',
-      (tester) async {
+  testWidgets('chat header history menu switches current object sessions', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       AiTeamApp(
         initialState: AppState.seed(),
@@ -126,8 +145,9 @@ void main() {
     expect(find.textContaining('私聊 · 秘书'), findsOneWidget);
   });
 
-  testWidgets('chat history menu deletes a session after confirmation',
-      (tester) async {
+  testWidgets('chat history menu deletes a session after confirmation', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       AiTeamApp(
         initialState: AppState.seed(),
@@ -173,8 +193,9 @@ void main() {
     expect(find.text('新会话 · 秘书'), findsNothing);
   });
 
-  testWidgets('chat header action menu reuses one empty history session',
-      (tester) async {
+  testWidgets('chat header action menu reuses one empty history session', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       AiTeamApp(
         initialState: AppState.seed(),
@@ -202,28 +223,31 @@ void main() {
     expect(find.text('新会话 · 秘书'), findsOneWidget);
   });
 
-  testWidgets('team chat appears only after starting chat from team management',
-      (tester) async {
-    await tester.pumpWidget(
-      AiTeamApp(
-        initialState: AppState.seed(),
-        modelGateway: FakeModelGateway(),
-      ),
-    );
+  testWidgets(
+    'team chat appears only after starting chat from team management',
+    (tester) async {
+      await tester.pumpWidget(
+        AiTeamApp(
+          initialState: AppState.seed(),
+          modelGateway: FakeModelGateway(),
+        ),
+      );
 
-    expect(find.text('群聊'), findsOneWidget);
+      expect(find.text('群聊'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('团队'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, '发起聊天'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('团队'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '发起聊天'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('群聊'), findsOneWidget);
-    expect(find.textContaining('群聊 · 默认开发团队'), findsOneWidget);
-  });
+      expect(find.text('群聊'), findsOneWidget);
+      expect(find.textContaining('群聊 · 默认开发团队'), findsOneWidget);
+    },
+  );
 
-  testWidgets('team management creates a named team with selected members',
-      (tester) async {
+  testWidgets('team management creates a named team with selected members', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       AiTeamApp(
         initialState: AppState.seed(),
@@ -243,8 +267,9 @@ void main() {
     expect(find.textContaining('前端工程师、测试工程师'), findsWidgets);
   });
 
-  testWidgets('team dialog defaults to serial mode and can select parallel',
-      (tester) async {
+  testWidgets('team dialog defaults to serial mode and can select parallel', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       AiTeamApp(
         initialState: AppState.seed(),
@@ -257,10 +282,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.widgetWithText(
-        SegmentedButton<TeamCollaborationMode>,
-        '串行',
-      ),
+      find.widgetWithText(SegmentedButton<TeamCollaborationMode>, '串行'),
       findsOneWidget,
     );
 
@@ -299,8 +321,9 @@ void main() {
     expect(find.text('并行'), findsWidgets);
   });
 
-  testWidgets('configuration dialogs use the clean shared dialog frame',
-      (tester) async {
+  testWidgets('configuration dialogs use the clean shared dialog frame', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       AiTeamApp(
         initialState: AppState.seed(),
@@ -322,10 +345,14 @@ void main() {
 
       expect(find.byKey(const ValueKey('config-dialog-frame')), findsOneWidget);
       expect(
-          find.byKey(const ValueKey('config-dialog-header')), findsOneWidget);
+        find.byKey(const ValueKey('config-dialog-header')),
+        findsOneWidget,
+      );
       expect(find.byKey(const ValueKey('config-dialog-body')), findsOneWidget);
       expect(
-          find.byKey(const ValueKey('config-dialog-actions')), findsOneWidget);
+        find.byKey(const ValueKey('config-dialog-actions')),
+        findsOneWidget,
+      );
       expect(find.text(title), findsWidgets);
 
       await tester.tap(find.text(closeText).last);
@@ -366,8 +393,9 @@ void main() {
     );
   });
 
-  testWidgets('role dialog remains usable in a compact viewport',
-      (tester) async {
+  testWidgets('role dialog remains usable in a compact viewport', (
+    tester,
+  ) async {
     tester.view.physicalSize = const Size(720, 520);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -401,8 +429,9 @@ void main() {
     expect(find.widgetWithText(FilledButton, '保存'), findsOneWidget);
   });
 
-  testWidgets('model dialog validation uses the shared error treatment',
-      (tester) async {
+  testWidgets('model dialog validation uses the shared error treatment', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       AiTeamApp(
         initialState: AppState.seed(),
@@ -467,10 +496,7 @@ void main() {
       ],
     );
     await tester.pumpWidget(
-      AiTeamApp(
-        initialState: state,
-        modelGateway: FakeModelGateway(),
-      ),
+      AiTeamApp(initialState: state, modelGateway: FakeModelGateway()),
     );
 
     expect(find.textContaining('队列 2'), findsNothing);
@@ -488,8 +514,9 @@ void main() {
     expect(find.byTooltip('历史'), findsNothing);
   });
 
-  testWidgets('sidebar audit button opens an independent audit page',
-      (tester) async {
+  testWidgets('sidebar audit button opens an independent audit page', (
+    tester,
+  ) async {
     final state = AppState.seed().copyWith(
       auditLog: [
         AuditEntry(
@@ -524,10 +551,7 @@ void main() {
       ],
     );
     await tester.pumpWidget(
-      AiTeamApp(
-        initialState: state,
-        modelGateway: FakeModelGateway(),
-      ),
+      AiTeamApp(initialState: state, modelGateway: FakeModelGateway()),
     );
 
     await tester.tap(find.byTooltip('审计'));
@@ -574,8 +598,9 @@ void main() {
     expect(find.textContaining('原始思考字段'), findsOneWidget);
     expect(find.text('model: reasoning-model'), findsOneWidget);
     expect(
-        find.text('requestUrl: https://api.example.test/v1/chat/completions'),
-        findsOneWidget);
+      find.text('requestUrl: https://api.example.test/v1/chat/completions'),
+      findsOneWidget,
+    );
     expect(find.textContaining('model-main'), findsNothing);
   });
 
@@ -610,8 +635,9 @@ void main() {
     expect(find.textContaining('深度思考'), findsWidgets);
   });
 
-  testWidgets('sidebar model button opens an independent model page',
-      (tester) async {
+  testWidgets('sidebar model button opens an independent model page', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       AiTeamApp(
         initialState: AppState.seed(),
@@ -628,8 +654,9 @@ void main() {
     expect(find.byTooltip('新增模型'), findsOneWidget);
   });
 
-  testWidgets('sidebar role button opens an independent role page',
-      (tester) async {
+  testWidgets('sidebar role button opens an independent role page', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       AiTeamApp(
         initialState: AppState.seed(),
@@ -646,8 +673,9 @@ void main() {
     expect(find.byTooltip('新增角色'), findsOneWidget);
   });
 
-  testWidgets('sidebar member button opens an independent member page',
-      (tester) async {
+  testWidgets('sidebar member button opens an independent member page', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       AiTeamApp(
         initialState: AppState.seed(),
@@ -665,8 +693,9 @@ void main() {
     expect(find.byTooltip('打开私聊'), findsWidgets);
   });
 
-  testWidgets('sidebar project button opens an independent project page',
-      (tester) async {
+  testWidgets('sidebar project button opens an independent project page', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       AiTeamApp(
         initialState: AppState.seed(),

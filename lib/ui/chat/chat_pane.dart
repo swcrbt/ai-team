@@ -64,8 +64,9 @@ class ChatPaneState extends State<ChatPane> {
   @override
   Widget build(BuildContext context) {
     widget.diagnostics?.chatPaneBuildCount++;
-    final conversation =
-        widget.controller.conversationById(widget.conversationId);
+    final conversation = widget.controller.conversationById(
+      widget.conversationId,
+    );
     final typingMemberList = typingMembers(widget.controller, conversation);
     final pendingPatches =
         widget.controller.selectedConversationId == conversation.id
@@ -73,8 +74,10 @@ class ChatPaneState extends State<ChatPane> {
                 .where((patch) => patch.status == PatchStatus.pending)
                 .toList()
             : const <PatchProposal>[];
-    final commandRequests =
-        widget.controller.commandRequestsForConversation(conversation.id);
+    final commandRequests = widget.controller.commandRequestsForConversation(
+      conversation.id,
+    );
+    final compactHeader = MediaQuery.sizeOf(context).width < 900;
     final messageListItemCount = conversation.messages.length +
         typingMemberList.length +
         commandRequests.length +
@@ -102,10 +105,7 @@ class ChatPaneState extends State<ChatPane> {
     lastMessageContentLength = currentLastMessageContentLength;
     lastMessageThinkingLength = currentLastMessageThinkingLength;
     lastMessageGenerationStatus = currentLastMessageGenerationStatus;
-    _syncActiveStreamingDraftSubscription(
-      conversation.id,
-      currentLastMessage,
-    );
+    _syncActiveStreamingDraftSubscription(conversation.id, currentLastMessage);
     if (lastMessageBodyChanged) {
       widget.diagnostics?.contentUpdateCount++;
     }
@@ -123,19 +123,17 @@ class ChatPaneState extends State<ChatPane> {
     return Column(
       children: [
         Container(
-          height: 74,
+          height: 64,
           padding: const EdgeInsets.symmetric(horizontal: 24),
           alignment: Alignment.centerLeft,
           decoration: const BoxDecoration(
             color: Colors.white,
-            border: Border(
-              bottom: BorderSide(color: Color(0xFFE5E7EB)),
-            ),
+            border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
           ),
           child: Row(
             children: [
               CircleAvatar(
-                radius: 22,
+                radius: 18,
                 backgroundColor: conversation.memberId == null
                     ? const Color(0xFF22C55E)
                     : const Color(0xFF3B82F6),
@@ -157,7 +155,7 @@ class ChatPaneState extends State<ChatPane> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 20,
+                        fontSize: 16,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -170,6 +168,32 @@ class ChatPaneState extends State<ChatPane> {
                   ],
                 ),
               ),
+              if (!compactHeader) ...[
+                const SizedBox(width: 12),
+                _HeaderMembersPill(
+                  count: widget.controller
+                      .membersForConversation(conversation.id)
+                      .length,
+                ),
+              ],
+              const SizedBox(width: 8),
+              _SafetyStatusButton(
+                compact: compactHeader,
+                pendingCount: commandRequests
+                        .where(
+                          (request) =>
+                              request.status == CommandRequestStatus.pending,
+                        )
+                        .length +
+                    pendingPatches.length,
+                onPressed: () => _showSafetyDrawer(
+                  context,
+                  conversation,
+                  commandRequests,
+                  pendingPatches,
+                ),
+              ),
+              const SizedBox(width: 4),
               PopupMenuButton<String>(
                 tooltip: '会话操作',
                 icon: const Icon(Icons.expand_more_rounded),
@@ -186,10 +210,7 @@ class ChatPaneState extends State<ChatPane> {
                     ),
                   ),
                   const PopupMenuDivider(),
-                  const PopupMenuItem(
-                    enabled: false,
-                    child: Text('历史会话'),
-                  ),
+                  const PopupMenuItem(enabled: false, child: Text('历史会话')),
                   for (final item in widget.controller.conversationHistory)
                     PopupMenuItem(
                       value: 'select:${item.id}',
@@ -204,10 +225,7 @@ class ChatPaneState extends State<ChatPane> {
                           const SizedBox(width: 10),
                           Flexible(
                             child: Text(
-                              conversationMenuTitle(
-                                widget.controller,
-                                item,
-                              ),
+                              conversationMenuTitle(widget.controller, item),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -238,21 +256,16 @@ class ChatPaneState extends State<ChatPane> {
               ColoredBox(
                 color: const Color(0xFFFCFCFD),
                 child: Listener(
-                  onPointerSignal: (event) => _handleMessagePointerSignal(
-                    event,
-                  ),
+                  onPointerSignal: (event) =>
+                      _handleMessagePointerSignal(event),
                   child: NotificationListener<ScrollNotification>(
                     onNotification: (notification) =>
                         _handleMessageScrollNotification(notification),
                     child: NotificationListener<ScrollMetricsNotification>(
                       onNotification: (notification) =>
-                          _handleMessageScrollMetricsNotification(
-                        notification,
-                      ),
+                          _handleMessageScrollMetricsNotification(notification),
                       child: KeyedSubtree(
-                        key: ValueKey(
-                          'chat-message-list-${conversation.id}',
-                        ),
+                        key: ValueKey('chat-message-list-${conversation.id}'),
                         child: ListView.builder(
                           key: const ValueKey('chat-message-list'),
                           controller: messageScrollController,
@@ -381,8 +394,9 @@ class ChatPaneState extends State<ChatPane> {
                         isConversationDispatching: widget.controller
                             .isConversationDispatching(conversation.id),
                         onSend: _submit,
-                        onStop: () => widget.controller
-                            .stopConversationById(conversation.id),
+                        onStop: () => widget.controller.stopConversationById(
+                          conversation.id,
+                        ),
                       ),
                     ],
                   ),
@@ -484,6 +498,43 @@ class ChatPaneState extends State<ChatPane> {
     }
   }
 
+  void _showSafetyDrawer(
+    BuildContext context,
+    Conversation conversation,
+    List<CommandRequest> commandRequests,
+    List<PatchProposal> pendingPatches,
+  ) {
+    showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: '关闭安全状态',
+      barrierColor: Colors.black.withValues(alpha: 0.08),
+      transitionDuration: const Duration(milliseconds: 120),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return SafeArea(
+          child: Align(
+            alignment: Alignment.topRight,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 76, right: 22),
+              child: _SafetyStatusDrawer(
+                controller: widget.controller,
+                conversation: conversation,
+                commandRequests: commandRequests,
+                pendingPatches: pendingPatches,
+              ),
+            ),
+          ),
+        );
+      },
+      transitionBuilder: (context, animation, secondaryAnimation, child) {
+        return FadeTransition(
+          opacity: CurvedAnimation(parent: animation, curve: Curves.easeOut),
+          child: child,
+        );
+      },
+    );
+  }
+
   Future<void> _confirmDeleteConversationSession(
     BuildContext menuContext,
     Conversation conversation,
@@ -567,16 +618,12 @@ class ChatPaneState extends State<ChatPane> {
     return metrics.maxScrollExtent - metrics.pixels <= _messageBottomThreshold;
   }
 
-  bool _handleMessageScrollNotification(
-    ScrollNotification notification,
-  ) {
+  bool _handleMessageScrollNotification(ScrollNotification notification) {
     if (notification.metrics.axis != Axis.vertical ||
         isProgrammaticMessageScroll) {
       return false;
     }
-    _recordMessageScrollPosition(
-      notification.metrics.pixels,
-    );
+    _recordMessageScrollPosition(notification.metrics.pixels);
     _syncMessageNearBottom(notification.metrics);
     return false;
   }
@@ -589,27 +636,19 @@ class ChatPaneState extends State<ChatPane> {
       return false;
     }
     _recordMessageScrollPosition(notification.metrics.pixels);
-    _syncMessageNearBottom(
-      notification.metrics,
-      canCancelPendingScroll: false,
-    );
+    _syncMessageNearBottom(notification.metrics, canCancelPendingScroll: false);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !messageScrollController.hasClients) {
         return;
       }
       final position = messageScrollController.position;
       _recordMessageScrollPosition(position.pixels);
-      _syncMessageNearBottom(
-        position,
-        canCancelPendingScroll: false,
-      );
+      _syncMessageNearBottom(position, canCancelPendingScroll: false);
     });
     return false;
   }
 
-  void _handleMessagePointerSignal(
-    PointerSignalEvent event,
-  ) {
+  void _handleMessagePointerSignal(PointerSignalEvent event) {
     if (event is! PointerScrollEvent || !messageScrollController.hasClients) {
       return;
     }
@@ -745,9 +784,7 @@ class ChatPaneState extends State<ChatPane> {
       final target = messageScrollController.position.maxScrollExtent;
       _jumpMessageScrollTo(target);
       if (settleFrames > 0 && (force || messageIsNearBottom)) {
-        _scheduleMessageScrollToBottom(
-          settleFrames: settleFrames - 1,
-        );
+        _scheduleMessageScrollToBottom(settleFrames: settleFrames - 1);
       }
     });
   }
@@ -786,10 +823,318 @@ class ChatPaneState extends State<ChatPane> {
         ),
       );
     }
-    _recordMessageScrollPosition(
-      messageScrollController.position.pixels,
-    );
+    _recordMessageScrollPosition(messageScrollController.position.pixels);
     _setMessageIsNearBottom(_isNearMessageBottom());
+  }
+}
+
+class _HeaderMembersPill extends StatelessWidget {
+  const _HeaderMembersPill({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 28,
+      padding: const EdgeInsets.symmetric(horizontal: 9),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: const Color(0xFFECFDF3),
+        border: Border.all(color: const Color(0xFFA7F3D0)),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        '$count members',
+        style: const TextStyle(
+          color: Color(0xFF047857),
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _SafetyStatusButton extends StatelessWidget {
+  const _SafetyStatusButton({
+    required this.compact,
+    required this.pendingCount,
+    required this.onPressed,
+  });
+
+  final bool compact;
+  final int pendingCount;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    if (compact) {
+      return Tooltip(
+        message: '安全状态',
+        child: OutlinedButton(
+          onPressed: onPressed,
+          style: OutlinedButton.styleFrom(
+            fixedSize: const Size(34, 30),
+            minimumSize: const Size(34, 30),
+            padding: EdgeInsets.zero,
+            visualDensity: VisualDensity.compact,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(6),
+            ),
+          ),
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
+            children: [
+              const Icon(Icons.receipt_long_rounded, size: 16),
+              if (pendingCount > 0)
+                Positioned(
+                  top: -8,
+                  right: -9,
+                  child: _SmallCountBadge(count: pendingCount),
+                ),
+            ],
+          ),
+        ),
+      );
+    }
+    return Tooltip(
+      message: '安全状态',
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: const Icon(Icons.receipt_long_rounded, size: 16),
+        label: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('安全状态'),
+            if (pendingCount > 0) ...[
+              const SizedBox(width: 6),
+              _SmallCountBadge(count: pendingCount),
+            ],
+          ],
+        ),
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(0, 30),
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          visualDensity: VisualDensity.compact,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        ),
+      ),
+    );
+  }
+}
+
+class _SmallCountBadge extends StatelessWidget {
+  const _SmallCountBadge({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 18,
+      constraints: const BoxConstraints(minWidth: 18),
+      padding: const EdgeInsets.symmetric(horizontal: 5),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBEB),
+        border: Border.all(color: const Color(0xFFFDE68A)),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        count.toString(),
+        style: const TextStyle(
+          color: Color(0xFFB45309),
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _SafetyStatusDrawer extends StatelessWidget {
+  const _SafetyStatusDrawer({
+    required this.controller,
+    required this.conversation,
+    required this.commandRequests,
+    required this.pendingPatches,
+  });
+
+  final AppController controller;
+  final Conversation conversation;
+  final List<CommandRequest> commandRequests;
+  final List<PatchProposal> pendingPatches;
+
+  @override
+  Widget build(BuildContext context) {
+    final members = controller.membersForConversation(conversation.id);
+    final pendingCommands = commandRequests
+        .where((request) => request.status == CommandRequestStatus.pending)
+        .length;
+    final approvedCommands = commandRequests
+        .where((request) => request.status == CommandRequestStatus.approved)
+        .length;
+    final latestAudit = controller.state.auditLog.isEmpty
+        ? null
+        : controller.state.auditLog.last;
+    return Material(
+      elevation: 14,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: 292,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: const Color(0xFFCBD5E1)),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              height: 42,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: Color(0xFFE2E8F0))),
+              ),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      '会话安全状态',
+                      style: TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '关闭安全状态',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: Column(
+                children: [
+                  _SafetyLine(
+                    label: '成员状态',
+                    value: members.map((member) => member.name).join('、'),
+                    badge: '${members.length}',
+                    color: const Color(0xFF047857),
+                  ),
+                  _SafetyLine(
+                    label: '命令审批',
+                    value: pendingCommands > 0
+                        ? '$pendingCommands 条等待确认'
+                        : approvedCommands > 0
+                            ? '$approvedCommands 条允许中'
+                            : '无待处理命令',
+                    badge: pendingCommands > 0
+                        ? '待审批'
+                        : approvedCommands > 0
+                            ? '允许中'
+                            : '空',
+                    color: pendingCommands > 0
+                        ? const Color(0xFFB45309)
+                        : const Color(0xFF2563EB),
+                  ),
+                  _SafetyLine(
+                    label: '补丁确认',
+                    value: pendingPatches.isEmpty
+                        ? '无待确认补丁'
+                        : '${pendingPatches.length} 个补丁等待确认',
+                    badge: pendingPatches.isEmpty ? '空' : '待确认',
+                    color: pendingPatches.isEmpty
+                        ? const Color(0xFF64748B)
+                        : const Color(0xFFB45309),
+                  ),
+                  _SafetyLine(
+                    label: '审计摘要',
+                    value: latestAudit == null
+                        ? '暂无审计记录'
+                        : '${latestAudit.action} · ${messageTimeText(latestAudit.createdAt)}',
+                    badge: 'newest',
+                    color: const Color(0xFF475569),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SafetyLine extends StatelessWidget {
+  const _SafetyLine({
+    required this.label,
+    required this.value,
+    required this.badge,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final String badge;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFCFCFD),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+              Container(
+                height: 22,
+                padding: const EdgeInsets.symmetric(horizontal: 7),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.08),
+                  border: Border.all(color: color.withValues(alpha: 0.24)),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  badge,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+          ),
+        ],
+      ),
+    );
   }
 }
 

@@ -73,6 +73,12 @@ class AppSidebar extends StatelessWidget {
         icon: SidebarIconKind.audit,
         onPressed: onAudit,
       ),
+      _SidebarEntry(
+        view: MainView.settings,
+        label: '设置',
+        icon: SidebarIconKind.settings,
+        onPressed: onSettings,
+      ),
     ];
     return ColoredBox(
       color: const Color(0xFF050505),
@@ -112,12 +118,6 @@ class AppSidebar extends StatelessWidget {
                 ],
               ),
             ),
-          ),
-          _SidebarButton(
-            label: '设置',
-            icon: SidebarIconKind.settings,
-            selected: selectedView == MainView.settings,
-            onPressed: onSettings,
           ),
           const SizedBox(height: 14),
         ],
@@ -217,10 +217,7 @@ class _SidebarButtonState extends State<_SidebarButton> {
                       ),
                     ),
                     child: Center(
-                      child: SidebarLinearIcon(
-                        widget.icon,
-                        color: foreground,
-                      ),
+                      child: SidebarLinearIcon(widget.icon, color: foreground),
                     ),
                   ),
                 ),
@@ -264,10 +261,7 @@ class SidebarLinearIcon extends StatelessWidget {
 }
 
 class _SidebarIconPainter extends CustomPainter {
-  const _SidebarIconPainter({
-    required this.kind,
-    required this.color,
-  });
+  const _SidebarIconPainter({required this.kind, required this.color});
 
   final SidebarIconKind kind;
   final Color color;
@@ -284,10 +278,12 @@ class _SidebarIconPainter extends CustomPainter {
     switch (kind) {
       case SidebarIconKind.messages:
         path
-          ..addRRect(RRect.fromRectAndRadius(
-            const Rect.fromLTWH(3, 4, 14, 10),
-            const Radius.circular(4),
-          ))
+          ..addRRect(
+            RRect.fromRectAndRadius(
+              const Rect.fromLTWH(3, 4, 14, 10),
+              const Radius.circular(4),
+            ),
+          )
           ..moveTo(8, 14)
           ..lineTo(6, 17)
           ..lineTo(11, 14);
@@ -304,10 +300,12 @@ class _SidebarIconPainter extends CustomPainter {
         break;
       case SidebarIconKind.models:
         path
-          ..addRRect(RRect.fromRectAndRadius(
-            const Rect.fromLTWH(4, 4, 12, 12),
-            const Radius.circular(3),
-          ))
+          ..addRRect(
+            RRect.fromRectAndRadius(
+              const Rect.fromLTWH(4, 4, 12, 12),
+              const Radius.circular(3),
+            ),
+          )
           ..moveTo(8, 1.8)
           ..lineTo(8, 4)
           ..moveTo(12, 1.8)
@@ -327,10 +325,12 @@ class _SidebarIconPainter extends CustomPainter {
         break;
       case SidebarIconKind.roles:
         path
-          ..addRRect(RRect.fromRectAndRadius(
-            const Rect.fromLTWH(5, 3, 10, 14),
-            const Radius.circular(4),
-          ))
+          ..addRRect(
+            RRect.fromRectAndRadius(
+              const Rect.fromLTWH(5, 3, 10, 14),
+              const Radius.circular(4),
+            ),
+          )
           ..moveTo(8, 8)
           ..lineTo(12, 8)
           ..moveTo(7.5, 12)
@@ -355,10 +355,12 @@ class _SidebarIconPainter extends CustomPainter {
         break;
       case SidebarIconKind.audit:
         path
-          ..addRRect(RRect.fromRectAndRadius(
-            const Rect.fromLTWH(5, 3, 10, 14),
-            const Radius.circular(2),
-          ))
+          ..addRRect(
+            RRect.fromRectAndRadius(
+              const Rect.fromLTWH(5, 3, 10, 14),
+              const Radius.circular(2),
+            ),
+          )
           ..moveTo(8, 7)
           ..lineTo(12, 7)
           ..moveTo(8, 10)

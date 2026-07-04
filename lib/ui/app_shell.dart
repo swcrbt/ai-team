@@ -126,7 +126,7 @@ class _AiTeamHomeState extends State<AiTeamHome> {
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final conversationListWidth =
-                    (constraints.maxWidth * 0.28).clamp(300.0, 360.0);
+                    constraints.maxWidth < 900 ? 260.0 : 282.0;
                 return Row(
                   children: [
                     SizedBox(
@@ -167,11 +167,8 @@ class _AiTeamHomeState extends State<AiTeamHome> {
 
   Widget _buildChatWorkspace(double conversationListWidth) {
     final paneConversations = controller.openConversationPanes;
-    final visibleConversationIds = paneConversations
-        .map(
-          (conversation) => conversation.id,
-        )
-        .toSet();
+    final visibleConversationIds =
+        paneConversations.map((conversation) => conversation.id).toSet();
     chatPaneKeys.removeWhere(
       (conversationId, key) => !visibleConversationIds.contains(conversationId),
     );
