@@ -577,15 +577,18 @@ void main() {
     final oldActionTop = tester.getTopLeft(find.text('old_action')).dy;
     expect(newActionTop, lessThan(oldActionTop));
 
-    await tester.tap(
-      find.descendant(
-        of: find.ancestor(
-          of: find.text('new_action'),
-          matching: find.byType(Container),
-        ),
-        matching: find.byTooltip('查看详情'),
-      ),
-    );
+    await tester.tap(find.widgetWithText(ChoiceChip, '模型'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('new_action'), findsOneWidget);
+    expect(find.text('old_action'), findsNothing);
+    expect(find.text('1 条'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(ChoiceChip, '全部'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('old_action'), findsOneWidget);
+    await tester.tap(find.byTooltip('查看详情'));
     await tester.pumpAndSettle();
 
     expect(find.text('审计详情'), findsOneWidget);
@@ -734,10 +737,7 @@ void main() {
       ],
     );
     await tester.pumpWidget(
-      AiTeamApp(
-        initialState: state,
-        modelGateway: FakeModelGateway(),
-      ),
+      AiTeamApp(initialState: state, modelGateway: FakeModelGateway()),
     );
 
     await tester.tap(find.byTooltip('团队'));
