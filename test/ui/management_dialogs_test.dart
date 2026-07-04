@@ -785,12 +785,14 @@ void main() {
     expect(find.byTooltip('新增成员'), findsOneWidget);
     expect(find.byTooltip('打开私聊'), findsWidgets);
     expect(find.text('秘书成员'), findsOneWidget);
-    expect(find.text('私聊已启用'), findsWidgets);
+    expect(find.text('私聊已启用'), findsNothing);
+    expect(find.text('私聊入口'), findsWidgets);
     expect(find.textContaining('优先级'), findsNothing);
     expect(find.text('角色 秘书'), findsOneWidget);
     expect(find.text('模型 OpenAI Compatible'), findsWidgets);
     expect(find.text('所属团队'), findsOneWidget);
     expect(find.text('开发团队'), findsOneWidget);
+    expect(find.text('成员页 / 会话栏'), findsOneWidget);
     expect(find.text('代表用户发送'), findsOneWidget);
     expect(find.text('参与群聊'), findsOneWidget);
   });

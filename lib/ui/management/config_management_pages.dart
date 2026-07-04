@@ -245,7 +245,7 @@ class _MemberManagementPageState extends State<MemberManagementPage> {
                 subtitle:
                     '${roleName(widget.controller.state, member.roleId)} · ${modelName(widget.controller.state, member.modelId)} · ${_memberTeamNames(widget.controller.state, member)}',
                 chips: [
-                  _TeamMetaChip(label: member.isSecretary ? '秘书成员' : '私聊已启用'),
+                  _TeamMetaChip(label: member.isSecretary ? '秘书成员' : '私聊入口'),
                   _TeamMetaChip(
                     label:
                         '角色 ${roleName(widget.controller.state, member.roleId)}',
@@ -1049,7 +1049,7 @@ class _MemberDetail extends StatelessWidget {
             value: _memberTeamNames(controller.state, member),
           ),
           _DetailRow(label: '成员类型', value: member.isSecretary ? '秘书' : '普通成员'),
-          const _DetailRow(label: '私聊入口', value: '启用'),
+          const _DetailRow(label: '私聊入口', value: '成员页 / 会话栏'),
           const SizedBox(height: 10),
           _CapabilityGrid(
             rows: [
