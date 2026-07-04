@@ -12,7 +12,7 @@ class WorkspaceService {
   }) async {
     final root = rootFor(state, workspaceId);
     if (!await root.exists()) {
-      throw StateError('工作区不存在: ${root.path}');
+      throw StateError('项目不存在: ${root.path}');
     }
     final rootPath = root.absolute.path;
     final files = <String>[];
@@ -62,8 +62,9 @@ class WorkspaceService {
       workspaceId: workspaceId,
       relativePath: relativePath,
     );
-    final originalContent =
-        await file.exists() ? await file.readAsString() : '';
+    final originalContent = await file.exists()
+        ? await file.readAsString()
+        : '';
     return PatchProposal.fromFileChange(
       id: id,
       filePath: file.path,
@@ -74,8 +75,9 @@ class WorkspaceService {
   }
 
   Directory rootFor(AppState state, String workspaceId) {
-    final workspace =
-        state.workspaces.firstWhere((item) => item.id == workspaceId);
+    final workspace = state.workspaces.firstWhere(
+      (item) => item.id == workspaceId,
+    );
     return Directory(workspace.path).absolute;
   }
 
@@ -92,7 +94,7 @@ class WorkspaceService {
     final root = rootFor(state, workspaceId).absolute.path;
     final file = File('$root/$relativePath').absolute;
     if (!file.path.startsWith('$root/')) {
-      throw ArgumentError('文件路径越过工作区边界: $relativePath');
+      throw ArgumentError('文件路径越过项目边界: $relativePath');
     }
     return file;
   }
