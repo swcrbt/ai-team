@@ -964,7 +964,8 @@ void main() {
     expect(find.widgetWithText(OutlinedButton, '查看'), findsOneWidget);
     expect(find.text('变更量'), findsOneWidget);
     expect(find.text('文件'), findsOneWidget);
-    expect(find.text('hunks'), findsOneWidget);
+    expect(find.text('片段'), findsOneWidget);
+    expect(find.text('hunks'), findsNothing);
     expect(find.text('lib/ui/chat_view.dart'), findsWidgets);
     expect(find.widgetWithText(OutlinedButton, '展开文件'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, '拒绝'), findsOneWidget);

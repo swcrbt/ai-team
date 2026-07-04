@@ -1412,7 +1412,7 @@ class _PatchConfirmationPanel extends StatelessWidget {
               Expanded(
                 child: _PatchMetric(
                   value: stats.hunks.toString(),
-                  label: 'hunks',
+                  label: '片段',
                 ),
               ),
             ],

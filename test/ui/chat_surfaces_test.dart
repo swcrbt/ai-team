@@ -78,6 +78,8 @@ void main() {
 
     expect(find.text('Diff review · 补丁确认'), findsOneWidget);
     expect(find.text('+1 -1'), findsOneWidget);
+    expect(find.text('片段'), findsOneWidget);
+    expect(find.text('hunks'), findsNothing);
     expect(find.text('确认应用'), findsOneWidget);
     expect(find.text('new docs'), findsOneWidget);
 

@@ -55,7 +55,7 @@ class _ChatPatchConfirmationCardState extends State<ChatPatchConfirmationCard> {
                   Expanded(
                     child: _PatchMetric(
                       value: stats.hunks.toString(),
-                      label: 'hunks',
+                      label: '片段',
                     ),
                   ),
                 ],
@@ -472,7 +472,7 @@ class _DiffCollapsedSummary extends StatelessWidget {
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(6)),
       ),
       child: Text(
-        '+${stats.additions} -${stats.deletions} · ${stats.hunks} hunks',
+        '+${stats.additions} -${stats.deletions} · ${stats.hunks} 个片段',
         style: const TextStyle(
           color: Color(0xFF64748B),
           fontFamily: 'monospace',
