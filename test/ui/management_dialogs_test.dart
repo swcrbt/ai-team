@@ -50,6 +50,8 @@ void main() {
 
     expect(find.text('团队管理'), findsOneWidget);
     expect(find.byTooltip('新增团队'), findsOneWidget);
+    expect(find.text('对象：开发团队'), findsOneWidget);
+    expect(find.text('负责方案拆解、代码修改、补丁提交。'), findsWidgets);
     expect(find.widgetWithText(FilledButton, '发起聊天'), findsOneWidget);
     expect(find.textContaining('群聊 · 默认开发团队'), findsNothing);
   });
@@ -291,7 +293,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '保存'));
     await tester.pumpAndSettle();
 
-    expect(find.text('并行'), findsWidgets);
+    expect(find.text('模式 并行协作'), findsWidgets);
   });
 
   testWidgets('team management edits a team', (tester) async {
@@ -310,7 +312,10 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '保存'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('编辑团队').last);
+    final editTeamButton = find.byTooltip('编辑团队').last;
+    await tester.ensureVisible(editTeamButton);
+    await tester.pumpAndSettle();
+    await tester.tap(editTeamButton);
     await tester.pumpAndSettle();
     await tester.enterText(find.widgetWithText(TextField, '团队名称'), '移动端交付组');
     await tester.tap(find.text('并行'));

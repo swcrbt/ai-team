@@ -302,6 +302,7 @@ class _TeamCardGrid extends StatelessWidget {
       actionLabel: '新增团队',
       onAdd: () => showTeamDialog(context, controller),
       children: [
+        const _TeamObjectHint(),
         for (final team in teams)
           _TeamObjectCard(
             key: ValueKey('team-row-${team.id}'),
@@ -315,6 +316,28 @@ class _TeamCardGrid extends StatelessWidget {
             },
           ),
       ],
+    );
+  }
+}
+
+class _TeamObjectHint extends StatelessWidget {
+  const _TeamObjectHint();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: const Text(
+        '按开发、测试、文档、发布这类团队对象管理成员组合。',
+        style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+      ),
     );
   }
 }
@@ -340,6 +363,12 @@ class _TeamObjectCard extends StatelessWidget {
     final members = controller.state.members
         .where((member) => team.memberIds.contains(member.id))
         .toList();
+    final secretary = members.firstWhere(
+      (member) => member.id == team.secretaryMemberId,
+      orElse: () =>
+          members.isEmpty ? controller.state.members.first : members.first,
+    );
+    final spec = _teamCardSpec(team);
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       child: Material(
@@ -359,31 +388,66 @@ class _TeamObjectCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
-                      child: Text(
-                        team.name,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            team.name,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            spec.purpose,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFF64748B),
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    Text(
-                      collaborationModeLabel(team.collaborationMode),
-                      style: const TextStyle(
-                        color: Color(0xFF64748B),
-                        fontWeight: FontWeight.w700,
+                    _TeamObjectBadge(label: '对象：${spec.objectName}'),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    _TeamMetaChip(label: '成员 ${members.length}'),
+                    _TeamMetaChip(
+                      label:
+                          '模式 ${collaborationModeLabel(team.collaborationMode)}协作',
+                    ),
+                    _TeamMetaChip(label: '默认秘书 ${secretary.name}'),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.groups_2_outlined,
+                      size: 16,
+                      color: Color(0xFF64748B),
+                    ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        members.map((member) => member.name).join('、'),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Color(0xFF475569)),
                       ),
                     ),
                   ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  members.map((member) => member.name).join('、'),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Color(0xFF475569)),
                 ),
                 const SizedBox(height: 12),
                 Row(
@@ -418,6 +482,98 @@ class _TeamObjectCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _TeamObjectBadge extends StatelessWidget {
+  const _TeamObjectBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Color(0xFF1D4ED8),
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _TeamMetaChip extends StatelessWidget {
+  const _TeamMetaChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Color(0xFF475569),
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _TeamCardSpec {
+  const _TeamCardSpec({required this.objectName, required this.purpose});
+
+  final String objectName;
+  final String purpose;
+}
+
+_TeamCardSpec _teamCardSpec(Team team) {
+  final name = team.name;
+  if (name.contains('测试') || name.toLowerCase().contains('qa')) {
+    return const _TeamCardSpec(
+      objectName: '测试团队',
+      purpose: '负责回归验证、失败复现、测试报告。',
+    );
+  }
+  if (name.contains('文档') || name.toLowerCase().contains('doc')) {
+    return const _TeamCardSpec(
+      objectName: '文档团队',
+      purpose: '负责设计文档、变更摘要、发布说明。',
+    );
+  }
+  if (name.contains('发布') || name.toLowerCase().contains('release')) {
+    return const _TeamCardSpec(
+      objectName: '发布团队',
+      purpose: '负责发布检查、审计确认、风险复核。',
+    );
+  }
+  if (name.contains('开发') ||
+      name.contains('默认') ||
+      name.toLowerCase().contains('dev')) {
+    return const _TeamCardSpec(
+      objectName: '开发团队',
+      purpose: '负责方案拆解、代码修改、补丁提交。',
+    );
+  }
+  return const _TeamCardSpec(
+    objectName: '协作团队',
+    purpose: '按成员组合执行当前协作流程。',
+  );
 }
 
 class _EntityLayout extends StatelessWidget {
@@ -565,7 +721,9 @@ class _TeamDetail extends StatelessWidget {
       ),
       child: Column(
         children: [
+          _DetailRow(label: '团队对象', value: _teamCardSpec(team).objectName),
           _DetailRow(label: '团队名称', value: team.name),
+          _DetailRow(label: '团队用途', value: _teamCardSpec(team).purpose),
           _DetailRow(
             label: '协作模式',
             value: collaborationModeLabel(team.collaborationMode),
