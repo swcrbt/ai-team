@@ -645,11 +645,11 @@ String _commandStateTitle(CommandRequestStatus status) {
 
 String _commandStatusLabel(CommandRequestStatus status) {
   return switch (status) {
-    CommandRequestStatus.pending => 'pending',
+    CommandRequestStatus.pending => '待审批',
     CommandRequestStatus.approved => '允许中',
-    CommandRequestStatus.executed => 'exit 0',
-    CommandRequestStatus.denied => 'denied',
-    CommandRequestStatus.failed => 'failed',
+    CommandRequestStatus.executed => '已执行',
+    CommandRequestStatus.denied => '已拒绝',
+    CommandRequestStatus.failed => '失败',
   };
 }
 

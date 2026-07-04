@@ -1,4 +1,5 @@
 import 'app_widget_test_support.dart';
+import 'package:ai_team/ui/management/chat_status_cards.dart';
 
 void main() {
   testWidgets('desktop workspace separates chat and settings surfaces', (
@@ -112,6 +113,8 @@ void main() {
     );
 
     expect(find.text('命令请求 · 待审批'), findsOneWidget);
+    expect(find.text('待审批'), findsWidgets);
+    expect(find.text('pending'), findsNothing);
     expect(find.textContaining('df -h /'), findsWidgets);
     expect(find.textContaining('/'), findsWidgets);
     expect(find.widgetWithText(FilledButton, '允许'), findsOneWidget);
@@ -191,12 +194,63 @@ void main() {
 
       expect(find.text('命令请求 · 待审批'), findsNothing);
       expect(find.text('命令已允许'), findsOneWidget);
+      expect(find.text('允许中'), findsWidgets);
       expect(find.textContaining('df -h /'), findsWidgets);
       expect(find.widgetWithText(FilledButton, '执行'), findsOneWidget);
       expect(find.widgetWithText(FilledButton, '允许'), findsNothing);
       expect(find.widgetWithText(OutlinedButton, '拒绝'), findsNothing);
     },
   );
+
+  testWidgets('command state cards use workflow status labels', (tester) async {
+    CommandRequest requestWithStatus(String id, CommandRequestStatus status) =>
+        CommandRequest.pending(
+          id: id,
+          memberName: '秘书',
+          command: 'pwd',
+          workingDirectory: '/',
+          decision: CommandDecision.allowed,
+          conversationId: 'conv-member-secretary',
+          memberId: 'member-secretary',
+          toolCallId: 'call-$id',
+        ).copyWith(
+          status: status,
+          output: status == CommandRequestStatus.failed ? '退出码 1' : null,
+        );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: Column(
+              children: [
+                for (final status in [
+                  CommandRequestStatus.pending,
+                  CommandRequestStatus.executed,
+                  CommandRequestStatus.denied,
+                  CommandRequestStatus.failed,
+                ])
+                  ChatCommandRequestCard(
+                    request: requestWithStatus(status.name, status),
+                    onApproveExecute: () {},
+                    onReject: () {},
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.text('待审批'), findsWidgets);
+    expect(find.text('已执行'), findsWidgets);
+    expect(find.text('已拒绝'), findsWidgets);
+    expect(find.text('失败'), findsWidgets);
+    expect(find.text('pending'), findsNothing);
+    expect(find.text('exit 0'), findsNothing);
+    expect(find.text('denied'), findsNothing);
+    expect(find.text('failed'), findsNothing);
+  });
 
   testWidgets(
     'chat message renders command result collapsed in the same bubble',
