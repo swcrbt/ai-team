@@ -9,8 +9,76 @@ import 'package:ai_team/core/orchestrator.dart';
 
 void main() {
   testWidgets(
-      'message sidebar renders grouped chat sections with context menu',
-      (tester) async {
+    'message sidebar renders grouped chat sections with context menu',
+    (tester) async {
+      await tester.pumpWidget(
+        AiTeamApp(
+          initialState: AppState.seed(),
+          modelGateway: _NoopModelGateway(),
+        ),
+      );
+
+      expect(find.text('群聊'), findsOneWidget);
+      expect(find.text('私聊'), findsOneWidget);
+      expect(find.text('默认开发团队'), findsOneWidget);
+      expect(find.text('秘书'), findsWidgets);
+      expect(find.text('前端工程师'), findsWidgets);
+      expect(find.byTooltip('关闭聊天'), findsNothing);
+
+      expect(
+        tester.getTopLeft(find.text('默认开发团队')).dy,
+        lessThan(tester.getTopLeft(find.text('秘书').first).dy),
+      );
+
+      await tester.tap(find.text('默认开发团队'));
+      await tester.pumpAndSettle();
+
+      final conversationList = tester.widget<ListView>(
+        find.byKey(const ValueKey('conversation-list')),
+      );
+      expect(
+        conversationList.padding,
+        const EdgeInsets.symmetric(horizontal: 10),
+      );
+      final selectedRow = tester.widget<Material>(
+        find.descendant(
+          of: find.byKey(const ValueKey('conversation-row-conv-team-default')),
+          matching: find.byType(Material),
+        ),
+      );
+      expect(selectedRow.color, const Color(0xFF2F80ED));
+      final selectedRowShape = selectedRow.shape! as RoundedRectangleBorder;
+      expect(selectedRowShape.borderRadius, BorderRadius.circular(8));
+      final selectedRowPadding = tester.widget<Padding>(
+        find
+            .descendant(
+              of: find.byKey(
+                const ValueKey('conversation-row-conv-team-default'),
+              ),
+              matching: find.byType(Padding),
+            )
+            .first,
+      );
+      expect(selectedRowPadding.padding, const EdgeInsets.all(10));
+
+      await tester.tap(
+        find.byKey(const ValueKey('conversation-row-conv-team-default')),
+        buttons: kSecondaryMouseButton,
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('删除'), findsOneWidget);
+
+      await tester.tap(find.text('删除'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('默认开发团队'), findsNothing);
+    },
+  );
+
+  testWidgets('message sidebar plus starts group or private chats only', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       AiTeamApp(
         initialState: AppState.seed(),
@@ -18,64 +86,27 @@ void main() {
       ),
     );
 
-    expect(find.text('群聊'), findsOneWidget);
-    expect(find.text('私聊'), findsOneWidget);
-    expect(find.text('默认开发团队'), findsOneWidget);
-    expect(find.text('秘书'), findsWidgets);
+    expect(find.byTooltip('新增成员'), findsNothing);
+    expect(find.byTooltip('新增会话'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('新增会话'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('新增团队成员'), findsNothing);
+    expect(find.text('群聊'), findsWidgets);
+    expect(find.text('私聊'), findsWidgets);
+    expect(find.text('默认开发团队'), findsWidgets);
     expect(find.text('前端工程师'), findsWidgets);
-    expect(find.byTooltip('关闭聊天'), findsNothing);
 
-    expect(
-      tester.getTopLeft(find.text('默认开发团队')).dy,
-      lessThan(tester.getTopLeft(find.text('秘书').first).dy),
-    );
-
-    await tester.tap(find.text('默认开发团队'));
+    await tester.tap(find.text('前端工程师').last);
     await tester.pumpAndSettle();
 
-    final conversationList = tester.widget<ListView>(
-      find.byKey(const ValueKey('conversation-list')),
-    );
-    expect(
-      conversationList.padding,
-      const EdgeInsets.symmetric(horizontal: 10),
-    );
-    final selectedRow = tester.widget<Material>(
-      find.descendant(
-        of: find.byKey(const ValueKey('conversation-row-conv-team-default')),
-        matching: find.byType(Material),
-      ),
-    );
-    expect(selectedRow.color, const Color(0xFF2F80ED));
-    final selectedRowShape = selectedRow.shape! as RoundedRectangleBorder;
-    expect(selectedRowShape.borderRadius, BorderRadius.circular(8));
-    final selectedRowPadding = tester.widget<Padding>(
-      find
-          .descendant(
-            of: find
-                .byKey(const ValueKey('conversation-row-conv-team-default')),
-            matching: find.byType(Padding),
-          )
-          .first,
-    );
-    expect(selectedRowPadding.padding, const EdgeInsets.all(10));
-
-    await tester.tap(
-      find.byKey(const ValueKey('conversation-row-conv-team-default')),
-      buttons: kSecondaryMouseButton,
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('删除'), findsOneWidget);
-
-    await tester.tap(find.text('删除'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('默认开发团队'), findsNothing);
+    expect(find.textContaining('私聊 · 前端工程师'), findsOneWidget);
   });
 
-  testWidgets('starting a chat moves it to the top of the sidebar',
-      (tester) async {
+  testWidgets('starting a chat moves it to the top of the sidebar', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       AiTeamApp(
         initialState: AppState.seed(),
@@ -161,8 +192,9 @@ void main() {
     expect(find.text('移动端小队'), findsOneWidget);
   });
 
-  testWidgets('message sidebar does not invent member chats after restart',
-      (tester) async {
+  testWidgets('message sidebar does not invent member chats after restart', (
+    tester,
+  ) async {
     final seed = AppState.seed();
     const persistedTeam = Team(
       id: 'team-aa',
@@ -221,12 +253,14 @@ void main() {
     );
     expect(
       find.byKey(
-          const ValueKey('conversation-row-conv-team-aa-member-secretary')),
+        const ValueKey('conversation-row-conv-team-aa-member-secretary'),
+      ),
       findsNothing,
     );
     expect(
       find.byKey(
-          const ValueKey('conversation-row-conv-team-aa-member-frontend')),
+        const ValueKey('conversation-row-conv-team-aa-member-frontend'),
+      ),
       findsNothing,
     );
     expect(
@@ -235,8 +269,9 @@ void main() {
     );
   });
 
-  testWidgets('message sidebar can close a chat without deleting history',
-      (tester) async {
+  testWidgets('message sidebar can close a chat without deleting history', (
+    tester,
+  ) async {
     final seed = AppState.seed();
     final teamConversation = seed.conversations.firstWhere(
       (conversation) =>
@@ -245,10 +280,7 @@ void main() {
     );
 
     await tester.pumpWidget(
-      AiTeamApp(
-        initialState: seed,
-        modelGateway: _NoopModelGateway(),
-      ),
+      AiTeamApp(initialState: seed, modelGateway: _NoopModelGateway()),
     );
 
     expect(find.text('默认开发团队'), findsOneWidget);
@@ -270,12 +302,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('默认开发团队'), findsOneWidget);
-    expect(find.textContaining(teamConversation.messages.last.content),
-        findsWidgets);
+    expect(
+      find.textContaining(teamConversation.messages.last.content),
+      findsWidgets,
+    );
   });
 
-  testWidgets('private chats remain listed after selecting another team chat',
-      (tester) async {
+  testWidgets('private chats remain listed after selecting another team chat', (
+    tester,
+  ) async {
     final controller = AppController(
       AppState.seed(),
       TeamOrchestrator(_NoopModelGateway()),
@@ -316,36 +351,41 @@ void main() {
     expect(find.text('私聊'), findsOneWidget);
   });
 
-  testWidgets('message sidebar keeps all private chats after team chat starts',
-      (tester) async {
-    await tester.pumpWidget(
-      AiTeamApp(
-        initialState: AppState.seed(),
-        modelGateway: _NoopModelGateway(),
-      ),
-    );
+  testWidgets(
+    'message sidebar keeps all private chats after team chat starts',
+    (tester) async {
+      await tester.pumpWidget(
+        AiTeamApp(
+          initialState: AppState.seed(),
+          modelGateway: _NoopModelGateway(),
+        ),
+      );
 
-    expect(find.text('私聊'), findsOneWidget);
-    expect(find.text('秘书'), findsWidgets);
-    expect(find.text('前端工程师'), findsWidgets);
-    expect(find.text('测试工程师'), findsWidgets);
+      expect(find.text('私聊'), findsOneWidget);
+      expect(find.text('秘书'), findsWidgets);
+      expect(find.text('前端工程师'), findsWidgets);
+      expect(find.text('测试工程师'), findsWidgets);
 
-    await tester.tap(find.byTooltip('团队'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, '发起聊天'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('团队'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, '发起聊天'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('群聊'), findsOneWidget);
-    expect(find.text('私聊'), findsOneWidget);
-    expect(find.text('秘书'), findsWidgets);
-    expect(find.text('前端工程师'), findsWidgets);
-    expect(find.text('测试工程师'), findsWidgets);
-    expect(find.byKey(const ValueKey('conversation-row-conv-team-default')),
-        findsOneWidget);
-  });
+      expect(find.text('群聊'), findsOneWidget);
+      expect(find.text('私聊'), findsOneWidget);
+      expect(find.text('秘书'), findsWidgets);
+      expect(find.text('前端工程师'), findsWidgets);
+      expect(find.text('测试工程师'), findsWidgets);
+      expect(
+        find.byKey(const ValueKey('conversation-row-conv-team-default')),
+        findsOneWidget,
+      );
+    },
+  );
 
-  testWidgets('message sidebar keeps scroll after private and group switches',
-      (tester) async {
+  testWidgets('message sidebar keeps scroll after private and group switches', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       AiTeamApp(
         initialState: _stateWithLongConversationSidebar(),
@@ -355,18 +395,17 @@ void main() {
     await tester.pumpAndSettle();
 
     final list = find.byKey(const ValueKey('conversation-list'));
-    const targetGroupRow =
-        ValueKey('conversation-row-conv-team-sidebar-target');
-    const targetPrivateRow =
-        ValueKey('conversation-row-conv-team-sidebar-target-member-sidebar');
+    const targetGroupRow = ValueKey(
+      'conversation-row-conv-team-sidebar-target',
+    );
+    const targetPrivateRow = ValueKey(
+      'conversation-row-conv-team-sidebar-target-member-sidebar',
+    );
 
     await tester.scrollUntilVisible(
       find.byKey(targetGroupRow),
       120,
-      scrollable: find.descendant(
-        of: list,
-        matching: find.byType(Scrollable),
-      ),
+      scrollable: find.descendant(of: list, matching: find.byType(Scrollable)),
     );
     await tester.pumpAndSettle();
 

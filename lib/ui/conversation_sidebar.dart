@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../application/app_controller.dart';
 import '../core/domain.dart';
 import 'app_helpers.dart';
-import 'dialogs/config_dialogs.dart';
 import 'main_view.dart';
 
 class ConversationList extends StatefulWidget {
@@ -69,21 +68,23 @@ class _ConversationListState extends State<ConversationList> {
                     ),
                   ),
                 ),
-                IconButton(
-                  tooltip: '新增成员',
-                  style: IconButton.styleFrom(
-                    fixedSize: const Size.square(30),
-                    minimumSize: const Size.square(30),
-                    padding: EdgeInsets.zero,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(6),
-                      side: const BorderSide(color: Color(0xFFE1E5EA)),
+                Builder(
+                  builder: (buttonContext) => IconButton(
+                    tooltip: '新增会话',
+                    style: IconButton.styleFrom(
+                      fixedSize: const Size.square(30),
+                      minimumSize: const Size.square(30),
+                      padding: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        side: const BorderSide(color: Color(0xFFE1E5EA)),
+                      ),
+                      backgroundColor: Colors.white,
+                      foregroundColor: const Color(0xFF5D6673),
                     ),
-                    backgroundColor: Colors.white,
-                    foregroundColor: const Color(0xFF5D6673),
+                    onPressed: () => _showStartConversationMenu(buttonContext),
+                    icon: const Icon(Icons.add_rounded, size: 18),
                   ),
-                  onPressed: () => showMemberDialog(context, widget.controller),
-                  icon: const Icon(Icons.add_rounded, size: 18),
                 ),
               ],
             ),
@@ -178,6 +179,81 @@ class _ConversationListState extends State<ConversationList> {
         .clamp(position.minScrollExtent, position.maxScrollExtent)
         .toDouble();
     widget.controller.recordConversationListScrollOffset(offset);
+  }
+
+  Future<void> _showStartConversationMenu(BuildContext buttonContext) async {
+    final buttonBox = buttonContext.findRenderObject() as RenderBox;
+    final overlayBox = Navigator.of(buttonContext)
+        .overlay!
+        .context
+        .findRenderObject() as RenderBox;
+    final buttonRect = Rect.fromPoints(
+      buttonBox.localToGlobal(Offset.zero, ancestor: overlayBox),
+      buttonBox.localToGlobal(
+        buttonBox.size.bottomRight(Offset.zero),
+        ancestor: overlayBox,
+      ),
+    );
+    final action = await showMenu<String>(
+      context: buttonContext,
+      position: RelativeRect.fromRect(
+        buttonRect,
+        Offset.zero & overlayBox.size,
+      ),
+      items: [
+        const PopupMenuItem<String>(enabled: false, child: Text('群聊')),
+        for (final team in widget.controller.state.teams)
+          PopupMenuItem<String>(
+            value: 'team:${team.id}',
+            child: Row(
+              children: [
+                const Icon(Icons.forum_rounded, size: 18),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Text(
+                    team.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        const PopupMenuDivider(),
+        const PopupMenuItem<String>(enabled: false, child: Text('私聊')),
+        for (final member in widget.controller.currentMembers)
+          PopupMenuItem<String>(
+            value: 'member:${member.id}',
+            child: Row(
+              children: [
+                Icon(
+                  member.isSecretary
+                      ? Icons.assignment_ind_rounded
+                      : Icons.person_rounded,
+                  size: 18,
+                ),
+                const SizedBox(width: 10),
+                Flexible(
+                  child: Text(
+                    member.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+    if (!mounted || action == null) {
+      return;
+    }
+    if (action.startsWith('team:')) {
+      widget.controller.startTeamChat(action.substring('team:'.length));
+    } else if (action.startsWith('member:')) {
+      widget.controller.startMemberChat(action.substring('member:'.length));
+    }
+    widget.onSelectConversation(widget.controller.selectedConversationId);
   }
 }
 
