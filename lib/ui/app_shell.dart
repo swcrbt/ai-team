@@ -8,6 +8,7 @@ import '../core/domain.dart';
 import '../core/file_dialogs.dart';
 import '../core/model_gateway.dart';
 import '../core/orchestrator.dart';
+import '../core/storage_directories.dart';
 import 'chat/chat_pane.dart';
 import 'conversation_sidebar.dart';
 import 'main_view.dart';
@@ -22,6 +23,8 @@ class AiTeamApp extends StatelessWidget {
     this.onStateChanged,
     this.fileDialogs = const SystemFileDialogService(),
     this.chatScrollDiagnostics,
+    this.storageDirectories,
+    this.storageDirectoryConfigStore,
   });
 
   final AppState initialState;
@@ -29,6 +32,8 @@ class AiTeamApp extends StatelessWidget {
   final StateChanged? onStateChanged;
   final FileDialogService fileDialogs;
   final ChatScrollDiagnostics? chatScrollDiagnostics;
+  final StorageDirectories? storageDirectories;
+  final StorageDirectoryConfigStore? storageDirectoryConfigStore;
 
   @override
   Widget build(BuildContext context) {
@@ -49,6 +54,8 @@ class AiTeamApp extends StatelessWidget {
         onStateChanged: onStateChanged,
         fileDialogs: fileDialogs,
         chatScrollDiagnostics: chatScrollDiagnostics,
+        storageDirectories: storageDirectories,
+        storageDirectoryConfigStore: storageDirectoryConfigStore,
       ),
     );
   }
@@ -62,6 +69,8 @@ class AiTeamHome extends StatefulWidget {
     this.onStateChanged,
     this.fileDialogs = const SystemFileDialogService(),
     this.chatScrollDiagnostics,
+    this.storageDirectories,
+    this.storageDirectoryConfigStore,
   });
 
   final AppState initialState;
@@ -69,6 +78,8 @@ class AiTeamHome extends StatefulWidget {
   final StateChanged? onStateChanged;
   final FileDialogService fileDialogs;
   final ChatScrollDiagnostics? chatScrollDiagnostics;
+  final StorageDirectories? storageDirectories;
+  final StorageDirectoryConfigStore? storageDirectoryConfigStore;
 
   @override
   State<AiTeamHome> createState() => _AiTeamHomeState();
@@ -88,6 +99,8 @@ class _AiTeamHomeState extends State<AiTeamHome> {
       onStateChanged: widget.onStateChanged,
       fileDialogs: widget.fileDialogs,
       diagnostics: widget.chatScrollDiagnostics,
+      storageDirectories: widget.storageDirectories,
+      storageDirectoryConfigStore: widget.storageDirectoryConfigStore,
     );
   }
 
@@ -117,7 +130,7 @@ class _AiTeamHomeState extends State<AiTeamHome> {
                 return Row(
                   children: [
                     SizedBox(
-                      width: 72,
+                      width: 64,
                       child: AppSidebar(
                         selectedView: mainView,
                         onChat: () => _showMainView(MainView.chat),
@@ -125,7 +138,6 @@ class _AiTeamHomeState extends State<AiTeamHome> {
                         onModels: () => _showMainView(MainView.models),
                         onRoles: () => _showMainView(MainView.roles),
                         onMembers: () => _showMainView(MainView.members),
-                        onHistory: () => _showMainView(MainView.history),
                         onAudit: () => _showMainView(MainView.audit),
                         onProject: () => _showMainView(MainView.project),
                         onSettings: () => _showMainView(MainView.settings),
@@ -216,7 +228,6 @@ class _AiTeamHomeState extends State<AiTeamHome> {
           controller: controller,
           onStartChat: () => _showMainView(MainView.chat),
         ),
-      MainView.history => HistoryPage(controller: controller),
       MainView.audit => AuditLogPage(controller: controller),
       MainView.project => ProjectPage(controller: controller),
       MainView.settings => SettingsPage(controller: controller),

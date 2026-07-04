@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ai_team/core/domain.dart';
 import 'package:ai_team/core/local_store.dart';
 import 'package:ai_team/core/secret_store.dart';
+import 'package:ai_team/core/storage_directories.dart';
 
 void main() {
   group('local store paths', () {
@@ -26,6 +27,55 @@ void main() {
         store.file.path,
         '/Users/example/Library/Application Support/ai_team/state.json',
       );
+    });
+
+    test('storage directory config defaults under application support',
+        () async {
+      final temp = await Directory.systemTemp.createTemp('ai_team_storage_');
+      addTearDown(() async => temp.delete(recursive: true));
+      final store = StorageDirectoryConfigStore.applicationSupport(temp);
+
+      final directories = await store.load();
+
+      expect(directories.stateDirectory, temp.path);
+      expect(directories.auditDirectory, '${temp.path}/audit');
+      expect(directories.conversationDirectory, '${temp.path}/conversations');
+      expect(directories.cacheDirectory, '${temp.path}/cache');
+    });
+
+    test('storage directory config saves and copies existing data', () async {
+      final temp = await Directory.systemTemp.createTemp('ai_team_storage_');
+      addTearDown(() async => temp.delete(recursive: true));
+      final store = StorageDirectoryConfigStore.applicationSupport(temp);
+      final source = StorageDirectories(
+        stateDirectory: '${temp.path}/old-state',
+        auditDirectory: '${temp.path}/old-audit',
+        conversationDirectory: '${temp.path}/old-conversations',
+        cacheDirectory: '${temp.path}/old-cache',
+      );
+      final target = StorageDirectories(
+        stateDirectory: '${temp.path}/new-state',
+        auditDirectory: '${temp.path}/new-audit',
+        conversationDirectory: '${temp.path}/new-conversations',
+        cacheDirectory: '${temp.path}/new-cache',
+      );
+      await File(source.stateFilePath).create(recursive: true);
+      await File(source.stateFilePath).writeAsString('{"ok":true}');
+      await File('${source.auditDirectory}/audit.jsonl')
+          .create(recursive: true);
+      await File('${source.auditDirectory}/audit.jsonl').writeAsString('event');
+
+      await store.copyExistingData(from: source, to: target);
+      await store.save(target);
+      final loaded = await store.load();
+
+      expect(await File(target.stateFilePath).readAsString(), '{"ok":true}');
+      expect(
+        await File('${target.auditDirectory}/audit.jsonl').readAsString(),
+        'event',
+      );
+      expect(loaded.stateDirectory, target.stateDirectory);
+      expect(loaded.auditDirectory, target.auditDirectory);
     });
 
     test('recovers richer legacy state when app support state is sparse',

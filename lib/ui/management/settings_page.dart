@@ -1,7 +1,9 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../application/app_controller.dart';
-import '../../core/domain.dart';
+import '../../core/storage_directories.dart';
 import '../dialogs/config_dialogs.dart';
 import 'management_components.dart';
 
@@ -18,264 +20,362 @@ class SettingsPage extends StatefulWidget {
 }
 
 class SettingsPageState extends State<SettingsPage> {
-  final scrollController = ScrollController();
-  final sectionKeys = {
-    '命令请求': GlobalKey(),
-    '导入导出': GlobalKey(),
-  };
+  late StorageDirectories draftDirectories;
+  bool saving = false;
 
   AppController get controller => widget.controller;
 
   @override
-  void dispose() {
-    scrollController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    draftDirectories = controller.storageDirectories;
   }
 
-  void scrollToSection(String title) {
-    final context = sectionKeys[title]?.currentContext;
-    if (context == null) {
-      return;
+  @override
+  void didUpdateWidget(covariant SettingsPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller.storageDirectories !=
+        widget.controller.storageDirectories) {
+      draftDirectories = widget.controller.storageDirectories;
     }
-    Scrollable.ensureVisible(
-      context,
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
-      alignment: 0.02,
-    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          height: 72,
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(
-              bottom: BorderSide(color: Color(0xFFE5E7EB)),
-            ),
+    return ManagementPageFrame(
+      title: '设置',
+      subtitle: '本机配置、持久化目录和导入导出',
+      child: Column(
+        children: [
+          _StorageDirectoryPanel(
+            directories: draftDirectories,
+            onPick: _pickDirectory,
+            onOpen: _openDirectory,
+            onClear: _clearDirectory,
+            onDefaults: _restoreDefaults,
+            onSave: saving ? null : _saveDirectories,
           ),
-          child: const Row(
-            children: [
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '设置',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    Text('命令和导入导出配置保存在本机'),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        _SettingsCategoryBar(onSelect: scrollToSection),
-        Expanded(
-          child: SingleChildScrollView(
-            controller: scrollController,
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              children: [
-                ManagementPanel(
-                  key: sectionKeys['导入导出'],
-                  title: '导入导出',
-                  icon: Icons.ios_share_rounded,
-                  action: IconButton(
-                    tooltip: '导入 / 导出配置',
-                    onPressed: () => showExportDialog(context, controller),
-                    icon: const Icon(Icons.open_in_new_rounded),
-                  ),
-                  child: const Text('配置文件和密钥导出选项集中在这里管理。'),
-                ),
-                ManagementPanel(
-                  title: '任务轮次',
-                  icon: Icons.account_tree_rounded,
-                  child: Column(
-                    children: controller.currentTaskAssignments.isEmpty
-                        ? [
-                            ManagementKeyValueRow(
-                              label: '当前轮次',
-                              value:
-                                  '第 ${controller.currentConversation.currentRound} 轮',
-                            ),
-                            const Text('暂无成员任务'),
-                          ]
-                        : controller.currentTaskAssignments
-                            .map(
-                              (assignment) =>
-                                  TaskAssignmentCard(assignment: assignment),
-                            )
-                            .toList(),
-                  ),
-                ),
-                ManagementPanel(
-                  key: sectionKeys['命令请求'],
-                  title: '命令请求',
-                  icon: Icons.terminal_rounded,
-                  action: IconButton(
-                    tooltip: '创建命令请求',
-                    onPressed: () => showCommandDialog(context, controller),
-                    icon: const Icon(Icons.add_rounded),
-                  ),
-                  child: Column(
-                    children: controller.state.commandRequests.isEmpty
-                        ? [const Text('暂无命令请求')]
-                        : controller.state.commandRequests
-                            .map(
-                              (request) => _CommandRequestCard(
-                                request: request,
-                                onApprove: () =>
-                                    controller.updateCommandRequestStatus(
-                                  request.id,
-                                  CommandRequestStatus.approved,
-                                ),
-                                onDeny: () =>
-                                    controller.updateCommandRequestStatus(
-                                  request.id,
-                                  CommandRequestStatus.denied,
-                                ),
-                                onExecute: () =>
-                                    controller.executeCommandRequest(
-                                  request.id,
-                                ),
-                              ),
-                            )
-                            .toList(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
+          const SizedBox(height: 14),
+          _ImportExportPanel(controller: controller),
+        ],
+      ),
     );
+  }
+
+  Future<void> _pickDirectory(_StorageDirectoryKind kind) async {
+    final path = await controller.fileDialogs.pickDirectory();
+    if (path == null || path.trim().isEmpty) {
+      return;
+    }
+    setState(() {
+      draftDirectories = _applyPath(
+        draftDirectories,
+        kind,
+        Directory(path).absolute.path,
+      );
+    });
+  }
+
+  Future<void> _openDirectory(_StorageDirectoryKind kind) async {
+    final path = _pathFor(draftDirectories, kind);
+    if (path.trim().isEmpty) {
+      return;
+    }
+    if (Platform.isMacOS) {
+      await Process.run('open', [path]);
+    }
+  }
+
+  void _clearDirectory(_StorageDirectoryKind kind) {
+    setState(() {
+      draftDirectories = _applyPath(draftDirectories, kind, '');
+    });
+  }
+
+  void _restoreDefaults() {
+    setState(() {
+      draftDirectories = controller.storageDirectoryConfigStore?.defaults ??
+          controller.storageDirectories;
+    });
+  }
+
+  Future<void> _saveDirectories() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('保存持久化目录？'),
+        content: const Text('保存前会复制现有状态、审计、会话和缓存目录。当前运行中的保存路径会在下次启动时完全生效。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('确认保存'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+    setState(() => saving = true);
+    try {
+      await controller.updateStorageDirectories(
+        draftDirectories,
+        migrate: true,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => saving = false);
+      }
+    }
   }
 }
 
-class _SettingsCategoryBar extends StatelessWidget {
-  const _SettingsCategoryBar({required this.onSelect});
+class _StorageDirectoryPanel extends StatelessWidget {
+  const _StorageDirectoryPanel({
+    required this.directories,
+    required this.onPick,
+    required this.onOpen,
+    required this.onClear,
+    required this.onDefaults,
+    required this.onSave,
+  });
 
-  final ValueChanged<String> onSelect;
-
-  static const items = [
-    (Icons.terminal_rounded, '命令', '命令请求'),
-    (Icons.ios_share_rounded, '导入导出', '导入导出'),
-  ];
+  final StorageDirectories directories;
+  final ValueChanged<_StorageDirectoryKind> onPick;
+  final ValueChanged<_StorageDirectoryKind> onOpen;
+  final ValueChanged<_StorageDirectoryKind> onClear;
+  final VoidCallback onDefaults;
+  final VoidCallback? onSave;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minHeight: 56),
-      alignment: Alignment.centerLeft,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-      decoration: const BoxDecoration(
-        color: Color(0xFFFAFAFB),
-        border: Border(
-          bottom: BorderSide(color: Color(0xFFE5E7EB)),
-        ),
-      ),
-      child: Wrap(
+    return _SettingsPanel(
+      title: '持久化存储目录',
+      action: Wrap(
         spacing: 8,
-        runSpacing: 6,
         children: [
-          for (final item in items)
-            ActionChip(
-              onPressed: () => onSelect(item.$3),
-              avatar: Icon(item.$1, size: 16),
-              label: Text(item.$2),
-              side: const BorderSide(color: Color(0xFFE5E7EB)),
-              backgroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
+          OutlinedButton(
+            onPressed: onDefaults,
+            child: const Text('恢复默认'),
+          ),
+          FilledButton(
+            onPressed: onSave,
+            child: const Text('保存目录'),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          _StorageDirectoryRow(
+            label: '状态目录',
+            description: 'state.json 和模型配置',
+            path: directories.stateDirectory,
+            kind: _StorageDirectoryKind.state,
+            onPick: onPick,
+            onOpen: onOpen,
+            onClear: onClear,
+          ),
+          _StorageDirectoryRow(
+            label: '审计目录',
+            description: '命令、模型调用和补丁审计',
+            path: directories.auditDirectory,
+            kind: _StorageDirectoryKind.audit,
+            onPick: onPick,
+            onOpen: onOpen,
+            onClear: onClear,
+          ),
+          _StorageDirectoryRow(
+            label: '会话目录',
+            description: '长期会话与私聊缓存',
+            path: directories.conversationDirectory,
+            kind: _StorageDirectoryKind.conversations,
+            onPick: onPick,
+            onOpen: onOpen,
+            onClear: onClear,
+          ),
+          _StorageDirectoryRow(
+            label: '缓存目录',
+            description: '临时响应和本地缓存',
+            path: directories.cacheDirectory,
+            kind: _StorageDirectoryKind.cache,
+            onPick: onPick,
+            onOpen: onOpen,
+            onClear: onClear,
+          ),
         ],
       ),
     );
   }
 }
 
-class _CommandRequestCard extends StatelessWidget {
-  const _CommandRequestCard({
-    required this.request,
-    required this.onApprove,
-    required this.onDeny,
-    required this.onExecute,
+class _StorageDirectoryRow extends StatelessWidget {
+  const _StorageDirectoryRow({
+    required this.label,
+    required this.description,
+    required this.path,
+    required this.kind,
+    required this.onPick,
+    required this.onOpen,
+    required this.onClear,
   });
 
-  final CommandRequest request;
-  final VoidCallback onApprove;
-  final VoidCallback onDeny;
-  final VoidCallback onExecute;
+  final String label;
+  final String description;
+  final String path;
+  final _StorageDirectoryKind kind;
+  final ValueChanged<_StorageDirectoryKind> onPick;
+  final ValueChanged<_StorageDirectoryKind> onOpen;
+  final ValueChanged<_StorageDirectoryKind> onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 118,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                Text(
+                  description,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: SelectableText(
+              path.isEmpty ? '未配置' : path,
+              maxLines: 1,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            tooltip: '选择目录',
+            onPressed: () => onPick(kind),
+            icon: const Icon(Icons.folder_open_rounded),
+          ),
+          IconButton(
+            tooltip: '打开目录',
+            onPressed: path.isEmpty ? null : () => onOpen(kind),
+            icon: const Icon(Icons.open_in_new_rounded),
+          ),
+          IconButton(
+            tooltip: '清空目录',
+            onPressed: () => onClear(kind),
+            icon: const Icon(Icons.backspace_outlined),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ImportExportPanel extends StatelessWidget {
+  const _ImportExportPanel({required this.controller});
+
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SettingsPanel(
+      title: '导入导出',
+      action: IconButton(
+        tooltip: '导入 / 导出配置',
+        onPressed: () => showExportDialog(context, controller),
+        icon: const Icon(Icons.open_in_new_rounded),
+      ),
+      child: const Text('配置文件和密钥导出选项集中在这里管理。'),
+    );
+  }
+}
+
+class _SettingsPanel extends StatelessWidget {
+  const _SettingsPanel({
+    required this.title,
+    required this.child,
+    this.action,
+  });
+
+  final String title;
+  final Widget child;
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(6),
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '${request.memberName} · ${request.status.name}',
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 4),
-          SelectableText(
-            '${request.workingDirectory}\n\$ ${request.command}',
-            style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-          ),
-          if (request.status == CommandRequestStatus.pending) ...[
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                FilledButton.icon(
-                  onPressed: onApprove,
-                  icon: const Icon(Icons.check_rounded),
-                  label: const Text('批准'),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
                 ),
-                OutlinedButton.icon(
-                  onPressed: onDeny,
-                  icon: const Icon(Icons.close_rounded),
-                  label: const Text('拒绝'),
-                ),
-              ],
-            ),
-          ],
-          if (request.status == CommandRequestStatus.approved) ...[
-            const SizedBox(height: 8),
-            FilledButton.icon(
-              onPressed: onExecute,
-              icon: const Icon(Icons.play_arrow_rounded),
-              label: const Text('执行'),
-            ),
-          ],
-          if (request.output != null && request.output!.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            SelectableText(
-              request.output!,
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
-            ),
-          ],
+              ),
+              if (action != null) action!,
+            ],
+          ),
+          const SizedBox(height: 10),
+          child,
         ],
       ),
     );
   }
+}
+
+enum _StorageDirectoryKind { state, audit, conversations, cache }
+
+String _pathFor(StorageDirectories directories, _StorageDirectoryKind kind) {
+  return switch (kind) {
+    _StorageDirectoryKind.state => directories.stateDirectory,
+    _StorageDirectoryKind.audit => directories.auditDirectory,
+    _StorageDirectoryKind.conversations => directories.conversationDirectory,
+    _StorageDirectoryKind.cache => directories.cacheDirectory,
+  };
+}
+
+StorageDirectories _applyPath(
+  StorageDirectories directories,
+  _StorageDirectoryKind kind,
+  String path,
+) {
+  return switch (kind) {
+    _StorageDirectoryKind.state => directories.copyWith(stateDirectory: path),
+    _StorageDirectoryKind.audit => directories.copyWith(auditDirectory: path),
+    _StorageDirectoryKind.conversations =>
+      directories.copyWith(conversationDirectory: path),
+    _StorageDirectoryKind.cache => directories.copyWith(cacheDirectory: path),
+  };
 }

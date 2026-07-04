@@ -140,6 +140,253 @@ class SplitSendButton extends StatelessWidget {
   }
 }
 
+class TokenUsageData {
+  const TokenUsageData({
+    required this.contextWindowTokens,
+    this.inputTokens,
+    this.outputTokens,
+    this.cachedTokens,
+    this.totalTokens,
+  });
+
+  final int contextWindowTokens;
+  final int? inputTokens;
+  final int? outputTokens;
+  final int? cachedTokens;
+  final int? totalTokens;
+
+  double? get ratio {
+    final total = totalTokens;
+    if (total == null || contextWindowTokens <= 0) {
+      return null;
+    }
+    return (total / contextWindowTokens).clamp(0, 1);
+  }
+}
+
+class TokenUsageMeter extends StatefulWidget {
+  const TokenUsageMeter({
+    super.key,
+    required this.data,
+  });
+
+  final TokenUsageData data;
+
+  @override
+  State<TokenUsageMeter> createState() => _TokenUsageMeterState();
+}
+
+class _TokenUsageMeterState extends State<TokenUsageMeter> {
+  bool hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final ratio = widget.data.ratio;
+    final percent = ratio == null ? '--' : '${(ratio * 100).round()}%';
+    return MouseRegion(
+      onEnter: (_) => setState(() => hovered = true),
+      onExit: (_) => setState(() => hovered = false),
+      child: FocusableActionDetector(
+        onShowFocusHighlight: (value) => setState(() => hovered = value),
+        child: Stack(
+          clipBehavior: Clip.none,
+          alignment: Alignment.bottomRight,
+          children: [
+            Semantics(
+              label: 'Token 用量',
+              child: Container(
+                key: const ValueKey('token-usage-meter'),
+                height: 34,
+                padding: const EdgeInsets.only(left: 8, right: 2),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  color: const Color(0xFFF8FAFC),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CustomPaint(
+                      size: const Size.square(26),
+                      painter: _TokenRingPainter(ratio: ratio),
+                      child: SizedBox.square(
+                        dimension: 26,
+                        child: Center(
+                          child: Text(
+                            percent,
+                            style: const TextStyle(
+                              fontSize: 8,
+                              fontWeight: FontWeight.w800,
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'context',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Color(0xFF64748B),
+                          ),
+                        ),
+                        Text(
+                          _tokenText(widget.data.totalTokens),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (hovered)
+              Positioned(
+                right: 0,
+                bottom: 42,
+                child: _TokenUsagePopover(data: widget.data),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TokenUsagePopover extends StatelessWidget {
+  const _TokenUsagePopover({required this.data});
+
+  final TokenUsageData data;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      elevation: 8,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: 232,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFFCBD5E1)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _TokenRow(
+              label: '上下文',
+              value:
+                  '${_tokenText(data.totalTokens)} / ${_tokenText(data.contextWindowTokens)}',
+            ),
+            const SizedBox(height: 6),
+            LinearProgressIndicator(
+              minHeight: 5,
+              value: data.ratio,
+              borderRadius: BorderRadius.circular(999),
+              backgroundColor: const Color(0xFFE5E7EB),
+            ),
+            const SizedBox(height: 8),
+            _TokenRow(label: '输入 tokens', value: _tokenText(data.inputTokens)),
+            _TokenRow(label: '输出 tokens', value: _tokenText(data.outputTokens)),
+            _TokenRow(label: '命中缓存', value: _tokenText(data.cachedTokens)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TokenRow extends StatelessWidget {
+  const _TokenRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TokenRingPainter extends CustomPainter {
+  const _TokenRingPainter({required this.ratio});
+
+  final double? ratio;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final stroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 4
+      ..strokeCap = StrokeCap.round;
+    canvas.drawArc(
+      rect.deflate(2),
+      -1.5708,
+      6.28318,
+      false,
+      stroke..color = const Color(0xFFE2E8F0),
+    );
+    final value = ratio;
+    if (value == null) {
+      return;
+    }
+    canvas.drawArc(
+      rect.deflate(2),
+      -1.5708,
+      6.28318 * value,
+      false,
+      stroke..color = const Color(0xFF2563EB),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _TokenRingPainter oldDelegate) {
+    return oldDelegate.ratio != ratio;
+  }
+}
+
+String _tokenText(int? value) {
+  if (value == null) {
+    return '--';
+  }
+  if (value >= 1000) {
+    final rounded = (value / 1000).toStringAsFixed(value >= 10000 ? 0 : 1);
+    return '${rounded}k';
+  }
+  return value.toString();
+}
+
 class TypingIndicator extends StatelessWidget {
   const TypingIndicator({super.key, required this.member});
 

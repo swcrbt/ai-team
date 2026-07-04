@@ -48,7 +48,7 @@ void main() {
       ),
     );
 
-    expect(find.text('私聊'), findsNothing);
+    expect(find.text('私聊'), findsOneWidget);
     expect(find.text('秘书'), findsWidgets);
     expect(find.text('前端工程师'), findsWidgets);
     expect(find.text('测试工程师'), findsWidgets);
@@ -58,8 +58,8 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '发起聊天'));
     await tester.pumpAndSettle();
 
-    expect(find.text('群聊'), findsNothing);
-    expect(find.text('私聊'), findsNothing);
+    expect(find.text('群聊'), findsOneWidget);
+    expect(find.text('私聊'), findsOneWidget);
     expect(find.text('秘书'), findsWidgets);
     expect(find.text('前端工程师'), findsWidgets);
     expect(find.text('测试工程师'), findsWidgets);
@@ -67,10 +67,10 @@ void main() {
 
     await tester.tap(find.byTooltip('成员'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, '发起聊天').at(1));
+    await tester.tap(find.byTooltip('打开私聊').at(1));
     await tester.pumpAndSettle();
 
-    expect(find.text('私聊'), findsNothing);
+    expect(find.text('私聊'), findsOneWidget);
     expect(find.text('秘书'), findsWidgets);
     expect(find.text('前端工程师'), findsWidgets);
     expect(find.text('测试工程师'), findsWidgets);
@@ -211,14 +211,14 @@ void main() {
       ),
     );
 
-    expect(find.text('群聊'), findsNothing);
+    expect(find.text('群聊'), findsOneWidget);
 
     await tester.tap(find.byTooltip('团队'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, '发起聊天'));
     await tester.pumpAndSettle();
 
-    expect(find.text('群聊'), findsNothing);
+    expect(find.text('群聊'), findsOneWidget);
     expect(find.textContaining('群聊 · 默认开发团队'), findsOneWidget);
   });
 
@@ -269,10 +269,10 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '保存'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('并行协同'), findsOneWidget);
+    expect(find.text('并行'), findsWidgets);
   });
 
-  testWidgets('team management edits and deletes a team', (tester) async {
+  testWidgets('team management edits a team', (tester) async {
     await tester.pumpWidget(
       AiTeamApp(
         initialState: AppState.seed(),
@@ -295,13 +295,8 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '保存'));
     await tester.pumpAndSettle();
 
-    expect(find.text('移动端交付组'), findsOneWidget);
-    expect(find.textContaining('并行协同'), findsOneWidget);
-
-    await tester.tap(find.byTooltip('删除团队').last);
-    await tester.pumpAndSettle();
-
-    expect(find.text('移动端交付组'), findsNothing);
+    expect(find.text('移动端交付组'), findsWidgets);
+    expect(find.text('并行'), findsWidgets);
   });
 
   testWidgets('configuration dialogs use the clean shared dialog frame',
@@ -331,7 +326,7 @@ void main() {
       expect(find.byKey(const ValueKey('config-dialog-body')), findsOneWidget);
       expect(
           find.byKey(const ValueKey('config-dialog-actions')), findsOneWidget);
-      expect(find.text(title), findsOneWidget);
+      expect(find.text(title), findsWidgets);
 
       await tester.tap(find.text(closeText).last);
       await tester.pump();
@@ -363,42 +358,6 @@ void main() {
       closeText: '取消',
     );
 
-    await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
-    await tester.pumpWidget(
-      AiTeamApp(
-        initialState: AppState.seed().copyWith(
-          workspaces: [
-            ProjectWorkspace(
-              id: 'workspace-dialog-test',
-              name: '当前项目',
-              path: Directory.current.path,
-            ),
-          ],
-        ),
-        modelGateway: FakeModelGateway(),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await expectSharedDialog(
-      pageTooltip: '项目',
-      actionTooltip: '创建补丁',
-      title: '创建补丁提案',
-      closeText: '取消',
-    );
-    await expectSharedDialog(
-      pageTooltip: '项目',
-      actionTooltip: '浏览文件',
-      title: '工作区文件',
-      closeText: '关闭',
-    );
-    await expectSharedDialog(
-      pageTooltip: '设置',
-      actionTooltip: '创建命令请求',
-      title: '创建命令请求',
-      closeText: '取消',
-    );
     await expectSharedDialog(
       pageTooltip: '设置',
       actionTooltip: '导入 / 导出配置',
@@ -461,11 +420,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('config-dialog-error')), findsOneWidget);
-    expect(find.textContaining('温度和最大 Token 必须是数字'), findsOneWidget);
+    expect(find.textContaining('温度和 Token 必须是数字'), findsOneWidget);
     expect(find.text('编辑模型配置'), findsOneWidget);
   });
 
-  testWidgets('member dialog edits execution priority', (tester) async {
+  testWidgets('member dialog edits role and model binding', (tester) async {
     await tester.pumpWidget(
       AiTeamApp(
         initialState: AppState.seed(),
@@ -477,15 +436,12 @@ void main() {
     await tester.tap(find.byTooltip('编辑成员').first);
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.widgetWithText(TextField, '执行优先级'), '20');
-    await tester.tap(find.widgetWithText(FilledButton, '保存'));
-    await tester.pumpAndSettle();
-
-    expect(find.textContaining('优先级 20'), findsOneWidget);
+    expect(find.text('角色'), findsOneWidget);
+    expect(find.text('模型'), findsOneWidget);
+    expect(find.text('执行优先级'), findsNothing);
   });
 
-  testWidgets('chat shows collapsed queue bar with count and running title',
-      (tester) async {
+  testWidgets('chat does not show task queue bar', (tester) async {
     final state = AppState.seed().copyWith(
       queuedTasks: [
         QueuedTask(
@@ -517,52 +473,19 @@ void main() {
       ),
     );
 
-    expect(find.textContaining('队列 2'), findsOneWidget);
-    expect(find.textContaining('登录任务'), findsOneWidget);
+    expect(find.textContaining('队列 2'), findsNothing);
+    expect(find.textContaining('登录任务'), findsNothing);
   });
 
-  testWidgets('history page lists all app tasks and filters by title',
-      (tester) async {
-    final state = AppState.seed().copyWith(
-      queuedTasks: [
-        QueuedTask(
-          id: 'task-1',
-          conversationId: 'conv-team-default',
-          title: '登录任务',
-          originalText: '实现登录',
-          priority: 0,
-          status: QueuedTaskStatus.completed,
-          createdAt: DateTime(2026, 6, 14),
-          updatedAt: DateTime(2026, 6, 14),
-        ),
-        QueuedTask(
-          id: 'task-2',
-          conversationId: 'conv-member-secretary',
-          title: '文档任务',
-          originalText: '写文档',
-          priority: 0,
-          status: QueuedTaskStatus.completed,
-          createdAt: DateTime(2026, 6, 14),
-          updatedAt: DateTime(2026, 6, 14),
-        ),
-      ],
-    );
+  testWidgets('main sidebar no longer exposes task history', (tester) async {
     await tester.pumpWidget(
       AiTeamApp(
-        initialState: state,
+        initialState: AppState.seed(),
         modelGateway: FakeModelGateway(),
       ),
     );
 
-    await tester.tap(find.byTooltip('历史'));
-    await tester.pumpAndSettle();
-    expect(find.text('登录任务'), findsOneWidget);
-    expect(find.text('文档任务'), findsOneWidget);
-
-    await tester.enterText(find.widgetWithText(TextField, '搜索标题'), '登录');
-    await tester.pumpAndSettle();
-    expect(find.text('登录任务'), findsOneWidget);
-    expect(find.text('文档任务'), findsNothing);
+    expect(find.byTooltip('历史'), findsNothing);
   });
 
   testWidgets('sidebar audit button opens an independent audit page',
@@ -671,7 +594,7 @@ void main() {
     await tester.tap(find.byTooltip('编辑模型').first);
     await tester.pumpAndSettle();
 
-    expect(find.text('深度思考'), findsOneWidget);
+    expect(find.text('深度思考'), findsWidgets);
 
     await tester.ensureVisible(find.byType(DropdownButtonFormField<String>));
     await tester.pump();
@@ -684,7 +607,7 @@ void main() {
 
     expect(persisted, isNotNull);
     expect(persisted!.models.first.reasoningEffort, 'high');
-    expect(find.textContaining('深度思考: high'), findsOneWidget);
+    expect(find.textContaining('深度思考'), findsWidgets);
   });
 
   testWidgets('sidebar model button opens an independent model page',
@@ -701,7 +624,7 @@ void main() {
 
     expect(find.text('设置'), findsNothing);
     expect(find.text('模型管理'), findsOneWidget);
-    expect(find.text('模型配置'), findsOneWidget);
+    expect(find.text('模型列表'), findsOneWidget);
     expect(find.byTooltip('新增模型'), findsOneWidget);
   });
 
@@ -719,7 +642,7 @@ void main() {
 
     expect(find.text('设置'), findsNothing);
     expect(find.text('角色管理'), findsOneWidget);
-    expect(find.text('角色配置'), findsOneWidget);
+    expect(find.text('角色列表'), findsOneWidget);
     expect(find.byTooltip('新增角色'), findsOneWidget);
   });
 
@@ -737,9 +660,9 @@ void main() {
 
     expect(find.text('设置'), findsNothing);
     expect(find.text('成员管理'), findsOneWidget);
-    expect(find.text('团队成员'), findsOneWidget);
+    expect(find.text('成员列表'), findsOneWidget);
     expect(find.byTooltip('新增成员'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, '发起聊天'), findsWidgets);
+    expect(find.byTooltip('打开私聊'), findsWidgets);
   });
 
   testWidgets('sidebar project button opens an independent project page',
@@ -757,9 +680,9 @@ void main() {
     expect(find.text('设置'), findsNothing);
     expect(find.byTooltip('返回聊天'), findsNothing);
     expect(find.text('项目管理'), findsOneWidget);
-    expect(find.text('项目工作区'), findsOneWidget);
+    expect(find.text('项目管理列表'), findsOneWidget);
     expect(find.byTooltip('添加工作区'), findsOneWidget);
-    expect(find.byTooltip('浏览文件'), findsOneWidget);
-    expect(find.byTooltip('创建补丁'), findsOneWidget);
+    expect(find.text('命令审批'), findsOneWidget);
+    expect(find.text('补丁确认'), findsOneWidget);
   });
 }

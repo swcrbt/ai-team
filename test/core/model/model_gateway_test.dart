@@ -288,6 +288,43 @@ void main() {
     );
   });
 
+  test('records token usage and cache hits in response diagnostics', () async {
+    unawaited(serve(server, (request) async {
+      requests.add(request);
+      await utf8.decodeStream(request);
+      request.response
+        ..headers.contentType = ContentType.json
+        ..write(jsonEncode({
+          'choices': [
+            {
+              'message': {'content': 'usage response'}
+            }
+          ],
+          'usage': {
+            'prompt_tokens': 3100,
+            'completion_tokens': 700,
+            'total_tokens': 3800,
+            'prompt_tokens_details': {'cached_tokens': 900},
+          },
+        }));
+      await request.response.close();
+    }));
+    final gateway = OpenAiCompatibleGateway();
+
+    final completion = await gateway.completeWithMetadata(
+      model: model().copyWith(streaming: false),
+      systemPrompt: 'system',
+      messages: const [],
+    );
+
+    expect(completion.inputTokens, 3100);
+    expect(completion.outputTokens, 700);
+    expect(completion.cachedTokens, 900);
+    expect(completion.totalTokens, 3800);
+    expect(completion.diagnostics!.toJson()['inputTokens'], 3100);
+    expect(completion.diagnostics!.toJson()['cachedTokens'], 900);
+  });
+
   test(
       'records request body diagnostics while preserving max_tokens by default',
       () async {

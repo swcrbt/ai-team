@@ -119,6 +119,7 @@ class ChatPaneState extends State<ChatPane> {
       );
     }
     final showBackToBottomButton = !messageIsNearBottom;
+    final tokenUsage = _tokenUsageFor(conversation);
     return Column(
       children: [
         Container(
@@ -335,17 +336,13 @@ class ChatPaneState extends State<ChatPane> {
               style: const TextStyle(color: Color(0xFFBE123C)),
             ),
           ),
-        TaskQueueBar(
-          controller: widget.controller,
-          conversationId: conversation.id,
-        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 10, 24, 18),
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: Colors.white,
               border: Border.all(color: const Color(0xFFE5E7EB)),
-              borderRadius: BorderRadius.circular(4),
+              borderRadius: BorderRadius.circular(8),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
@@ -373,13 +370,21 @@ class ChatPaneState extends State<ChatPane> {
                 ),
                 Padding(
                   padding: const EdgeInsets.only(right: 8, bottom: 8),
-                  child: SplitSendButton(
-                    isDispatching: widget.controller.isDispatching,
-                    isConversationDispatching: widget.controller
-                        .isConversationDispatching(conversation.id),
-                    onSend: _submit,
-                    onStop: () =>
-                        widget.controller.stopConversationById(conversation.id),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      TokenUsageMeter(data: tokenUsage),
+                      const SizedBox(width: 8),
+                      SplitSendButton(
+                        isDispatching: widget.controller.isDispatching,
+                        isConversationDispatching: widget.controller
+                            .isConversationDispatching(conversation.id),
+                        onSend: _submit,
+                        onStop: () => widget.controller
+                            .stopConversationById(conversation.id),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -388,6 +393,78 @@ class ChatPaneState extends State<ChatPane> {
         ),
       ],
     );
+  }
+
+  TokenUsageData _tokenUsageFor(Conversation conversation) {
+    final model = _modelForConversation(conversation);
+    final messageUsage = _latestMessageUsage(conversation);
+    final auditUsage = _latestAuditUsage();
+    return TokenUsageData(
+      contextWindowTokens: model.contextWindowTokens,
+      inputTokens: messageUsage.inputTokens ?? auditUsage.inputTokens,
+      outputTokens: messageUsage.outputTokens ?? auditUsage.outputTokens,
+      cachedTokens: messageUsage.cachedTokens ?? auditUsage.cachedTokens,
+      totalTokens: messageUsage.totalTokens ?? auditUsage.totalTokens,
+    );
+  }
+
+  ModelProfile _modelForConversation(Conversation conversation) {
+    final memberId = conversation.memberId;
+    if (memberId != null) {
+      final member = widget.controller.state.members.firstWhere(
+        (item) => item.id == memberId,
+        orElse: () => widget.controller.state.members.first,
+      );
+      return widget.controller.state.models.firstWhere(
+        (model) => model.id == member.modelId,
+        orElse: () => widget.controller.state.models.first,
+      );
+    }
+    final team = widget.controller.teamForConversation(conversation.id);
+    final secretary = widget.controller.state.members.firstWhere(
+      (member) => member.id == team.secretaryMemberId,
+      orElse: () => widget.controller.state.members.first,
+    );
+    return widget.controller.state.models.firstWhere(
+      (model) => model.id == secretary.modelId,
+      orElse: () => widget.controller.state.models.first,
+    );
+  }
+
+  _TokenFields _latestMessageUsage(Conversation conversation) {
+    for (final message in conversation.messages.reversed) {
+      if (message.inputTokens != null ||
+          message.outputTokens != null ||
+          message.cachedTokens != null ||
+          message.totalTokens != null) {
+        return _TokenFields(
+          inputTokens: message.inputTokens,
+          outputTokens: message.outputTokens,
+          cachedTokens: message.cachedTokens,
+          totalTokens: message.totalTokens,
+        );
+      }
+    }
+    return const _TokenFields();
+  }
+
+  _TokenFields _latestAuditUsage() {
+    for (final entry in widget.controller.state.auditLog.reversed) {
+      final metadata = entry.metadata;
+      if (metadata == null) {
+        continue;
+      }
+      final fields = _TokenFields(
+        inputTokens: _metadataInt(metadata['inputTokens']),
+        outputTokens: _metadataInt(metadata['outputTokens']),
+        cachedTokens: _metadataInt(metadata['cachedTokens']),
+        totalTokens: _metadataInt(metadata['totalTokens']),
+      );
+      if (!fields.isEmpty) {
+        return fields;
+      }
+    }
+    return const _TokenFields();
   }
 
   Future<void> _submit() async {
@@ -714,4 +791,31 @@ class ChatPaneState extends State<ChatPane> {
     );
     _setMessageIsNearBottom(_isNearMessageBottom());
   }
+}
+
+class _TokenFields {
+  const _TokenFields({
+    this.inputTokens,
+    this.outputTokens,
+    this.cachedTokens,
+    this.totalTokens,
+  });
+
+  final int? inputTokens;
+  final int? outputTokens;
+  final int? cachedTokens;
+  final int? totalTokens;
+
+  bool get isEmpty =>
+      inputTokens == null &&
+      outputTokens == null &&
+      cachedTokens == null &&
+      totalTokens == null;
+}
+
+int? _metadataInt(Object? value) {
+  if (value is num) {
+    return value.toInt();
+  }
+  return null;
 }

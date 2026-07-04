@@ -1,6 +1,8 @@
 import 'commands_and_tasks.dart';
 
 class ModelProfile {
+  static const defaultContextWindowTokens = 32000;
+
   const ModelProfile({
     required this.id,
     required this.name,
@@ -10,6 +12,7 @@ class ModelProfile {
     this.streaming = true,
     this.temperature = 0.4,
     this.maxTokens = 1600,
+    this.contextWindowTokens = defaultContextWindowTokens,
     this.reasoningEffort,
   });
 
@@ -21,6 +24,7 @@ class ModelProfile {
   final bool streaming;
   final double temperature;
   final int maxTokens;
+  final int contextWindowTokens;
   final String? reasoningEffort;
 
   ModelProfile copyWith({
@@ -32,6 +36,7 @@ class ModelProfile {
     bool? streaming,
     double? temperature,
     int? maxTokens,
+    int? contextWindowTokens,
     String? reasoningEffort,
   }) {
     return ModelProfile(
@@ -43,6 +48,7 @@ class ModelProfile {
       streaming: streaming ?? this.streaming,
       temperature: temperature ?? this.temperature,
       maxTokens: maxTokens ?? this.maxTokens,
+      contextWindowTokens: contextWindowTokens ?? this.contextWindowTokens,
       reasoningEffort: reasoningEffort ?? this.reasoningEffort,
     );
   }
@@ -56,6 +62,8 @@ class ModelProfile {
       'streaming': streaming,
       'temperature': temperature,
       'maxTokens': maxTokens,
+      if (contextWindowTokens != defaultContextWindowTokens)
+        'contextWindowTokens': contextWindowTokens,
       if (reasoningEffort != null) 'reasoningEffort': reasoningEffort,
     };
     if (includeSecrets) {
@@ -73,6 +81,8 @@ class ModelProfile {
         streaming: (json['streaming'] as bool?) ?? true,
         temperature: ((json['temperature'] as num?) ?? 0.4).toDouble(),
         maxTokens: (json['maxTokens'] as num?)?.toInt() ?? 1600,
+        contextWindowTokens: (json['contextWindowTokens'] as num?)?.toInt() ??
+            ModelProfile.defaultContextWindowTokens,
         reasoningEffort: _optionalJsonString(json['reasoningEffort']),
       );
 }

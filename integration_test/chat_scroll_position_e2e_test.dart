@@ -68,7 +68,7 @@ void main() {
       expect(_messageListFinder, findsNothing, reason: trace.dump());
       await trace.capture(tester, 'members page opened');
 
-      await tester.tap(find.widgetWithText(FilledButton, '发起聊天').at(1));
+      await tester.tap(find.byTooltip('打开私聊').at(1));
       await tester.pumpAndSettle();
       await trace.capture(tester, 'frontend private opened from members page');
 
@@ -294,7 +294,7 @@ void main() {
       );
 
       await _openSidebarPage(tester, '成员');
-      await tester.tap(find.widgetWithText(FilledButton, '发起聊天').at(2));
+      await tester.tap(find.byTooltip('打开私聊').at(2));
       await tester.pumpAndSettle();
       await trace.capture(tester, 'tester private opened from members page');
 

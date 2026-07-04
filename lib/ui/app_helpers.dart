@@ -236,6 +236,31 @@ String? conversationListBadge(
   return member.isSecretary ? 'BOT' : null;
 }
 
+String? conversationStatusPill(
+  AppController controller,
+  Conversation conversation,
+) {
+  if (controller.commandRequestsForConversation(conversation.id).any(
+        (request) => request.status == CommandRequestStatus.pending,
+      )) {
+    return '待审批';
+  }
+  if (controller.commandRequestsForConversation(conversation.id).any(
+        (request) => request.status == CommandRequestStatus.approved,
+      )) {
+    return '允许中';
+  }
+  if (controller.state.patchProposals.any(
+    (proposal) => proposal.status == PatchStatus.pending,
+  )) {
+    return '有补丁';
+  }
+  if (conversation.status == ConversationStatus.running) {
+    return '执行中';
+  }
+  return null;
+}
+
 String _privateConversationPreview(
   AppController controller,
   Conversation conversation,

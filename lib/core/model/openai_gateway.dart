@@ -149,16 +149,25 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
     );
     final content = message['content'] as String? ?? '';
     final toolCalls = parseToolCalls(message['tool_calls']);
+    final usage = parseTokenUsage(decoded['usage']);
     return ModelCompletion(
       content: content,
       thinkingContent: thinkingContent,
       toolCalls: toolCalls,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      cachedTokens: usage.cachedTokens,
+      totalTokens: usage.totalTokens,
       diagnostics: ModelResponseDiagnostics(
         streaming: false,
         contentLength: content.length,
         thinkingContentLength: thinkingContent?.length ?? 0,
         thinkingFieldKeys: thinkingFieldKeys.toList(growable: false),
         toolCallCount: toolCalls.length,
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        cachedTokens: usage.cachedTokens,
+        totalTokens: usage.totalTokens,
         rawToolCalls: rawToolCalls(message['tool_calls']),
         rawResponse: body,
         requestBody: requestBody,
@@ -181,6 +190,7 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
     final toolCallBuilders = <int, StreamingToolCallBuilder>{};
     var contentDeltaCount = 0;
     var thinkingDeltaCount = 0;
+    var usage = const ModelTokenUsage();
     final lines = response.transform(utf8.decoder).transform(
           const LineSplitter(),
         );
@@ -201,6 +211,10 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
           break;
         }
         final decoded = jsonDecode(data) as Map<String, Object?>;
+        final parsedUsage = parseTokenUsage(decoded['usage']);
+        if (!parsedUsage.isEmpty) {
+          usage = parsedUsage;
+        }
         final choices = decoded['choices'] as List;
         for (final item in choices) {
           final choice = item as Map<String, Object?>;
@@ -242,6 +256,10 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
       content: content,
       thinkingContent: normalizedThinkingContent,
       toolCalls: toolCalls,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      cachedTokens: usage.cachedTokens,
+      totalTokens: usage.totalTokens,
       diagnostics: ModelResponseDiagnostics(
         streaming: true,
         contentLength: content.length,
@@ -250,6 +268,10 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
         contentDeltaCount: contentDeltaCount,
         thinkingDeltaCount: thinkingDeltaCount,
         toolCallCount: toolCalls.length,
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        cachedTokens: usage.cachedTokens,
+        totalTokens: usage.totalTokens,
         rawToolCalls: toolCalls.map((call) => call.toChatJson()).toList(),
         rawResponse: rawBuffer.toString(),
         requestBody: requestBody,

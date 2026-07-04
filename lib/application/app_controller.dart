@@ -9,6 +9,7 @@ import '../core/domain.dart';
 import '../core/file_dialogs.dart';
 import '../core/local_store.dart';
 import '../core/orchestrator.dart';
+import '../core/storage_directories.dart';
 import '../core/workspace/workspace_service.dart';
 import 'app_controller_helpers.dart';
 import 'chat_streaming.dart';
@@ -33,8 +34,23 @@ class AppController extends ChangeNotifier {
     this.workspaceService = const WorkspaceService(),
     CommandService? commandService,
     this.diagnostics,
+    StorageDirectories? storageDirectories,
+    this.storageDirectoryConfigStore,
   })  : state = initialState,
         exportStore = exportStore ?? JsonLocalStore.defaultStore(),
+        storageDirectories = storageDirectories ??
+            StorageDirectories(
+              stateDirectory: (exportStore ?? JsonLocalStore.defaultStore())
+                  .file
+                  .parent
+                  .path,
+              auditDirectory:
+                  '${(exportStore ?? JsonLocalStore.defaultStore()).file.parent.path}/audit',
+              conversationDirectory:
+                  '${(exportStore ?? JsonLocalStore.defaultStore()).file.parent.path}/conversations',
+              cacheDirectory:
+                  '${(exportStore ?? JsonLocalStore.defaultStore()).file.parent.path}/cache',
+            ),
         commandService = commandService ?? const CommandService(),
         selectedConversationId = initialConversationId(initialState) {
     _streamingDraftRegistry = StreamingDraftRegistry(diagnostics: diagnostics);
@@ -119,6 +135,8 @@ class AppController extends ChangeNotifier {
   final WorkspaceService workspaceService;
   final CommandService commandService;
   final ChatScrollDiagnostics? diagnostics;
+  StorageDirectories storageDirectories;
+  final StorageDirectoryConfigStore? storageDirectoryConfigStore;
   final StatePersistenceQueue _persistenceQueue = StatePersistenceQueue();
   late final StreamingDraftRegistry _streamingDraftRegistry;
   late final WorkspaceCommandController _workspaceCommands;
@@ -584,6 +602,22 @@ class AppController extends ChangeNotifier {
 
   void rejectPatch(PatchProposal proposal) {
     _workspaceCommands.rejectPatch(proposal);
+  }
+
+  Future<void> updateStorageDirectories(
+    StorageDirectories directories, {
+    required bool migrate,
+  }) async {
+    final previous = storageDirectories;
+    if (migrate) {
+      await storageDirectoryConfigStore?.copyExistingData(
+        from: previous,
+        to: directories,
+      );
+    }
+    await storageDirectoryConfigStore?.save(directories);
+    storageDirectories = directories;
+    _notifyListeners();
   }
 
   void _commit(AppState nextState) {

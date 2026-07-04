@@ -1,182 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../application/app_controller.dart';
 import '../../core/domain.dart';
-import '../app_helpers.dart';
 
-class TaskQueueBar extends StatelessWidget {
-  const TaskQueueBar({
-    super.key,
-    required this.controller,
-    required this.conversationId,
-  });
-
-  final AppController controller;
-  final String conversationId;
-
-  @override
-  Widget build(BuildContext context) {
-    final tasks = controller.tasksForConversation(conversationId);
-    if (tasks.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    final running = firstTaskWithStatus(tasks, QueuedTaskStatus.running);
-    final title = running == null
-        ? '队列 ${tasks.length}'
-        : '队列 ${tasks.length} · ${running.title}';
-    return Material(
-      color: const Color(0xFFF8FAFC),
-      child: ExpansionTile(
-        tilePadding: const EdgeInsets.symmetric(horizontal: 24),
-        initiallyExpanded: false,
-        title: Text(
-          title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontWeight: FontWeight.w700),
-        ),
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-            child: Column(
-              children: tasks
-                  .map(
-                    (task) => _TaskQueueTile(
-                      controller: controller,
-                      task: task,
-                    ),
-                  )
-                  .toList(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TaskQueueTile extends StatefulWidget {
-  const _TaskQueueTile({
-    required this.controller,
-    required this.task,
-  });
-
-  final AppController controller;
-  final QueuedTask task;
-
-  @override
-  State<_TaskQueueTile> createState() => _TaskQueueTileState();
-}
-
-class _TaskQueueTileState extends State<_TaskQueueTile> {
-  final noteController = TextEditingController();
-  late final priorityController = TextEditingController(
-    text: widget.task.priority.toString(),
-  );
-
-  @override
-  void dispose() {
-    noteController.dispose();
-    priorityController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final task = widget.task;
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(6),
-        side: const BorderSide(color: Color(0xFFE5E7EB)),
-      ),
-      child: ExpansionTile(
-        title: Text(task.title),
-        subtitle: Text(
-          '${queuedTaskStatusText(task.status)} · 优先级 ${task.priority} · 备注 ${task.notes.length}',
-        ),
-        trailing: Wrap(
-          spacing: 4,
-          children: [
-            if (task.status == QueuedTaskStatus.running)
-              IconButton(
-                tooltip: '暂停任务',
-                onPressed: () => widget.controller.pauseTask(task.id),
-                icon: const Icon(Icons.pause_rounded),
-              ),
-            if (task.status == QueuedTaskStatus.paused)
-              IconButton(
-                tooltip: '继续任务',
-                onPressed: () => widget.controller.resumeTask(task.id),
-                icon: const Icon(Icons.play_arrow_rounded),
-              ),
-            IconButton(
-              tooltip: '删除任务',
-              onPressed: () => widget.controller.deleteTask(task.id),
-              icon: const Icon(Icons.delete_outline_rounded),
-            ),
-          ],
-        ),
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(task.originalText),
-                const SizedBox(height: 8),
-                if (task.notes.isNotEmpty) Text('备注：${task.notes.join('；')}'),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    SizedBox(
-                      width: 120,
-                      child: TextField(
-                        controller: priorityController,
-                        decoration: const InputDecoration(labelText: '优先级'),
-                        keyboardType: TextInputType.number,
-                        onSubmitted: (value) {
-                          final priority = int.tryParse(value.trim());
-                          if (priority != null) {
-                            widget.controller.updateTaskPriority(
-                              task.id,
-                              priority,
-                            );
-                          }
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextField(
-                        controller: noteController,
-                        decoration: const InputDecoration(labelText: '追加备注'),
-                        onSubmitted: (_) => _appendNote(),
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: '追加备注',
-                      onPressed: _appendNote,
-                      icon: const Icon(Icons.add_comment_rounded),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _appendNote() {
-    widget.controller.appendTaskNote(widget.task.id, noteController.text);
-    noteController.clear();
-  }
-}
-
-class ChatPatchConfirmationCard extends StatelessWidget {
+class ChatPatchConfirmationCard extends StatefulWidget {
   const ChatPatchConfirmationCard({
     super.key,
     required this.patch,
@@ -189,7 +15,16 @@ class ChatPatchConfirmationCard extends StatelessWidget {
   final VoidCallback onReject;
 
   @override
+  State<ChatPatchConfirmationCard> createState() =>
+      _ChatPatchConfirmationCardState();
+}
+
+class _ChatPatchConfirmationCardState extends State<ChatPatchConfirmationCard> {
+  bool expanded = true;
+
+  @override
   Widget build(BuildContext context) {
+    final stats = _diffStats(widget.patch.diff);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -217,33 +52,62 @@ class ChatPatchConfirmationCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  '待确认修改',
+                  '补丁确认',
                   style: TextStyle(fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 6),
-                Text('${patch.memberName} 提议修改 ${patch.filePath}'),
+                Text('${widget.patch.memberName} 提议修改'),
                 const SizedBox(height: 10),
-                SelectableText(
-                  patch.diff,
-                  style: const TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 12,
+                _PatchFileTab(filePath: widget.patch.filePath),
+                if (expanded)
+                  _DiffViewer(diff: widget.patch.diff)
+                else
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFF8FAFC),
+                      border: Border(
+                        left: BorderSide(color: Color(0xFFE2E8F0)),
+                        right: BorderSide(color: Color(0xFFE2E8F0)),
+                      ),
+                    ),
+                    child: Text(
+                      '${stats.additions} additions · ${stats.deletions} deletions',
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        fontFamily: 'monospace',
+                        fontSize: 12,
+                      ),
+                    ),
                   ),
-                ),
                 const SizedBox(height: 10),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children: [
                     FilledButton.icon(
-                      onPressed: onApply,
+                      onPressed: widget.onApply,
                       icon: const Icon(Icons.check_rounded),
                       label: const Text('应用修改'),
                     ),
                     OutlinedButton.icon(
-                      onPressed: onReject,
+                      onPressed: widget.onReject,
                       icon: const Icon(Icons.close_rounded),
                       label: const Text('拒绝'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () => setState(() => expanded = !expanded),
+                      icon: Icon(
+                        expanded
+                            ? Icons.unfold_less_rounded
+                            : Icons.unfold_more_rounded,
+                      ),
+                      label: Text(expanded ? '收起 Diff' : '展开 Diff'),
+                    ),
+                    Chip(
+                      visualDensity: VisualDensity.compact,
+                      label: Text('+${stats.additions} -${stats.deletions}'),
                     ),
                   ],
                 ),
@@ -254,6 +118,127 @@ class ChatPatchConfirmationCard extends StatelessWidget {
       ],
     );
   }
+}
+
+class _PatchFileTab extends StatelessWidget {
+  const _PatchFileTab({required this.filePath});
+
+  final String filePath;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 30,
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      alignment: Alignment.centerLeft,
+      decoration: const BoxDecoration(
+        color: Color(0xFFEFF6FF),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(6)),
+        border: Border.fromBorderSide(BorderSide(color: Color(0xFFBFDBFE))),
+      ),
+      child: Text(
+        filePath,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: Color(0xFF1D4ED8),
+          fontFamily: 'monospace',
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
+  }
+}
+
+class _DiffViewer extends StatelessWidget {
+  const _DiffViewer({required this.diff});
+
+  final String diff;
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = diff.split('\n').where((line) => line.isNotEmpty).toList();
+    return Container(
+      constraints: const BoxConstraints(maxHeight: 260),
+      decoration: const BoxDecoration(
+        border: Border(
+          left: BorderSide(color: Color(0xFFE2E8F0)),
+          right: BorderSide(color: Color(0xFFE2E8F0)),
+          bottom: BorderSide(color: Color(0xFFE2E8F0)),
+        ),
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(6)),
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          children: [
+            for (final line in lines) _DiffLine(line: line),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DiffLine extends StatelessWidget {
+  const _DiffLine({required this.line});
+
+  final String line;
+
+  @override
+  Widget build(BuildContext context) {
+    final type = line.startsWith('+') && !line.startsWith('+++')
+        ? _DiffLineType.added
+        : line.startsWith('-') && !line.startsWith('---')
+            ? _DiffLineType.deleted
+            : _DiffLineType.neutral;
+    final background = switch (type) {
+      _DiffLineType.added => const Color(0xFFECFDF3),
+      _DiffLineType.deleted => const Color(0xFFFFF1F2),
+      _DiffLineType.neutral => Colors.white,
+    };
+    final foreground = switch (type) {
+      _DiffLineType.added => const Color(0xFF047857),
+      _DiffLineType.deleted => const Color(0xFFBE123C),
+      _DiffLineType.neutral => const Color(0xFF475569),
+    };
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      color: background,
+      child: SelectableText(
+        line,
+        style: TextStyle(
+          color: foreground,
+          fontFamily: 'monospace',
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+}
+
+enum _DiffLineType { added, deleted, neutral }
+
+_DiffStats _diffStats(String diff) {
+  var additions = 0;
+  var deletions = 0;
+  for (final line in diff.split('\n')) {
+    if (line.startsWith('+') && !line.startsWith('+++')) {
+      additions++;
+    }
+    if (line.startsWith('-') && !line.startsWith('---')) {
+      deletions++;
+    }
+  }
+  return _DiffStats(additions: additions, deletions: deletions);
+}
+
+class _DiffStats {
+  const _DiffStats({required this.additions, required this.deletions});
+
+  final int additions;
+  final int deletions;
 }
 
 class ChatCommandRequestCard extends StatelessWidget {
@@ -271,8 +256,8 @@ class ChatCommandRequestCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final title = switch (request.status) {
-      CommandRequestStatus.pending => '待确认命令',
-      CommandRequestStatus.approved => '已允许命令',
+      CommandRequestStatus.pending => '命令请求 · 待审批',
+      CommandRequestStatus.approved => '命令已允许',
       CommandRequestStatus.executed => '命令已执行',
       CommandRequestStatus.failed => '命令执行失败',
       CommandRequestStatus.denied => '命令已拒绝',
@@ -282,8 +267,8 @@ class ChatCommandRequestCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        border: Border.all(color: const Color(0xFFCBD5E1)),
+        color: _commandCardBackground(request.status),
+        border: Border.all(color: _commandCardBorder(request.status)),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -332,7 +317,7 @@ class ChatCommandRequestCard extends StatelessWidget {
                   ),
                   label: Text(
                     request.status == CommandRequestStatus.pending
-                        ? '批准并执行'
+                        ? '允许'
                         : '执行',
                   ),
                 ),
@@ -341,6 +326,12 @@ class ChatCommandRequestCard extends StatelessWidget {
                     onPressed: onReject,
                     icon: const Icon(Icons.close_rounded),
                     label: const Text('拒绝'),
+                  ),
+                if (request.status == CommandRequestStatus.approved)
+                  OutlinedButton.icon(
+                    onPressed: null,
+                    icon: const Icon(Icons.article_outlined),
+                    label: const Text('日志'),
                   ),
               ],
             ),
@@ -356,4 +347,24 @@ class ChatCommandRequestCard extends StatelessWidget {
       ),
     );
   }
+}
+
+Color _commandCardBackground(CommandRequestStatus status) {
+  return switch (status) {
+    CommandRequestStatus.pending => const Color(0xFFFFFBEB),
+    CommandRequestStatus.approved => const Color(0xFFEFF6FF),
+    CommandRequestStatus.executed => const Color(0xFFECFDF3),
+    CommandRequestStatus.failed => const Color(0xFFFFF1F2),
+    CommandRequestStatus.denied => const Color(0xFFFFF1F2),
+  };
+}
+
+Color _commandCardBorder(CommandRequestStatus status) {
+  return switch (status) {
+    CommandRequestStatus.pending => const Color(0xFFFDE68A),
+    CommandRequestStatus.approved => const Color(0xFFBFDBFE),
+    CommandRequestStatus.executed => const Color(0xFFA7F3D0),
+    CommandRequestStatus.failed => const Color(0xFFFECDD3),
+    CommandRequestStatus.denied => const Color(0xFFFECDD3),
+  };
 }

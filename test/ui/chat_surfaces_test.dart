@@ -10,8 +10,8 @@ void main() {
       ),
     );
 
-    expect(find.text('群聊'), findsNothing);
-    expect(find.text('私聊'), findsNothing);
+    expect(find.text('群聊'), findsOneWidget);
+    expect(find.text('私聊'), findsOneWidget);
     expect(find.text('秘书'), findsWidgets);
     expect(find.text('前端工程师'), findsWidgets);
     expect(find.text('测试工程师'), findsWidgets);
@@ -26,6 +26,7 @@ void main() {
     expect(find.text('模型配置'), findsNothing);
     expect(find.text('角色配置'), findsNothing);
     expect(find.text('团队成员'), findsNothing);
+    expect(find.byKey(const ValueKey('token-usage-meter')), findsOneWidget);
     expect(find.text('补丁确认'), findsNothing);
 
     await tester.tap(find.byTooltip('设置'));
@@ -40,7 +41,7 @@ void main() {
     expect(find.text('角色'), findsNothing);
     expect(find.text('成员'), findsNothing);
     expect(find.text('项目'), findsNothing);
-    expect(find.text('命令'), findsOneWidget);
+    expect(find.text('持久化存储目录'), findsOneWidget);
     expect(find.text('审计'), findsNothing);
     expect(find.text('审计日志'), findsNothing);
     expect(find.text('补丁'), findsNothing);
@@ -48,7 +49,7 @@ void main() {
     expect(find.text('角色配置'), findsNothing);
     expect(find.text('团队成员'), findsNothing);
     expect(find.text('项目工作区'), findsNothing);
-    expect(find.text('任务轮次'), findsOneWidget);
+    expect(find.text('任务轮次'), findsNothing);
     expect(find.text('补丁确认'), findsNothing);
   });
 
@@ -74,13 +75,13 @@ void main() {
       ),
     );
 
-    expect(find.text('待确认修改'), findsOneWidget);
+    expect(find.text('补丁确认'), findsOneWidget);
     expect(find.textContaining('+new docs'), findsOneWidget);
 
     await tester.tap(find.widgetWithText(OutlinedButton, '拒绝'));
     await tester.pumpAndSettle();
 
-    expect(find.text('待确认修改'), findsNothing);
+    expect(find.text('补丁确认'), findsNothing);
   });
 
   testWidgets('chat workspace shows scoped pending command requests',
@@ -107,10 +108,10 @@ void main() {
       ),
     );
 
-    expect(find.text('待确认命令'), findsOneWidget);
+    expect(find.text('命令请求 · 待审批'), findsOneWidget);
     expect(find.textContaining('df -h /'), findsWidgets);
     expect(find.textContaining('/'), findsWidgets);
-    expect(find.widgetWithText(FilledButton, '批准并执行'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, '允许'), findsOneWidget);
     expect(find.widgetWithText(OutlinedButton, '拒绝'), findsOneWidget);
   });
 
@@ -138,11 +139,11 @@ void main() {
       ),
     );
 
-    expect(find.text('待确认命令'), findsNothing);
-    expect(find.text('已允许命令'), findsOneWidget);
+    expect(find.text('命令请求 · 待审批'), findsNothing);
+    expect(find.text('命令已允许'), findsOneWidget);
     expect(find.textContaining('df -h /'), findsWidgets);
     expect(find.widgetWithText(FilledButton, '执行'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, '批准并执行'), findsNothing);
+    expect(find.widgetWithText(FilledButton, '允许'), findsNothing);
     expect(find.widgetWithText(OutlinedButton, '拒绝'), findsNothing);
   });
 
@@ -216,7 +217,7 @@ void main() {
     expect(find.textContaining('Filesystem 42Gi'), findsOneWidget);
   });
 
-  testWidgets('legacy unscoped pending commands remain visible in settings',
+  testWidgets('legacy unscoped pending commands remain visible in project',
       (tester) async {
     final state = AppState.seed().copyWith(
       commandRequests: [
@@ -239,12 +240,11 @@ void main() {
 
     expect(find.text('待确认命令'), findsNothing);
 
-    await tester.tap(find.byTooltip('设置'));
+    await tester.tap(find.byTooltip('项目'));
     await tester.pumpAndSettle();
 
-    expect(find.text('命令请求'), findsOneWidget);
+    expect(find.text('命令审批'), findsOneWidget);
     expect(find.textContaining('df -h /'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, '批准'), findsOneWidget);
   });
 
   testWidgets(
@@ -257,7 +257,7 @@ void main() {
       ),
     );
 
-    expect(find.text('群聊'), findsNothing);
+    expect(find.text('群聊'), findsOneWidget);
     expect(
       find.byWidgetPredicate(
         (widget) => widget.runtimeType.toString() == '_QuickAvatar',

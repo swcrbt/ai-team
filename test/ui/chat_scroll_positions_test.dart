@@ -309,7 +309,7 @@ void main() {
 
     await tester.tap(find.byTooltip('成员'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, '发起聊天').at(1));
+    await tester.tap(find.byTooltip('打开私聊').at(1));
     await tester.pumpAndSettle();
 
     await tester.tap(

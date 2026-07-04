@@ -9,7 +9,7 @@ import 'package:ai_team/core/orchestrator.dart';
 
 void main() {
   testWidgets(
-      'message sidebar renders a flat ordered chat list with context menu',
+      'message sidebar renders grouped chat sections with context menu',
       (tester) async {
     await tester.pumpWidget(
       AiTeamApp(
@@ -18,12 +18,11 @@ void main() {
       ),
     );
 
-    expect(find.text('群聊'), findsNothing);
-    expect(find.text('私聊'), findsNothing);
+    expect(find.text('群聊'), findsOneWidget);
+    expect(find.text('私聊'), findsOneWidget);
     expect(find.text('默认开发团队'), findsOneWidget);
     expect(find.text('秘书'), findsWidgets);
     expect(find.text('前端工程师'), findsWidgets);
-    expect(find.byType(Divider), findsWidgets);
     expect(find.byTooltip('关闭聊天'), findsNothing);
 
     expect(
@@ -39,7 +38,7 @@ void main() {
     );
     expect(
       conversationList.padding,
-      const EdgeInsets.symmetric(horizontal: 12),
+      const EdgeInsets.symmetric(horizontal: 10),
     );
     final selectedRow = tester.widget<Material>(
       find.descendant(
@@ -59,7 +58,7 @@ void main() {
           )
           .first,
     );
-    expect(selectedRowPadding.padding, EdgeInsets.zero);
+    expect(selectedRowPadding.padding, const EdgeInsets.all(10));
 
     await tester.tap(
       find.byKey(const ValueKey('conversation-row-conv-team-default')),
@@ -86,12 +85,12 @@ void main() {
 
     await tester.tap(find.byTooltip('成员'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilledButton, '发起聊天').at(1));
+    await tester.tap(find.byTooltip('打开私聊').at(1));
     await tester.pumpAndSettle();
 
     expect(
       tester.getTopLeft(find.text('前端工程师').first).dy,
-      lessThan(tester.getTopLeft(find.text('默认开发团队')).dy),
+      lessThan(tester.getTopLeft(find.text('秘书').first).dy),
     );
   });
 
@@ -113,7 +112,7 @@ void main() {
 
     expect(
       tester.getTopLeft(find.text('前端工程师').first).dy,
-      lessThan(tester.getTopLeft(find.text('默认开发团队')).dy),
+      lessThan(tester.getTopLeft(find.text('秘书').first).dy),
     );
     final pinnedRow = tester.widget<Material>(
       find.descendant(
@@ -121,7 +120,7 @@ void main() {
         matching: find.byType(Material),
       ),
     );
-    expect(pinnedRow.color, const Color(0xFFE9EDF3));
+    expect(pinnedRow.color, const Color(0xFFE8EBF0));
 
     await tester.tap(
       find.byKey(const ValueKey('conversation-row-conv-member-frontend')),
@@ -133,7 +132,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      tester.getTopLeft(find.text('默认开发团队')).dy,
+      tester.getTopLeft(find.text('秘书').first).dy,
       lessThan(tester.getTopLeft(find.text('前端工程师').first).dy),
     );
   });
@@ -156,8 +155,8 @@ void main() {
       ),
     );
 
-    expect(find.text('群聊'), findsNothing);
-    expect(find.text('私聊'), findsNothing);
+    expect(find.text('群聊'), findsOneWidget);
+    expect(find.text('私聊'), findsOneWidget);
     expect(find.text('默认开发团队'), findsOneWidget);
     expect(find.text('移动端小队'), findsOneWidget);
   });
@@ -314,7 +313,7 @@ void main() {
 
     expect(find.text('默认开发团队'), findsOneWidget);
     expect(find.text('AA工程师'), findsWidgets);
-    expect(find.text('私聊'), findsNothing);
+    expect(find.text('私聊'), findsOneWidget);
   });
 
   testWidgets('message sidebar keeps all private chats after team chat starts',
@@ -326,7 +325,7 @@ void main() {
       ),
     );
 
-    expect(find.text('私聊'), findsNothing);
+    expect(find.text('私聊'), findsOneWidget);
     expect(find.text('秘书'), findsWidgets);
     expect(find.text('前端工程师'), findsWidgets);
     expect(find.text('测试工程师'), findsWidgets);
@@ -336,12 +335,13 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '发起聊天'));
     await tester.pumpAndSettle();
 
-    expect(find.text('群聊'), findsNothing);
-    expect(find.text('私聊'), findsNothing);
+    expect(find.text('群聊'), findsOneWidget);
+    expect(find.text('私聊'), findsOneWidget);
     expect(find.text('秘书'), findsWidgets);
     expect(find.text('前端工程师'), findsWidgets);
     expect(find.text('测试工程师'), findsWidgets);
-    expect(find.textContaining('群聊 · 默认开发团队'), findsOneWidget);
+    expect(find.byKey(const ValueKey('conversation-row-conv-team-default')),
+        findsOneWidget);
   });
 
   testWidgets('message sidebar keeps scroll after private and group switches',

@@ -12,6 +12,10 @@ class ChatMessage {
     this.memberId,
     this.isUser = false,
     this.taskIds = const [],
+    this.inputTokens,
+    this.outputTokens,
+    this.cachedTokens,
+    this.totalTokens,
     List<ChatMessageContentBlock>? contentBlocks = const [],
   }) : _contentBlocks = contentBlocks;
 
@@ -25,6 +29,10 @@ class ChatMessage {
   final String? memberId;
   final bool isUser;
   final List<String> taskIds;
+  final int? inputTokens;
+  final int? outputTokens;
+  final int? cachedTokens;
+  final int? totalTokens;
   final List<ChatMessageContentBlock>? _contentBlocks;
 
   List<ChatMessageContentBlock> get contentBlocks => _contentBlocks ?? const [];
@@ -34,6 +42,10 @@ class ChatMessage {
     String? thinkingContent,
     ChatMessageGenerationStatus? generationStatus,
     int? generationDurationMs,
+    int? inputTokens,
+    int? outputTokens,
+    int? cachedTokens,
+    int? totalTokens,
     List<ChatMessageContentBlock>? contentBlocks,
   }) {
     return ChatMessage(
@@ -47,6 +59,10 @@ class ChatMessage {
       memberId: memberId,
       isUser: isUser,
       taskIds: taskIds,
+      inputTokens: inputTokens ?? this.inputTokens,
+      outputTokens: outputTokens ?? this.outputTokens,
+      cachedTokens: cachedTokens ?? this.cachedTokens,
+      totalTokens: totalTokens ?? this.totalTokens,
       contentBlocks: contentBlocks ?? this.contentBlocks,
     );
   }
@@ -62,6 +78,10 @@ class ChatMessage {
         'memberId': memberId,
         'isUser': isUser,
         'taskIds': taskIds,
+        if (inputTokens != null) 'inputTokens': inputTokens,
+        if (outputTokens != null) 'outputTokens': outputTokens,
+        if (cachedTokens != null) 'cachedTokens': cachedTokens,
+        if (totalTokens != null) 'totalTokens': totalTokens,
         'contentBlocks': contentBlocks.map((block) => block.toJson()).toList(),
       };
 
@@ -79,6 +99,10 @@ class ChatMessage {
         memberId: json['memberId'] as String?,
         isUser: (json['isUser'] as bool?) ?? false,
         taskIds: List<String>.from(json['taskIds'] as List? ?? const []),
+        inputTokens: (json['inputTokens'] as num?)?.toInt(),
+        outputTokens: (json['outputTokens'] as num?)?.toInt(),
+        cachedTokens: (json['cachedTokens'] as num?)?.toInt(),
+        totalTokens: (json['totalTokens'] as num?)?.toInt(),
         contentBlocks: (json['contentBlocks'] as List? ?? const [])
             .map(
               (item) => ChatMessageContentBlock.fromJson(

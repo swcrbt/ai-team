@@ -149,3 +149,81 @@ String? firstStringValue(
 String? normalizeOptionalText(String value) {
   return value.trim().isEmpty ? null : value;
 }
+
+ModelTokenUsage parseTokenUsage(Object? value) {
+  if (value is! Map) {
+    return const ModelTokenUsage();
+  }
+  final usage = Map<String, Object?>.from(value);
+  final inputTokens = _firstInt(usage, const [
+    'prompt_tokens',
+    'input_tokens',
+  ]);
+  final outputTokens = _firstInt(usage, const [
+    'completion_tokens',
+    'output_tokens',
+  ]);
+  final totalTokens = _firstInt(usage, const ['total_tokens']);
+  final cachedTokens = _cachedTokenCount(usage);
+  return ModelTokenUsage(
+    inputTokens: inputTokens,
+    outputTokens: outputTokens,
+    cachedTokens: cachedTokens,
+    totalTokens: totalTokens,
+  );
+}
+
+int? _cachedTokenCount(Map<String, Object?> usage) {
+  final direct = _firstInt(usage, const [
+    'cached_tokens',
+    'cache_read_input_tokens',
+    'prompt_cache_hit_tokens',
+  ]);
+  if (direct != null) {
+    return direct;
+  }
+  final promptDetails = usage['prompt_tokens_details'];
+  if (promptDetails is Map) {
+    return _firstInt(Map<String, Object?>.from(promptDetails), const [
+      'cached_tokens',
+    ]);
+  }
+  final inputDetails = usage['input_tokens_details'];
+  if (inputDetails is Map) {
+    return _firstInt(Map<String, Object?>.from(inputDetails), const [
+      'cached_tokens',
+      'cache_read',
+    ]);
+  }
+  return null;
+}
+
+int? _firstInt(Map<String, Object?> json, List<String> keys) {
+  for (final key in keys) {
+    final value = json[key];
+    if (value is num) {
+      return value.toInt();
+    }
+  }
+  return null;
+}
+
+class ModelTokenUsage {
+  const ModelTokenUsage({
+    this.inputTokens,
+    this.outputTokens,
+    this.cachedTokens,
+    this.totalTokens,
+  });
+
+  final int? inputTokens;
+  final int? outputTokens;
+  final int? cachedTokens;
+  final int? totalTokens;
+
+  bool get isEmpty =>
+      inputTokens == null &&
+      outputTokens == null &&
+      cachedTokens == null &&
+      totalTokens == null;
+}

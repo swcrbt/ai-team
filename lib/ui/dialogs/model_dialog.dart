@@ -22,6 +22,11 @@ Future<void> showModelDialog(
   final maxTokens = TextEditingController(
     text: (model?.maxTokens ?? 1600).toString(),
   );
+  final contextWindowTokens = TextEditingController(
+    text:
+        (model?.contextWindowTokens ?? ModelProfile.defaultContextWindowTokens)
+            .toString(),
+  );
   var streaming = model?.streaming ?? true;
   var reasoningEffort = model?.reasoningEffort ?? reasoningEffortOffValue;
   String? validationError;
@@ -85,6 +90,10 @@ Future<void> showModelDialog(
                   const SizedBox(height: 12),
                   DialogField(controller: temperature, label: '温度 0-2'),
                   DialogField(controller: maxTokens, label: '最大 Token'),
+                  DialogField(
+                    controller: contextWindowTokens,
+                    label: '上下文窗口 Token',
+                  ),
                 ],
               ),
             ),
@@ -102,8 +111,12 @@ Future<void> showModelDialog(
                   temperature.text.trim(),
                 );
                 final parsedMaxTokens = int.tryParse(maxTokens.text.trim());
-                if (parsedTemperature == null || parsedMaxTokens == null) {
-                  throw ArgumentError('温度和最大 Token 必须是数字');
+                final parsedContextWindowTokens =
+                    int.tryParse(contextWindowTokens.text.trim());
+                if (parsedTemperature == null ||
+                    parsedMaxTokens == null ||
+                    parsedContextWindowTokens == null) {
+                  throw ArgumentError('温度和 Token 必须是数字');
                 }
                 final next = ModelProfile(
                   id: model?.id ??
@@ -115,6 +128,7 @@ Future<void> showModelDialog(
                   streaming: streaming,
                   temperature: parsedTemperature,
                   maxTokens: parsedMaxTokens,
+                  contextWindowTokens: parsedContextWindowTokens,
                   reasoningEffort: reasoningEffort == reasoningEffortOffValue
                       ? null
                       : reasoningEffort,

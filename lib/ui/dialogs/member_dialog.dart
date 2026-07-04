@@ -10,9 +10,6 @@ Future<void> showMemberDialog(
   TeamMember? member,
 }) async {
   final name = TextEditingController(text: member?.name ?? '');
-  final priority = TextEditingController(
-    text: (member?.executionPriority ?? 0).toString(),
-  );
   var roleId = member?.roleId ?? controller.state.roles.first.id;
   var modelId = member?.modelId ?? controller.state.models.first.id;
   String? validationError;
@@ -21,7 +18,7 @@ Future<void> showMemberDialog(
     builder: (context) => StatefulBuilder(
       builder: (context, setDialogState) => ConfigDialog(
         title: member == null ? '新增团队成员' : '编辑团队成员',
-        subtitle: '绑定成员名称、执行优先级、角色和模型。',
+        subtitle: '绑定成员名称、角色和模型。',
         icon: Icons.person_add_alt_1_rounded,
         body: Column(
           mainAxisSize: MainAxisSize.min,
@@ -32,7 +29,6 @@ Future<void> showMemberDialog(
               child: Column(
                 children: [
                   DialogField(controller: name, label: '成员名称'),
-                  DialogField(controller: priority, label: '执行优先级'),
                   DropdownButtonFormField<String>(
                     initialValue: roleId,
                     decoration: dialogInputDecoration('角色'),
@@ -74,10 +70,6 @@ Future<void> showMemberDialog(
           FilledButton(
             onPressed: () {
               try {
-                final executionPriority = int.tryParse(priority.text.trim());
-                if (executionPriority == null) {
-                  throw ArgumentError('执行优先级必须是整数');
-                }
                 final next = TeamMember(
                   id: member?.id ??
                       'member-${DateTime.now().microsecondsSinceEpoch}',
@@ -85,7 +77,7 @@ Future<void> showMemberDialog(
                   roleId: roleId,
                   modelId: modelId,
                   isSecretary: member?.isSecretary ?? false,
-                  executionPriority: executionPriority,
+                  executionPriority: member?.executionPriority ?? 0,
                 );
                 if (member == null) {
                   controller.addMember(next);

@@ -4,7 +4,6 @@ enum MainView {
   models,
   roles,
   members,
-  history,
   audit,
   project,
   settings,

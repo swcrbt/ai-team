@@ -119,12 +119,20 @@ class ModelCompletion {
     required this.content,
     this.thinkingContent,
     this.toolCalls = const [],
+    this.inputTokens,
+    this.outputTokens,
+    this.cachedTokens,
+    this.totalTokens,
     this.diagnostics,
   });
 
   final String content;
   final String? thinkingContent;
   final List<ModelToolCall> toolCalls;
+  final int? inputTokens;
+  final int? outputTokens;
+  final int? cachedTokens;
+  final int? totalTokens;
   final ModelResponseDiagnostics? diagnostics;
 }
 
@@ -137,6 +145,10 @@ class ModelResponseDiagnostics {
     this.contentDeltaCount = 0,
     this.thinkingDeltaCount = 0,
     this.toolCallCount = 0,
+    this.inputTokens,
+    this.outputTokens,
+    this.cachedTokens,
+    this.totalTokens,
     this.rawToolCalls = const [],
     this.rawResponse,
     this.requestBody,
@@ -150,6 +162,10 @@ class ModelResponseDiagnostics {
   final int contentDeltaCount;
   final int thinkingDeltaCount;
   final int toolCallCount;
+  final int? inputTokens;
+  final int? outputTokens;
+  final int? cachedTokens;
+  final int? totalTokens;
   final List<Map<String, Object?>> rawToolCalls;
   final String? rawResponse;
   final Map<String, Object?>? requestBody;
@@ -165,6 +181,10 @@ class ModelResponseDiagnostics {
         'contentDeltaCount': contentDeltaCount,
         'thinkingDeltaCount': thinkingDeltaCount,
         'toolCallCount': toolCallCount,
+        if (inputTokens != null) 'inputTokens': inputTokens,
+        if (outputTokens != null) 'outputTokens': outputTokens,
+        if (cachedTokens != null) 'cachedTokens': cachedTokens,
+        if (totalTokens != null) 'totalTokens': totalTokens,
         'rawToolCalls': rawToolCalls,
         'rawResponse': rawResponse,
         'requestBody': requestBody,
