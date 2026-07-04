@@ -925,6 +925,13 @@ void main() {
     tester,
   ) async {
     final state = AppState.seed().copyWith(
+      workspaces: const [
+        ProjectWorkspace(
+          id: 'workspace-ai-team',
+          name: 'ai-team',
+          path: '/repo/ai-team',
+        ),
+      ],
       commandRequests: [
         CommandRequest.pending(
           id: 'command-project-test',
@@ -976,6 +983,18 @@ void main() {
     expect(find.text('命令审批'), findsOneWidget);
     expect(find.text('补丁确认'), findsOneWidget);
     expect(find.text('项目边界'), findsOneWidget);
+    expect(find.text('已生效'), findsWidgets);
+    expect(find.text('可写'), findsWidgets);
+    expect(find.text('补丁'), findsWidgets);
+    expect(find.text('需确认'), findsWidgets);
+    expect(find.text('项目外'), findsOneWidget);
+    expect(find.text('已阻断'), findsWidgets);
+    expect(find.text('enforced'), findsNothing);
+    expect(find.text('write'), findsNothing);
+    expect(find.text('confirm'), findsNothing);
+    expect(find.text('patch'), findsNothing);
+    expect(find.text('outside'), findsNothing);
+    expect(find.text('blocked'), findsNothing);
     expect(find.text('审计摘要'), findsOneWidget);
     expect(find.text('最新优先'), findsOneWidget);
     expect(find.text('事件'), findsOneWidget);
@@ -1022,5 +1041,8 @@ void main() {
     expect(find.text('0 pending'), findsNothing);
     expect(find.text('暂无待确认补丁'), findsOneWidget);
     expect(find.text('模型生成的 Diff 会先停在这里等待确认。'), findsOneWidget);
+    expect(find.text('项目'), findsWidgets);
+    expect(find.text('未配置'), findsOneWidget);
+    expect(find.text('root'), findsNothing);
   });
 }

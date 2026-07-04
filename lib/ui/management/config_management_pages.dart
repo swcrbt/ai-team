@@ -1594,14 +1594,14 @@ class _ProjectBoundaryPanel extends StatelessWidget {
     return _Panel(
       title: '项目边界',
       action: const _ProjectStatusPill(
-        label: 'enforced',
+        label: '已生效',
         tone: _ProjectTone.green,
       ),
       child: Column(
         children: [
           if (workspaces.isEmpty)
             const _BoundaryRow(
-              label: 'root',
+              label: '项目',
               value: '未选择',
               status: '未配置',
               tone: _ProjectTone.amber,
@@ -1611,19 +1611,19 @@ class _ProjectBoundaryPanel extends StatelessWidget {
               _BoundaryRow(
                 label: workspace.name,
                 value: workspace.path,
-                status: 'write',
+                status: '可写',
                 tone: _ProjectTone.green,
               ),
           const _BoundaryRow(
-            label: 'patch',
+            label: '补丁',
             value: '统一 diff 确认后应用',
-            status: 'confirm',
+            status: '需确认',
             tone: _ProjectTone.amber,
           ),
           const _BoundaryRow(
-            label: 'outside',
+            label: '项目外',
             value: '仓库外路径',
-            status: 'blocked',
+            status: '已阻断',
             tone: _ProjectTone.red,
           ),
         ],
