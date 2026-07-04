@@ -28,6 +28,7 @@ void main() {
     expect(find.text('角色配置'), findsNothing);
     expect(find.text('团队成员'), findsNothing);
     expect(find.byKey(const ValueKey('token-usage-meter')), findsOneWidget);
+    expect(find.textContaining('members'), findsNothing);
     expect(find.text('补丁确认'), findsNothing);
 
     await tester.tap(find.byTooltip('设置'));

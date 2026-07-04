@@ -845,7 +845,7 @@ class _HeaderMembersPill extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        '$count members',
+        '$count 名成员',
         style: const TextStyle(
           color: Color(0xFF047857),
           fontSize: 12,
