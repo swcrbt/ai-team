@@ -763,11 +763,11 @@
                 <section class="entity-panel">
                   <header><strong>角色列表</strong><span class="caption">按角色对象展示，选中后编辑提示词与权限</span></header>
                   <div class="role-list">
-                    <article class="list-row-card active" data-od-id="role-list-architect"><div><strong>架构师</strong><span class="caption">方案规划 · 风险识别 · 最小补丁路径</span></div><span class="status green"><span class="dot"></span>启用</span></article>
-                    <article class="list-row-card"><div><strong>Reviewer</strong><span class="caption">Diff 审阅 · 质量检查 · 风险提示</span></div><span class="status green"><span class="dot"></span>启用</span></article>
-                    <article class="list-row-card"><div><strong>秘书</strong><span class="caption">群聊汇总 · 私聊转发 · 状态记录</span></div><span class="status blue"><span class="dot"></span>系统</span></article>
-                    <article class="list-row-card"><div><strong>测试工程师</strong><span class="caption">复现步骤 · 回归验证 · 测试摘要</span></div><span class="status green"><span class="dot"></span>启用</span></article>
-                    <article class="list-row-card"><div><strong>文档维护者</strong><span class="caption">设计文档 · 发布说明 · 变更摘要</span></div><span class="status amber"><span class="dot"></span>草稿</span></article>
+                    <article class="list-row-card active" data-od-id="role-list-architect"><div><strong>架构师</strong><span class="caption">方案规划 · 风险识别 · 最小补丁路径</span></div><span class="caption">读项目 · 命令需确认</span></article>
+                    <article class="list-row-card"><div><strong>Reviewer</strong><span class="caption">Diff 审阅 · 质量检查 · 风险提示</span></div><span class="caption">读补丁 · 命令需确认</span></article>
+                    <article class="list-row-card"><div><strong>秘书</strong><span class="caption">群聊汇总 · 私聊转发 · 状态记录</span></div><span class="caption">汇总与转发</span></article>
+                    <article class="list-row-card"><div><strong>测试工程师</strong><span class="caption">复现步骤 · 回归验证 · 测试摘要</span></div><span class="caption">回归验证</span></article>
+                    <article class="list-row-card"><div><strong>文档维护者</strong><span class="caption">设计文档 · 发布说明 · 变更摘要</span></div><span class="caption">文档输出</span></article>
                   </div>
                 </section>
                 <section class="entity-panel" data-od-id="role-edit-panel">
@@ -827,7 +827,7 @@
                     <div class="edit-field"><span>绑定角色</span><strong>架构师</strong></div>
                     <div class="edit-field"><span>绑定模型</span><strong>Codex 主模型</strong></div>
                     <div class="edit-field"><span>所属团队</span><strong>开发团队 · 测试团队</strong></div>
-                    <div class="edit-field"><span>私聊入口</span><strong>启用</strong></div>
+                    <div class="edit-field"><span>私聊入口</span><strong>成员页 / 会话栏</strong></div>
                     <div class="permission-grid"><div class="permission-row"><span>读取文件</span><strong>允许</strong></div><div class="permission-row"><span>请求命令</span><strong>需确认</strong></div><div class="permission-row"><span>代表用户发送</span><strong>禁止</strong></div><div class="permission-row"><span>参与群聊</span><strong>允许</strong></div></div>
                   </div>
                 </section>
@@ -844,7 +844,7 @@
         <header data-od-id="route-board-header"><div><h3>主侧边栏 8 个入口的页面矩阵</h3><span class="caption">从主侧边栏直接进入；每个页面都有独立内容、表单状态和操作区。</span></div><span class="status blue"><span class="dot"></span>single source</span></header>
         <div class="route-grid" data-od-id="route-page-grid">
           <section class="route-page" data-od-id="route-page-messages">
-            <header><div class="route-title"><svg class="icon"><use href="#i-chat"/></svg><strong>消息</strong></div><span class="status green"><span class="dot"></span>active</span></header>
+            <header><div class="route-title"><svg class="icon"><use href="#i-chat"/></svg><strong>消息</strong></div><span class="status green"><span class="dot"></span>当前</span></header>
             <div class="route-content">
               <div class="route-row split"><div><strong>群聊 / Team Desk</strong><span class="caption">命令请求待确认</span></div><span class="mono">09:42</span></div>
               <div class="route-row split"><div><strong>私聊 / Reviewer Lin</strong><span class="caption">补丁审阅</span></div><span class="status amber"><span class="dot"></span>待审批</span></div>
@@ -873,19 +873,19 @@
           <section class="route-page" data-od-id="route-page-roles">
             <header><div class="route-title"><svg class="icon"><use href="#i-role"/></svg><strong>角色</strong></div><button class="ghost-btn">编辑</button></header>
             <div class="route-content">
-              <div class="route-row split"><strong>架构师</strong><span class="status blue"><span class="dot"></span>planning</span></div>
-              <div class="route-row split"><strong>Reviewer</strong><span class="status amber"><span class="dot"></span>approval</span></div>
-              <div class="route-row split"><strong>秘书</strong><span class="status green"><span class="dot"></span>summary</span></div>
+              <div class="route-row split"><strong>架构师</strong><span class="caption">方案规划</span></div>
+              <div class="route-row split"><strong>Reviewer</strong><span class="caption">Diff 审阅</span></div>
+              <div class="route-row split"><strong>秘书</strong><span class="caption">群聊汇总</span></div>
               <div class="route-field"><span>角色提示词</span><strong>版本化</strong></div>
             </div>
           </section>
           <section class="route-page" data-od-id="route-page-members">
             <header><div class="route-title"><svg class="icon"><use href="#i-member"/></svg><strong>成员</strong></div><span class="mono caption">5 total</span></header>
             <div class="route-content">
-              <div class="route-row split"><div><strong>Kai</strong><span class="caption">gpt-5-codex · 架构师</span></div><span class="status green"><span class="dot"></span>在线</span></div>
-              <div class="route-row split"><div><strong>Lin</strong><span class="caption">gpt-5-codex · Reviewer</span></div><span class="status green"><span class="dot"></span>在线</span></div>
+              <div class="route-row split"><div><strong>Kai</strong><span class="caption">gpt-5-codex · 架构师</span></div><span class="status blue"><span class="dot"></span>执行中</span></div>
+              <div class="route-row split"><div><strong>Lin</strong><span class="caption">gpt-5-codex · Reviewer</span></div><span class="status amber"><span class="dot"></span>待审批</span></div>
               <div class="route-field"><span>权限</span><strong>命令需确认</strong></div>
-              <div class="route-field"><span>私聊入口</span><strong>启用</strong></div>
+              <div class="route-field"><span>私聊入口</span><strong>成员页 / 会话栏</strong></div>
             </div>
           </section>
           <section class="route-page" data-od-id="route-page-projects">

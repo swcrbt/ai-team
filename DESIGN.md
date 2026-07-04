@@ -66,7 +66,7 @@
 - Empty: no project, no audit, and no command request states should provide one clear primary action.
 - Error: model/command/project errors show source, recoverable action, and audit reference.
 - Success: applied patches and executed commands enter audit immediately.
-- Management: management pages are list-first. Teams use card-style team objects such as 开发团队, 测试团队, 文档团队, and 发布团队, with editing shown only for the selected card; team cards do not show enabled/draft/template status because those are not domain states. Model, role, member, and project pages use object lists as the primary surface, with selected-item editing as secondary detail. Group chat context is always shared and is not configurable per team.
+- Management: management pages are list-first. Teams use card-style team objects such as 开发团队, 测试团队, 文档团队, and 发布团队, with editing shown only for the selected card; team cards do not show enabled/draft/template status because those are not domain states. Role rows show purpose and permission summaries instead of enabled/draft lifecycle states. Model, role, member, and project pages use object lists as the primary surface, with selected-item editing as secondary detail. Group chat context is always shared and is not configurable per team.
 - Disabled: blocked actions state why, especially missing project or secretary constraints.
 - Offline/slow network: model request diagnostics and retry/stop states stay visible.
 - Settings: persistent storage directories are first-class settings for state, audit logs, conversations, and cache. Directory changes should expose choose/open/clear actions and require migration confirmation before saving.
