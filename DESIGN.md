@@ -45,7 +45,7 @@
 
 ## Components
 - Existing components to reuse: Flutter Material 3 widgets, existing sidebars, chat pane, split send button, shared dialog frame, management panels, and audit rows.
-- New/changed components: fixed-bottom chat composer with lower-right send action, circular token meter placed inside the composer directly left of the send button, input/output/cache-hit token breakdown popover, returned-thinking panel inside messages, command approval state card, diff review card, list-first team/model/role/member management pages, team cards for examples such as 开发团队 and 测试团队, project management list inside the project safety surface, conversation status pills for pending approval and allowed-running states, on-demand safety drawer, safety-oriented project review panel, audit detail drawer, sidebar icon components, compact state pills, concrete page layouts for every sidebar entry.
+- New/changed components: fixed-bottom chat composer with lower-right send action, circular token meter placed inside the composer directly left of the send button, input/output/cache-hit token breakdown popover, returned-thinking panel inside messages, command approval state card, diff review card, list-first team/model/role/member management pages, team cards for examples such as 开发团队 and 测试团队 without lifecycle status chips, project management list inside the project safety surface, settings storage-directory configuration for state/audit/conversation/cache persistence, conversation status pills for pending approval and allowed-running states, on-demand safety drawer, safety-oriented project review panel, audit detail drawer, sidebar icon components, compact state pills, concrete page layouts for every sidebar entry.
 - Variants and states: sidebar icon default/hover/active/disabled, command pending/approved/executed/denied/failed as separate system or assistant message variants rather than simultaneous state panels or user-authored execution bubbles, patch pending/applied/rejected, diff collapsed/expanded/applied, model streaming/stopped/failed, empty project.
 - Token/component ownership: keep tokens local to `lib/ui` theme unless a broader design-system refactor is approved.
 
@@ -66,9 +66,10 @@
 - Empty: no project, no audit, and no command request states should provide one clear primary action.
 - Error: model/command/project errors show source, recoverable action, and audit reference.
 - Success: applied patches and executed commands enter audit immediately.
-- Management: management pages are list-first. Teams use card-style team objects such as 开发团队, 测试团队, 文档团队, and 发布团队, with editing shown only for the selected card. Model, role, member, and project pages use object lists as the primary surface, with selected-item editing as secondary detail.
+- Management: management pages are list-first. Teams use card-style team objects such as 开发团队, 测试团队, 文档团队, and 发布团队, with editing shown only for the selected card; team cards do not show enabled/draft/template status because those are not domain states. Model, role, member, and project pages use object lists as the primary surface, with selected-item editing as secondary detail. Group chat context is always shared and is not configurable per team.
 - Disabled: blocked actions state why, especially missing project or secretary constraints.
 - Offline/slow network: model request diagnostics and retry/stop states stay visible.
+- Settings: persistent storage directories are first-class settings for state, audit logs, conversations, and cache. Directory changes should expose choose/open/clear actions and require migration confirmation before saving.
 
 ## Content voice
 - Tone: concise, operational, and explicit.

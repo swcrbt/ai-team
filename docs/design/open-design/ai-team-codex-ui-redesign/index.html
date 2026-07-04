@@ -160,6 +160,8 @@
 
     .conversation-pane { background: var(--surface-2); border-right: 1px solid var(--border); display: grid; grid-template-rows: 64px 42px 1fr; min-width: 0; }
     .pane-header, .chat-header, .admin-header { border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 18px; }
+    .conversation-pane .pane-header { padding: 0 14px 0 20px; gap: 16px; }
+    .conversation-pane .pane-header .tool-square { margin-left: auto; }
     .pane-header h3, .chat-header h3, .admin-header h3 { margin: 0; font-size: 14px; font-weight: 730; }
     .tool-square { width: 28px; height: 28px; border: 1px solid var(--border); border-radius: var(--r6); background: var(--surface); color: var(--muted); display: grid; place-items: center; }
     .search-strip { padding: 7px 14px; border-bottom: 1px solid var(--border); }
@@ -272,6 +274,12 @@
     .data-row { display: grid; grid-template-columns: 1.2fr 1fr 1fr auto; gap: 12px; align-items: center; min-height: 42px; padding: 0 14px; border-bottom: 1px solid var(--border); }
     .data-row:last-child { border-bottom: 0; }
     .data-row.head { background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 680; }
+    .storage-panel { border: 1px solid var(--border); border-radius: var(--r8); background: var(--surface); overflow: hidden; }
+    .storage-panel > header { min-height: 42px; padding: 0 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .storage-grid { padding: 12px; display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 10px; }
+    .storage-row { min-height: 38px; border: 1px solid var(--border); border-radius: var(--r6); background: oklch(99% 0.002 250); padding: 8px 10px; display: grid; grid-template-columns: 126px minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+    .storage-row strong, .storage-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .storage-actions { padding: 0 12px 12px; display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
     .management-detail { display: grid; grid-template-columns: 216px minmax(0, 1fr); height: 960px; background: var(--workbench-bg); }
     .detail-main { display: grid; grid-template-rows: 64px 1fr; min-width: 0; }
     .detail-content { padding: 18px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-height: 0; }
@@ -451,7 +459,7 @@
             <button class="danger-btn" data-od-id="danger-action">阻断命令</button>
           </div>
           <div class="component-row">
-            <span class="status green"><span class="dot"></span>成员在线</span>
+            <span class="status green"><span class="dot"></span>执行中</span>
             <span class="status amber"><span class="dot"></span>等待确认</span>
             <span class="status red"><span class="dot"></span>越界阻断</span>
             <span class="status blue"><span class="dot"></span>模型调用</span>
@@ -589,7 +597,7 @@
           <div class="admin-content">
             <div class="entry-grid" data-od-id="top-level-entry-grid">
               <article class="entry-cell"><header><div><h3>消息</h3><p>Team Desk 与成员私聊</p></div><div class="entry-mark"><svg class="icon"><use href="#i-chat"/></svg></div></header><span class="mono caption">12 conversations</span><span class="status green"><span class="dot"></span>active</span></article>
-              <article class="entry-cell"><header><div><h3>团队</h3><p>团体列表与成员组合</p></div><div class="entry-mark"><svg class="icon"><use href="#i-team"/></svg></div></header><span class="mono caption">3 groups</span><span class="status blue"><span class="dot"></span>configured</span></article>
+              <article class="entry-cell"><header><div><h3>团队</h3><p>开发、测试、文档、发布</p></div><div class="entry-mark"><svg class="icon"><use href="#i-team"/></svg></div></header><span class="mono caption">4 teams</span><span class="status blue"><span class="dot"></span>configured</span></article>
               <article class="entry-cell"><header><div><h3>模型</h3><p>OpenAI-compatible profiles</p></div><div class="entry-mark"><svg class="icon"><use href="#i-model"/></svg></div></header><span class="mono caption">gpt-5-codex</span><span class="status green"><span class="dot"></span>ready</span></article>
               <article class="entry-cell"><header><div><h3>角色</h3><p>架构师、Reviewer、秘书</p></div><div class="entry-mark"><svg class="icon"><use href="#i-role"/></svg></div></header><span class="mono caption">7 roles</span><span class="status blue"><span class="dot"></span>mapped</span></article>
               <article class="entry-cell"><header><div><h3>成员</h3><p>模型实例与权限</p></div><div class="entry-mark"><svg class="icon"><use href="#i-member"/></svg></div></header><span class="mono caption">5 members</span><span class="status green"><span class="dot"></span>online</span></article>
@@ -599,11 +607,21 @@
             </div>
             <div class="data-table" data-od-id="management-table">
               <div class="data-row head"><span>入口</span><span>当前对象</span><span>状态</span><span>更新时间</span></div>
-              <div class="data-row"><strong>团队</strong><span>3 个团体</span><span class="status green"><span class="dot"></span>可用</span><span class="mono">09:12</span></div>
+              <div class="data-row"><strong>团队</strong><span>4 个团队</span><span class="status green"><span class="dot"></span>可用</span><span class="mono">09:12</span></div>
               <div class="data-row"><strong>模型</strong><span>gpt-5-codex</span><span class="status green"><span class="dot"></span>可调用</span><span class="mono">09:18</span></div>
               <div class="data-row"><strong>项目</strong><span>ai-team</span><span class="status amber"><span class="dot"></span>边界复核</span><span class="mono">09:42</span></div>
               <div class="data-row"><strong>审计</strong><span>model_request_diagnostic</span><span class="status blue"><span class="dot"></span>写入</span><span class="mono">09:42</span></div>
             </div>
+            <section class="storage-panel" data-od-id="settings-storage-directories">
+              <header><strong>持久化存储目录</strong><span class="caption">用于 state、审计、会话与本地缓存；路径变更需要确认迁移。</span></header>
+              <div class="storage-grid">
+                <div class="storage-row"><strong>状态目录</strong><span class="mono">~/Library/Application Support/ai-team/state</span><button class="ghost-btn">选择</button></div>
+                <div class="storage-row"><strong>审计目录</strong><span class="mono">~/Library/Application Support/ai-team/audit</span><button class="ghost-btn">打开</button></div>
+                <div class="storage-row"><strong>会话目录</strong><span class="mono">~/Library/Application Support/ai-team/conversations</span><button class="ghost-btn">选择</button></div>
+                <div class="storage-row"><strong>缓存目录</strong><span class="mono">~/Library/Caches/ai-team</span><button class="ghost-btn">清理</button></div>
+              </div>
+              <div class="storage-actions"><button class="ghost-btn">恢复默认</button><button class="primary-btn">保存目录</button></div>
+            </section>
           </div>
         </section>
       </div></div>
@@ -627,28 +645,28 @@
           <div class="caption">当前页：团队管理</div>
         </nav>
         <section class="detail-main" data-od-id="team-management-page">
-          <header class="admin-header"><h3>团队管理</h3><div class="header-actions"><span class="status blue"><span class="dot"></span>3 个团队</span><button class="primary-btn">新建团队</button></div></header>
+          <header class="admin-header"><h3>团队管理</h3><div class="header-actions"><span class="mono caption">4 个团队</span><button class="primary-btn">新建团队</button></div></header>
           <div class="detail-content">
             <article class="detail-page" data-od-id="team-settings-detail">
-              <header><h3><svg class="icon"><use href="#i-team"/></svg>团队列表</h3><div class="command-actions"><button class="ghost-btn">导入模板</button><button class="primary-btn">新建团队</button></div></header>
+              <header><h3><svg class="icon"><use href="#i-team"/></svg>团队列表</h3><div class="command-actions"><button class="ghost-btn">导入团队</button><button class="primary-btn">新建团队</button></div></header>
               <div class="entity-layout">
                 <section class="entity-panel">
                   <header><strong>团队卡片</strong><span class="caption">开发、测试、文档、发布按团队管理</span></header>
                   <div class="entity-list">
                     <article class="entity-card active" data-od-id="team-card-dev">
-                      <header><div><h4>开发团队</h4><p>负责方案拆解、代码修改、补丁提交</p></div><span class="status green"><span class="dot"></span>启用</span></header>
+                      <header><div><h4>开发团队</h4><p>负责方案拆解、代码修改、补丁提交</p></div></header>
                       <div class="entity-meta"><span>成员 4</span><span>模式 串行协作</span><span>默认秘书 Secretary</span></div>
                     </article>
                     <article class="entity-card" data-od-id="team-card-test">
-                      <header><div><h4>测试团队</h4><p>负责回归验证、失败复现、测试报告</p></div><span class="status blue"><span class="dot"></span>模板</span></header>
+                      <header><div><h4>测试团队</h4><p>负责回归验证、失败复现、测试报告</p></div></header>
                       <div class="entity-meta"><span>成员 3</span><span>模式 并行验证</span><span>默认入口 QA Runner</span></div>
                     </article>
                     <article class="entity-card" data-od-id="team-card-docs">
-                      <header><div><h4>文档团队</h4><p>负责设计文档、变更摘要、发布说明</p></div><span class="status green"><span class="dot"></span>启用</span></header>
+                      <header><div><h4>文档团队</h4><p>负责设计文档、变更摘要、发布说明</p></div></header>
                       <div class="entity-meta"><span>成员 2</span><span>模式 顺序汇总</span><span>默认入口 Writer</span></div>
                     </article>
                     <article class="entity-card" data-od-id="team-card-release">
-                      <header><div><h4>发布团队</h4><p>负责发布检查、审计确认、风险复核</p></div><span class="status amber"><span class="dot"></span>草稿</span></header>
+                      <header><div><h4>发布团队</h4><p>负责发布检查、审计确认、风险复核</p></div></header>
                       <div class="entity-meta"><span>成员 3</span><span>模式 Gate</span><span>默认秘书 Secretary</span></div>
                     </article>
                   </div>
@@ -661,7 +679,7 @@
                     <div class="edit-field"><span>协作模式</span><strong>串行协作</strong></div>
                     <div class="edit-field"><span>成员</span><strong>Kai · Lin · Runner · Secretary</strong></div>
                     <div class="edit-field"><span>默认秘书</span><strong>Secretary</strong></div>
-                    <div class="permission-grid"><div class="permission-row"><span>共享群聊上下文</span><strong>开启</strong></div><div class="permission-row"><span>命令执行</span><strong>需确认</strong></div><div class="permission-row"><span>补丁应用</span><strong>需确认</strong></div></div>
+                    <div class="permission-grid"><div class="permission-row"><span>命令执行</span><strong>需确认</strong></div><div class="permission-row"><span>补丁应用</span><strong>需确认</strong></div></div>
                   </div>
                 </section>
               </div>
@@ -810,7 +828,7 @@
                     <div class="edit-field"><span>显示名称</span><strong>Kai</strong></div>
                     <div class="edit-field"><span>绑定角色</span><strong>架构师</strong></div>
                     <div class="edit-field"><span>绑定模型</span><strong>Codex 主模型</strong></div>
-                    <div class="edit-field"><span>所属团队</span><strong>开发团队 · Bug Bash</strong></div>
+                    <div class="edit-field"><span>所属团队</span><strong>开发团队 · 测试团队</strong></div>
                     <div class="edit-field"><span>私聊入口</span><strong>启用</strong></div>
                     <div class="permission-grid"><div class="permission-row"><span>读取文件</span><strong>允许</strong></div><div class="permission-row"><span>请求命令</span><strong>需确认</strong></div><div class="permission-row"><span>代表用户发送</span><strong>禁止</strong></div><div class="permission-row"><span>参与群聊</span><strong>允许</strong></div></div>
                   </div>
@@ -839,10 +857,10 @@
           <section class="route-page" data-od-id="route-page-teams">
             <header><div class="route-title"><svg class="icon"><use href="#i-team"/></svg><strong>团队</strong></div><button class="tool-square"><svg class="icon"><use href="#i-plus"/></svg></button></header>
             <div class="route-content">
-              <div class="route-row"><strong>Core Review</strong><span class="caption">Kai, Lin, Secretary · serial</span></div>
-              <div class="route-field"><span>团体数量</span><strong>3 groups</strong></div>
-              <div class="route-field"><span>批量操作</span><strong>复制 / 停用 / 归档</strong></div>
-              <div class="route-mini-table"><div class="route-mini-row"><span>Bug Bash</span><span>模板</span></div><div class="route-mini-row"><span>Release Gate</span><span>草稿</span></div></div>
+              <div class="route-row"><strong>开发团队</strong><span class="caption">Kai, Lin, Runner, Secretary</span></div>
+              <div class="route-field"><span>团队数量</span><strong>4 teams</strong></div>
+              <div class="route-field"><span>批量操作</span><strong>复制 / 归档 / 调整成员</strong></div>
+              <div class="route-mini-table"><div class="route-mini-row"><span>测试团队</span><span>3 members</span></div><div class="route-mini-row"><span>发布团队</span><span>3 members</span></div></div>
             </div>
           </section>
           <section class="route-page" data-od-id="route-page-models">
@@ -896,10 +914,10 @@
           <section class="route-page" data-od-id="route-page-settings">
             <header><div class="route-title"><svg class="icon"><use href="#i-settings"/></svg><strong>设置</strong></div><span class="status blue"><span class="dot"></span>local</span></header>
             <div class="route-content">
+              <div class="route-field"><span>持久化目录</span><strong>Application Support/ai-team</strong></div>
               <div class="route-field"><span>状态文件</span><strong>state.json</strong></div>
               <div class="route-field"><span>主题</span><strong>跟随系统</strong></div>
-              <div class="route-field"><span>语言</span><strong>中文 / English</strong></div>
-              <div class="route-row"><strong>危险操作</strong><span class="caption">清除本地会话需二次确认</span></div>
+              <div class="route-row"><strong>目录迁移</strong><span class="caption">保存前显示迁移确认</span></div>
             </div>
           </section>
         </div>
