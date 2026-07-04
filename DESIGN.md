@@ -28,7 +28,7 @@
 ## Information architecture
 - Primary navigation: compact dark icon rail for messages, teams, models, roles, members, project, audit, and settings. Each entry has a designed 20px linear icon with default, hover, active, and disabled states.
 - Core routes/screens: Group Chat Command Center, Member Private Chat, Team Management, Model Management, Role Management, Member Management, Project Safety and Patch Review, Audit Console, App Settings, Sidebar Icon System.
-- Content hierarchy: active work first, safety confirmation second, historical/audit evidence third. The message sidebar is only for group/private conversations; model and project objects remain sidebar destinations, not conversation rows. Team, model, role, and member management are separate sidebar pages in that order, not sections inside one settings page.
+- Content hierarchy: active work first, safety confirmation second, historical/audit evidence third. The message sidebar is only for group/private conversations; model and project objects remain sidebar destinations, not conversation rows. Team, model, role, and member management are separate sidebar pages in that order, not sections inside one settings page, and each management page presents its object list before item editing.
 
 ## Design principles
 - Principle 1: keep command, patch, member, and audit state close to the action that created it, but do not keep a right-side safety panel permanently resident in chat.
@@ -45,7 +45,7 @@
 
 ## Components
 - Existing components to reuse: Flutter Material 3 widgets, existing sidebars, chat pane, split send button, shared dialog frame, management panels, and audit rows.
-- New/changed components: fixed-bottom chat composer with lower-right send action, circular token meter placed inside the composer directly left of the send button, input/output/cache-hit token breakdown popover, returned-thinking panel inside messages, command approval state card, diff review card, dedicated team/model/role/member management pages, conversation status pills for pending approval and allowed-running states, on-demand safety drawer, safety-oriented project review panel, audit detail drawer, sidebar icon components, compact state pills, concrete page layouts for every sidebar entry.
+- New/changed components: fixed-bottom chat composer with lower-right send action, circular token meter placed inside the composer directly left of the send button, input/output/cache-hit token breakdown popover, returned-thinking panel inside messages, command approval state card, diff review card, list-first team/model/role/member management pages, team cards for examples such as 开发团队 and 测试团队, project management list inside the project safety surface, conversation status pills for pending approval and allowed-running states, on-demand safety drawer, safety-oriented project review panel, audit detail drawer, sidebar icon components, compact state pills, concrete page layouts for every sidebar entry.
 - Variants and states: sidebar icon default/hover/active/disabled, command pending/approved/executed/denied/failed as separate system or assistant message variants rather than simultaneous state panels or user-authored execution bubbles, patch pending/applied/rejected, diff collapsed/expanded/applied, model streaming/stopped/failed, empty project.
 - Token/component ownership: keep tokens local to `lib/ui` theme unless a broader design-system refactor is approved.
 
@@ -66,7 +66,7 @@
 - Empty: no project, no audit, and no command request states should provide one clear primary action.
 - Error: model/command/project errors show source, recoverable action, and audit reference.
 - Success: applied patches and executed commands enter audit immediately.
-- Management: the team detail mockup manages team objects only, including team roster, collaboration strategy, default secretary, and team-level permissions. Model, role, and member detail pages are separate sidebar destinations and separate Open Design boards.
+- Management: management pages are list-first. Teams use card-style team objects such as 开发团队, 测试团队, 文档团队, and 发布团队, with editing shown only for the selected card. Model, role, member, and project pages use object lists as the primary surface, with selected-item editing as secondary detail.
 - Disabled: blocked actions state why, especially missing project or secretary constraints.
 - Offline/slow network: model request diagnostics and retry/stop states stay visible.
 

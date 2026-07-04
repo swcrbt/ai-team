@@ -314,6 +314,26 @@
     .permission-row { min-height: 32px; padding: 0 9px; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
     .permission-row:last-child { border-bottom: 0; }
     .prompt-preview { min-height: 136px; border: 1px solid var(--border); border-radius: var(--r6); background: var(--surface); padding: 10px; font-family: var(--font-mono); font-size: 12px; color: oklch(34% 0.02 250); overflow: hidden; }
+    .entity-layout { padding: 12px; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 12px; overflow: hidden; }
+    .entity-panel { border: 1px solid var(--border); border-radius: var(--r6); background: oklch(99% 0.002 250); overflow: hidden; display: grid; grid-template-rows: 36px 1fr; min-width: 0; }
+    .entity-panel > header { padding: 0 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .entity-list { padding: 12px; display: grid; gap: 10px; align-content: start; min-height: 0; overflow: hidden; }
+    .entity-card { border: 1px solid var(--border); border-radius: var(--r8); background: var(--surface); padding: 12px; display: grid; gap: 10px; min-width: 0; }
+    .entity-card.active { border-color: oklch(84% 0.05 255); background: var(--blue-soft); }
+    .entity-card header { display: flex; align-items: start; justify-content: space-between; gap: 10px; }
+    .entity-card h4 { margin: 0; font-size: 14px; }
+    .entity-card p { margin: 3px 0 0; color: var(--muted); }
+    .entity-meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .entity-meta span { min-height: 30px; border: 1px solid var(--border); border-radius: var(--r6); background: oklch(99% 0.002 250); padding: 6px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .entity-detail-body { padding: 12px; display: grid; gap: 10px; align-content: start; overflow: hidden; }
+    .edit-field { min-height: 36px; border: 1px solid var(--border); border-radius: var(--r6); background: var(--surface); padding: 8px 10px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .edit-field > :last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .role-list, .member-list, .model-list, .project-list { padding: 12px; display: grid; gap: 8px; align-content: start; overflow: hidden; }
+    .list-row-card { min-height: 58px; border: 1px solid var(--border); border-radius: var(--r8); background: var(--surface); padding: 10px 12px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+    .list-row-card.active { border-color: oklch(84% 0.05 255); background: var(--blue-soft); }
+    .list-row-card strong, .list-row-card span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .list-row-card > div { min-width: 0; display: grid; gap: 3px; }
+    .list-row-meta { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
     .route-board { padding: 22px; display: grid; grid-template-rows: 54px 1fr; gap: 16px; background: var(--workbench-bg); }
     .route-board > header { display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border); border-radius: var(--r8); background: var(--surface); padding: 0 16px; }
     .route-board h3 { margin: 0; font-size: 16px; }
@@ -336,8 +356,9 @@
 
     .security-shell { display: grid; grid-template-columns: 64px minmax(0, 1fr); height: 960px; }
     .security-main { display: grid; grid-template-rows: 64px 1fr; background: var(--workbench-bg); }
-    .security-grid { padding: 20px; display: grid; grid-template-columns: 1.08fr 0.92fr; grid-template-rows: 1fr 1fr; gap: 16px; min-height: 0; }
+    .security-grid { padding: 20px; display: grid; grid-template-columns: 1.08fr 0.92fr; grid-template-rows: 168px 1fr 1fr; gap: 16px; min-height: 0; }
     .security-panel { border: 1px solid var(--border); border-radius: var(--r8); background: var(--surface); overflow: hidden; display: grid; grid-template-rows: 42px 1fr; min-height: 0; }
+    .security-panel.project-management { grid-column: 1 / -1; }
     .security-panel > header { padding: 0 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
     .approval-row { padding: 12px 14px; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start; }
     .approval-row:last-child { border-bottom: 0; }
@@ -353,6 +374,10 @@
     .kpi strong { display: block; font-size: 22px; font-family: var(--font-mono); font-weight: 720; }
     .audit-list { padding: 0 14px 14px; display: grid; gap: 8px; }
     .audit-line { border: 1px solid var(--border); border-radius: var(--r6); padding: 8px 10px; display: grid; grid-template-columns: 98px 1fr auto; gap: 10px; align-items: center; }
+    .project-management-list { padding: 12px 14px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .project-card { min-height: 92px; border: 1px solid var(--border); border-radius: var(--r6); background: oklch(99% 0.002 250); padding: 10px; display: grid; gap: 8px; }
+    .project-card.active { background: var(--blue-soft); border-color: oklch(84% 0.05 255); }
+    .project-card header { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
 
     .icon-board { padding: 34px; display: grid; grid-template-rows: auto 1fr; gap: 24px; }
     .icon-board header h2 { margin: 0; font-size: 28px; }
@@ -474,7 +499,7 @@
             <div class="message-row" data-od-id="command-approved-message"><div class="message-avatar">Sys</div><div class="message-stack"><div class="speaker-line"><strong>系统</strong><span class="mono">09:41:40</span><span class="status blue"><span class="dot"></span>允许中</span></div><article class="message-card"><div class="message-body"><p>用户已允许，命令进入执行中。</p><div class="command-card" data-od-id="command-approved-card"><header><strong>命令已允许</strong><span class="mono">flutter test test/app_widget_test.dart</span></header><div class="command-flow"><div class="command-state approved"><strong>执行中<span class="status blue"><span class="dot"></span>running</span></strong><span class="caption">按钮替换为停止和查看日志，状态会继续写回消息流。</span><div class="command-actions"><button class="ghost-btn">停止</button><button class="ghost-btn">日志</button></div></div></div></div></div></article></div></div>
             <div class="message-row" data-od-id="command-executed-message"><div class="message-avatar">Kai</div><div class="message-stack"><div class="speaker-line"><strong>架构师 Kai</strong><span class="mono">09:42:05</span></div><article class="message-card"><div class="message-body"><p>命令执行完成，摘要进入消息流并写入审计。</p><div class="command-card" data-od-id="command-executed-card"><header><strong>命令结果</strong><span class="mono">flutter test test/app_widget_test.dart</span></header><div class="command-flow"><div class="command-state executed"><strong>已执行<span class="status green"><span class="dot"></span>exit 0</span></strong><span class="caption">312 tests · 0 failed</span><span class="mono caption">duration 18.4s</span></div></div></div></div></article></div></div>
             <div class="message-row" data-od-id="command-rejected-message"><div class="message-avatar">Sec</div><div class="message-stack"><div class="speaker-line"><strong>秘书</strong><span class="mono">09:42:10</span></div><article class="message-card"><div class="message-body"><p>另一条越界命令作为拒绝状态示例；拒绝后只留下原因和审计记录。</p><div class="command-card" data-od-id="command-rejected-card"><header><strong>命令已拒绝</strong><span class="mono">rm -rf /tmp/outside-project</span></header><div class="command-flow"><div class="command-state rejected"><strong>已拒绝<span class="status red"><span class="dot"></span>denied</span></strong><span class="caption">不进入执行流程，记录拒绝原因与操作者。</span><span class="mono caption">user rejected</span></div></div></div></div></article></div></div>
-            <div class="message-row"><div class="message-avatar">Sec</div><div class="message-stack"><div class="speaker-line"><strong>秘书</strong><span class="mono">09:42:18</span></div><article class="message-card"><div class="message-body"><p>补丁摘要已生成。涉及聊天布局、侧边栏入口、安全状态抽屉。未触碰模型配置。</p><div class="patch-card" data-od-id="diff-review-interaction"><header><strong>Diff review</strong><span class="status amber"><span class="dot"></span>待确认</span></header><div class="patch-meta"><div class="patch-metric"><strong>+42 -18</strong><span class="caption">变更量</span></div><div class="patch-metric"><strong>2</strong><span class="caption">文件</span></div><div class="patch-metric"><strong>3</strong><span class="caption">hunks</span></div></div><div class="file-tabs"><span class="file-tab active">chat_view.dart</span><span class="file-tab">sidebar.dart</span></div><div class="diff-view"><div class="diff-row neutral"><span>@@</span><span>composer layout</span></div><div class="diff-row del"><span>-</span><span>message flow owns input controls</span></div><div class="diff-row add"><span>+</span><span>composer stays fixed at bottom with token meter</span></div><div class="diff-row add"><span>+</span><span>command and diff approvals render as interaction cards</span></div></div><div class="review-actions"><div class="command-actions"><button class="ghost-btn">展开 diff</button><button class="danger-btn">拒绝</button><button class="primary-btn">确认应用</button></div><span class="status green"><span class="dot"></span>已应用状态示例</span></div></div></div></article></div></div>
+            <div class="message-row"><div class="message-avatar">Sec</div><div class="message-stack"><div class="speaker-line"><strong>秘书</strong><span class="mono">09:42:18</span></div><article class="message-card"><div class="message-body"><p>补丁摘要已生成。涉及聊天布局、侧边栏入口、安全状态抽屉。未触碰模型列表。</p><div class="patch-card" data-od-id="diff-review-interaction"><header><strong>Diff review</strong><span class="status amber"><span class="dot"></span>待确认</span></header><div class="patch-meta"><div class="patch-metric"><strong>+42 -18</strong><span class="caption">变更量</span></div><div class="patch-metric"><strong>2</strong><span class="caption">文件</span></div><div class="patch-metric"><strong>3</strong><span class="caption">hunks</span></div></div><div class="file-tabs"><span class="file-tab active">chat_view.dart</span><span class="file-tab">sidebar.dart</span></div><div class="diff-view"><div class="diff-row neutral"><span>@@</span><span>composer layout</span></div><div class="diff-row del"><span>-</span><span>message flow owns input controls</span></div><div class="diff-row add"><span>+</span><span>composer stays fixed at bottom with token meter</span></div><div class="diff-row add"><span>+</span><span>command and diff approvals render as interaction cards</span></div></div><div class="review-actions"><div class="command-actions"><button class="ghost-btn">展开 diff</button><button class="danger-btn">拒绝</button><button class="primary-btn">确认应用</button></div><span class="status green"><span class="dot"></span>已应用状态示例</span></div></div></div></article></div></div>
           </div>
           <button class="return-bottom" data-od-id="return-to-bottom"><svg class="icon"><use href="#i-chevron"/></svg>回到底部</button>
           <div class="context-drawer" data-od-id="ephemeral-safety-drawer">
@@ -605,39 +630,38 @@
           <header class="admin-header"><h3>团队管理</h3><div class="header-actions"><span class="status blue"><span class="dot"></span>3 个团队</span><button class="primary-btn">新建团队</button></div></header>
           <div class="detail-content">
             <article class="detail-page" data-od-id="team-settings-detail">
-              <header><h3><svg class="icon"><use href="#i-team"/></svg>团队对象</h3><div class="command-actions"><button class="ghost-btn">复制</button><button class="ghost-btn">停用</button><button class="primary-btn">保存</button></div></header>
-              <div class="manager-layout">
-                <section class="manager-panel">
-                  <header><strong>团队列表</strong><span class="caption">按最近使用排序</span></header>
-                  <div class="manager-body">
-                    <div class="manager-table">
-                      <div class="manager-row head"><span>团队</span><span>协作模式</span><span>成员</span><span>状态</span></div>
-                      <div class="manager-row active"><strong>Core Review</strong><span>串行审阅</span><span>Kai, Lin, Sec</span><span class="status green"><span class="dot"></span>启用</span></div>
-                      <div class="manager-row"><strong>Bug Bash</strong><span>并行排查</span><span>Runner, QA</span><span class="status blue"><span class="dot"></span>模板</span></div>
-                      <div class="manager-row"><strong>Release Gate</strong><span>发布检查</span><span>Architect, QA, Sec</span><span class="status amber"><span class="dot"></span>草稿</span></div>
-                      <div class="manager-row"><strong>Docs Sweep</strong><span>顺序汇总</span><span>Writer, Reviewer</span><span class="status green"><span class="dot"></span>启用</span></div>
-                    </div>
-                    <div class="manager-field"><span>默认打开</span><strong>上次使用团队</strong></div>
-                    <div class="manager-field"><span>批量管理</span><strong>复制 · 归档 · 设为模板</strong></div>
+              <header><h3><svg class="icon"><use href="#i-team"/></svg>团队列表</h3><div class="command-actions"><button class="ghost-btn">导入模板</button><button class="primary-btn">新建团队</button></div></header>
+              <div class="entity-layout">
+                <section class="entity-panel">
+                  <header><strong>团队卡片</strong><span class="caption">开发、测试、文档、发布按团队管理</span></header>
+                  <div class="entity-list">
+                    <article class="entity-card active" data-od-id="team-card-dev">
+                      <header><div><h4>开发团队</h4><p>负责方案拆解、代码修改、补丁提交</p></div><span class="status green"><span class="dot"></span>启用</span></header>
+                      <div class="entity-meta"><span>成员 4</span><span>模式 串行协作</span><span>默认秘书 Secretary</span></div>
+                    </article>
+                    <article class="entity-card" data-od-id="team-card-test">
+                      <header><div><h4>测试团队</h4><p>负责回归验证、失败复现、测试报告</p></div><span class="status blue"><span class="dot"></span>模板</span></header>
+                      <div class="entity-meta"><span>成员 3</span><span>模式 并行验证</span><span>默认入口 QA Runner</span></div>
+                    </article>
+                    <article class="entity-card" data-od-id="team-card-docs">
+                      <header><div><h4>文档团队</h4><p>负责设计文档、变更摘要、发布说明</p></div><span class="status green"><span class="dot"></span>启用</span></header>
+                      <div class="entity-meta"><span>成员 2</span><span>模式 顺序汇总</span><span>默认入口 Writer</span></div>
+                    </article>
+                    <article class="entity-card" data-od-id="team-card-release">
+                      <header><div><h4>发布团队</h4><p>负责发布检查、审计确认、风险复核</p></div><span class="status amber"><span class="dot"></span>草稿</span></header>
+                      <div class="entity-meta"><span>成员 3</span><span>模式 Gate</span><span>默认秘书 Secretary</span></div>
+                    </article>
                   </div>
                 </section>
-                <section class="manager-panel">
-                  <header><strong>Core Review 详情</strong><button class="ghost-btn">编辑团队</button></header>
-                  <div class="manager-body">
-                    <div class="manager-field"><span>团队名称</span><strong>Core Review</strong></div>
-                    <div class="manager-field"><span>协作策略</span><strong>串行审阅</strong></div>
-                    <div class="manager-field"><span>默认秘书</span><strong>Secretary</strong></div>
-                    <div class="slot-grid">
-                      <div class="slot-card"><strong>Kai</strong><span class="caption">架构师 · 首轮方案</span></div>
-                      <div class="slot-card"><strong>Lin</strong><span class="caption">Reviewer · 补丁审阅</span></div>
-                      <div class="slot-card"><strong>Secretary</strong><span class="caption">汇总 · 转发私聊</span></div>
-                      <div class="slot-card"><strong>空位</strong><span class="caption">可拖入成员</span></div>
-                    </div>
-                    <div class="permission-grid">
-                      <div class="permission-row"><span>共享群聊上下文</span><strong>开启</strong></div>
-                      <div class="permission-row"><span>命令执行</span><strong>需用户确认</strong></div>
-                      <div class="permission-row"><span>补丁应用</span><strong>需确认</strong></div>
-                    </div>
+                <section class="entity-panel" data-od-id="team-edit-panel">
+                  <header><strong>编辑开发团队</strong><button class="ghost-btn">保存编辑</button></header>
+                  <div class="entity-detail-body">
+                    <div class="edit-field"><span>团队名称</span><strong>开发团队</strong></div>
+                    <div class="edit-field"><span>团队用途</span><strong>开发与补丁提交</strong></div>
+                    <div class="edit-field"><span>协作模式</span><strong>串行协作</strong></div>
+                    <div class="edit-field"><span>成员</span><strong>Kai · Lin · Runner · Secretary</strong></div>
+                    <div class="edit-field"><span>默认秘书</span><strong>Secretary</strong></div>
+                    <div class="permission-grid"><div class="permission-row"><span>共享群聊上下文</span><strong>开启</strong></div><div class="permission-row"><span>命令执行</span><strong>需确认</strong></div><div class="permission-row"><span>补丁应用</span><strong>需确认</strong></div></div>
                   </div>
                 </section>
               </div>
@@ -668,11 +692,28 @@
           <header class="admin-header"><h3>模型管理</h3><div class="header-actions"><span class="status green"><span class="dot"></span>2 个可用</span><button class="primary-btn">新增模型</button></div></header>
           <div class="detail-content">
             <article class="detail-page">
-              <header><h3><svg class="icon"><use href="#i-model"/></svg>模型配置</h3><div class="command-actions"><button class="ghost-btn">测试连接</button><button class="primary-btn">保存</button></div></header>
-              <div class="manager-layout three">
-                <section class="manager-panel"><header><strong>Profile 列表</strong><span class="caption">provider + model</span></header><div class="manager-body"><div class="manager-table"><div class="manager-row head"><span>名称</span><span>Provider</span><span>模型名</span><span>状态</span></div><div class="manager-row active"><strong>Codex 主模型</strong><span>OpenAI</span><span>gpt-5-codex</span><span class="status green"><span class="dot"></span>ready</span></div><div class="manager-row"><strong>Fast Review</strong><span>兼容端点</span><span>review-fast</span><span class="status blue"><span class="dot"></span>备用</span></div><div class="manager-row"><strong>Local Draft</strong><span>本地</span><span>draft-large</span><span class="status amber"><span class="dot"></span>未测</span></div></div></div></section>
-                <section class="manager-panel"><header><strong>连接设置</strong><span class="caption">不显示密钥明文</span></header><div class="manager-body"><div class="manager-field"><span>API 类型</span><strong>OpenAI-compatible</strong></div><div class="manager-field"><span>Base URL</span><span class="mono">https://api.example.com/v1</span></div><div class="manager-field"><span>Stream</span><strong>开启</strong></div><div class="manager-field"><span>超时</span><strong>90s</strong></div><div class="permission-grid"><div class="permission-row"><span>工具调用</span><strong>开启</strong></div><div class="permission-row"><span>返回思考区</span><strong>仅真实字段</strong></div><div class="permission-row"><span>审计诊断</span><strong>写入</strong></div></div></div></section>
-                <section class="manager-panel"><header><strong>预算与诊断</strong><button class="ghost-btn">查看日志</button></header><div class="manager-body"><div class="manager-field"><span>上下文上限</span><strong class="mono">32k</strong></div><div class="manager-field"><span>默认输出</span><strong class="mono">4k</strong></div><div class="manager-field"><span>缓存命中</span><strong>单次显示</strong></div><div class="manager-table"><div class="manager-row head"><span>检查项</span><span>值</span><span>来源</span><span>结果</span></div><div class="manager-row"><strong>latency</strong><span>842ms</span><span>probe</span><span class="status green"><span class="dot"></span>pass</span></div><div class="manager-row"><strong>finish</strong><span>stop</span><span>last call</span><span class="status green"><span class="dot"></span>ok</span></div></div></div></section>
+              <header><h3><svg class="icon"><use href="#i-model"/></svg>模型列表管理</h3><div class="command-actions"><button class="ghost-btn">测试选中模型</button><button class="primary-btn">新增模型</button></div></header>
+              <div class="entity-layout">
+                <section class="entity-panel">
+                  <header><strong>模型列表</strong><span class="caption">按模型对象管理，不在此页展开全量设置</span></header>
+                  <div class="model-list">
+                    <article class="list-row-card active" data-od-id="model-list-primary"><div><strong>Codex 主模型</strong><span class="caption">OpenAI-compatible · gpt-5-codex · 默认聊天/开发</span></div><span class="status green"><span class="dot"></span>ready</span></article>
+                    <article class="list-row-card"><div><strong>Fast Review</strong><span class="caption">OpenAI-compatible · review-fast · 审阅与摘要</span></div><span class="status blue"><span class="dot"></span>备用</span></article>
+                    <article class="list-row-card"><div><strong>Local Draft</strong><span class="caption">本地端点 · draft-large · 离线草稿</span></div><span class="status amber"><span class="dot"></span>未测</span></article>
+                    <article class="list-row-card"><div><strong>Long Context</strong><span class="caption">兼容端点 · long-context · 大上下文分析</span></div><span class="status green"><span class="dot"></span>可用</span></article>
+                  </div>
+                </section>
+                <section class="entity-panel" data-od-id="model-edit-panel">
+                  <header><strong>编辑 Codex 主模型</strong><button class="ghost-btn">保存</button></header>
+                  <div class="entity-detail-body">
+                    <div class="edit-field"><span>显示名称</span><strong>Codex 主模型</strong></div>
+                    <div class="edit-field"><span>Provider</span><strong>OpenAI-compatible</strong></div>
+                    <div class="edit-field"><span>模型名</span><strong class="mono">gpt-5-codex</strong></div>
+                    <div class="edit-field"><span>用途</span><strong>聊天 · 开发 · 审阅</strong></div>
+                    <div class="edit-field"><span>上下文上限</span><strong class="mono">32k</strong></div>
+                    <div class="permission-grid"><div class="permission-row"><span>流式输出</span><strong>开启</strong></div><div class="permission-row"><span>工具调用</span><strong>开启</strong></div><div class="permission-row"><span>返回思考区</span><strong>仅真实字段</strong></div><div class="permission-row"><span>审计诊断</span><strong>写入</strong></div></div>
+                  </div>
+                </section>
               </div>
             </article>
           </div>
@@ -701,11 +742,28 @@
           <header class="admin-header"><h3>角色管理</h3><div class="header-actions"><span class="status blue"><span class="dot"></span>7 个角色</span><button class="primary-btn">新增角色</button></div></header>
           <div class="detail-content">
             <article class="detail-page">
-              <header><h3><svg class="icon"><use href="#i-role"/></svg>角色定义</h3><div class="command-actions"><button class="ghost-btn">预览输出</button><button class="primary-btn">发布版本</button></div></header>
-              <div class="manager-layout three">
-                <section class="manager-panel"><header><strong>角色列表</strong><span class="caption">role id</span></header><div class="manager-body"><div class="manager-table"><div class="manager-row head"><span>角色</span><span>用途</span><span>权限</span><span>状态</span></div><div class="manager-row active"><strong>架构师</strong><span>方案规划</span><span>读项目</span><span class="status green"><span class="dot"></span>启用</span></div><div class="manager-row"><strong>Reviewer</strong><span>审阅 diff</span><span>读补丁</span><span class="status green"><span class="dot"></span>启用</span></div><div class="manager-row"><strong>秘书</strong><span>汇总转发</span><span>调度</span><span class="status blue"><span class="dot"></span>系统</span></div></div></div></section>
-                <section class="manager-panel"><header><strong>提示词模板</strong><span class="mono caption">v3</span></header><div class="manager-body"><div class="manager-field"><span>角色名</span><strong>架构师</strong></div><div class="manager-field"><span>输出风格</span><strong>先结论后证据</strong></div><div class="prompt-preview">你是架构师。先识别边界和风险，再给出最小可执行方案。不要伪造模型思考，不要把命令执行放进用户消息。</div></div></section>
-                <section class="manager-panel"><header><strong>权限与发布</strong><button class="ghost-btn">比较版本</button></header><div class="manager-body"><div class="permission-grid"><div class="permission-row"><span>读取项目文件</span><strong>允许</strong></div><div class="permission-row"><span>请求命令</span><strong>需确认</strong></div><div class="permission-row"><span>应用补丁</span><strong>禁止直写</strong></div><div class="permission-row"><span>私聊可见</span><strong>按成员</strong></div></div><div class="manager-field"><span>当前版本</span><strong class="mono">role.architect.v3</strong></div><div class="manager-field"><span>发布记录</span><strong>4 次</strong></div></div></section>
+              <header><h3><svg class="icon"><use href="#i-role"/></svg>角色列表</h3><div class="command-actions"><button class="ghost-btn">复制角色</button><button class="primary-btn">新增角色</button></div></header>
+              <div class="entity-layout">
+                <section class="entity-panel">
+                  <header><strong>角色列表</strong><span class="caption">按角色对象展示，选中后编辑提示词与权限</span></header>
+                  <div class="role-list">
+                    <article class="list-row-card active" data-od-id="role-list-architect"><div><strong>架构师</strong><span class="caption">方案规划 · 风险识别 · 最小补丁路径</span></div><span class="status green"><span class="dot"></span>启用</span></article>
+                    <article class="list-row-card"><div><strong>Reviewer</strong><span class="caption">Diff 审阅 · 质量检查 · 风险提示</span></div><span class="status green"><span class="dot"></span>启用</span></article>
+                    <article class="list-row-card"><div><strong>秘书</strong><span class="caption">群聊汇总 · 私聊转发 · 状态记录</span></div><span class="status blue"><span class="dot"></span>系统</span></article>
+                    <article class="list-row-card"><div><strong>测试工程师</strong><span class="caption">复现步骤 · 回归验证 · 测试摘要</span></div><span class="status green"><span class="dot"></span>启用</span></article>
+                    <article class="list-row-card"><div><strong>文档维护者</strong><span class="caption">设计文档 · 发布说明 · 变更摘要</span></div><span class="status amber"><span class="dot"></span>草稿</span></article>
+                  </div>
+                </section>
+                <section class="entity-panel" data-od-id="role-edit-panel">
+                  <header><strong>编辑架构师</strong><button class="ghost-btn">发布版本</button></header>
+                  <div class="entity-detail-body">
+                    <div class="edit-field"><span>角色名</span><strong>架构师</strong></div>
+                    <div class="edit-field"><span>角色用途</span><strong>方案规划</strong></div>
+                    <div class="edit-field"><span>输出风格</span><strong>先结论后证据</strong></div>
+                    <div class="prompt-preview">你是架构师。先识别边界和风险，再给出最小可执行方案。不要伪造模型思考，不要把命令执行放进用户消息。</div>
+                    <div class="permission-grid"><div class="permission-row"><span>读取项目文件</span><strong>允许</strong></div><div class="permission-row"><span>请求命令</span><strong>需确认</strong></div><div class="permission-row"><span>应用补丁</span><strong>禁止直写</strong></div><div class="permission-row"><span>私聊可见</span><strong>按成员</strong></div></div>
+                  </div>
+                </section>
               </div>
             </article>
           </div>
@@ -734,34 +792,27 @@
           <header class="admin-header"><h3>成员管理</h3><div class="header-actions"><span class="status green"><span class="dot"></span>5 个成员</span><button class="primary-btn">新增成员</button></div></header>
           <div class="detail-content">
             <article class="detail-page">
-              <header><h3><svg class="icon"><use href="#i-member"/></svg>成员实例</h3><div class="command-actions"><button class="ghost-btn">打开私聊</button><button class="primary-btn">保存绑定</button></div></header>
-              <div class="manager-layout">
-                <section class="manager-panel">
-                  <header><strong>成员列表</strong><span class="caption">model + role binding</span></header>
-                  <div class="manager-body">
-                    <div class="manager-table">
-                      <div class="manager-row head"><span>成员</span><span>模型</span><span>角色</span><span>状态</span></div>
-                      <div class="manager-row active"><strong>Kai</strong><span>Codex 主模型</span><span>架构师</span><span class="status green"><span class="dot"></span>在线</span></div>
-                      <div class="manager-row"><strong>Lin</strong><span>Codex 主模型</span><span>Reviewer</span><span class="status amber"><span class="dot"></span>待审批</span></div>
-                      <div class="manager-row"><strong>Secretary</strong><span>Fast Review</span><span>秘书</span><span class="status blue"><span class="dot"></span>允许中</span></div>
-                      <div class="manager-row"><strong>QA Runner</strong><span>Fast Review</span><span>测试</span><span class="status green"><span class="dot"></span>在线</span></div>
-                    </div>
-                    <div class="manager-field"><span>私聊入口</span><strong>每个成员独立</strong></div>
+              <header><h3><svg class="icon"><use href="#i-member"/></svg>成员列表</h3><div class="command-actions"><button class="ghost-btn">打开私聊</button><button class="primary-btn">新增成员</button></div></header>
+              <div class="entity-layout">
+                <section class="entity-panel">
+                  <header><strong>成员列表</strong><span class="caption">成员是模型与角色的绑定实例</span></header>
+                  <div class="member-list">
+                    <article class="list-row-card active" data-od-id="member-list-kai"><div><strong>Kai</strong><span class="caption">架构师 · Codex 主模型 · 开发团队</span></div><span class="status green"><span class="dot"></span>在线</span></article>
+                    <article class="list-row-card"><div><strong>Lin</strong><span class="caption">Reviewer · Codex 主模型 · 开发团队</span></div><span class="status amber"><span class="dot"></span>待审批</span></article>
+                    <article class="list-row-card"><div><strong>Secretary</strong><span class="caption">秘书 · Fast Review · 全团队共享</span></div><span class="status blue"><span class="dot"></span>允许中</span></article>
+                    <article class="list-row-card"><div><strong>QA Runner</strong><span class="caption">测试工程师 · Fast Review · 测试团队</span></div><span class="status green"><span class="dot"></span>在线</span></article>
+                    <article class="list-row-card"><div><strong>Doc Writer</strong><span class="caption">文档维护者 · Long Context · 文档团队</span></div><span class="status green"><span class="dot"></span>在线</span></article>
                   </div>
                 </section>
-                <section class="manager-panel">
-                  <header><strong>Kai 绑定</strong><button class="ghost-btn">重置</button></header>
-                  <div class="manager-body">
-                    <div class="manager-field"><span>显示名称</span><strong>Kai</strong></div>
-                    <div class="manager-field"><span>角色</span><strong>架构师</strong></div>
-                    <div class="manager-field"><span>模型</span><strong>Codex 主模型</strong></div>
-                    <div class="slot-grid">
-                      <div class="slot-card"><strong>Core Review</strong><span class="caption">第一轮发言</span></div>
-                      <div class="slot-card"><strong>Bug Bash</strong><span class="caption">方案支持</span></div>
-                      <div class="slot-card"><strong>私聊</strong><span class="caption">允许用户直达</span></div>
-                      <div class="slot-card"><strong>审计</strong><span class="caption">成员行为记录</span></div>
-                    </div>
-                    <div class="permission-grid"><div class="permission-row"><span>读取文件</span><strong>允许</strong></div><div class="permission-row"><span>请求命令</span><strong>需确认</strong></div><div class="permission-row"><span>代表用户发送</span><strong>禁止</strong></div></div>
+                <section class="entity-panel" data-od-id="member-edit-panel">
+                  <header><strong>编辑 Kai</strong><button class="ghost-btn">保存绑定</button></header>
+                  <div class="entity-detail-body">
+                    <div class="edit-field"><span>显示名称</span><strong>Kai</strong></div>
+                    <div class="edit-field"><span>绑定角色</span><strong>架构师</strong></div>
+                    <div class="edit-field"><span>绑定模型</span><strong>Codex 主模型</strong></div>
+                    <div class="edit-field"><span>所属团队</span><strong>开发团队 · Bug Bash</strong></div>
+                    <div class="edit-field"><span>私聊入口</span><strong>启用</strong></div>
+                    <div class="permission-grid"><div class="permission-row"><span>读取文件</span><strong>允许</strong></div><div class="permission-row"><span>请求命令</span><strong>需确认</strong></div><div class="permission-row"><span>代表用户发送</span><strong>禁止</strong></div><div class="permission-row"><span>参与群聊</span><strong>允许</strong></div></div>
                   </div>
                 </section>
               </div>
@@ -864,6 +915,7 @@
         <section class="security-main" data-od-id="project-security-surface">
           <header class="admin-header"><h3>项目 ai-team · 安全状态</h3><div class="header-actions"><span class="status amber"><span class="dot"></span>2 confirmations</span><button class="ghost-btn">导出审计</button></div></header>
           <div class="security-grid">
+            <section class="security-panel project-management" data-od-id="project-management-list-panel"><header><strong>项目管理列表</strong><button class="primary-btn">新增项目</button></header><div class="project-management-list"><article class="project-card active"><header><strong>ai-team</strong><span class="status amber"><span class="dot"></span>边界复核</span></header><span class="mono caption">/Users/swcrbt/develop/github/swcrbt/ai-team</span><span class="caption">当前项目 · 补丁需确认</span></article><article class="project-card"><header><strong>ai-ide</strong><span class="status green"><span class="dot"></span>可用</span></header><span class="mono caption">/Users/swcrbt/develop/github/swcrbt/ai-ide</span><span class="caption">工作树任务 · 只读默认</span></article><article class="project-card"><header><strong>tw</strong><span class="status blue"><span class="dot"></span>模板</span></header><span class="mono caption">/Users/swcrbt/develop/github/swcrbt/tw</span><span class="caption">Warp parity · 独立审计</span></article></div></section>
             <section class="security-panel" data-od-id="command-approval-panel"><header><strong>命令审批</strong><span class="status amber"><span class="dot"></span>等待确认</span></header><div><div class="approval-row"><div><strong class="mono">flutter test test/app_widget_test.dart</strong><p class="quiet">Kai 申请 · 只读验证 · 项目内执行</p></div><button class="primary-btn">允许</button></div><div class="approval-row"><div><strong class="mono">git diff -- lib/ui/chat_view.dart</strong><p class="quiet">Lin 申请 · 读取补丁摘要</p></div><button class="ghost-btn">查看</button></div><div class="approval-row"><div><strong class="mono">rm -rf /tmp/outside-project</strong><p class="quiet">路径不属于当前项目</p></div><button class="danger-btn">阻断</button></div></div></section>
             <section class="security-panel" data-od-id="patch-confirmation-panel"><header><strong>补丁确认</strong><span class="mono caption">+42 -18</span></header><div><div class="diff-box"><div class="diff-line del">- composer 与消息流共享滚动区域</div><div class="diff-line add">+ chat pane uses header / scroll region / fixed composer rows</div><div class="diff-line add">+ return-to-bottom floats above composer</div><div class="diff-line add">+ safety drawer appears only when context is requested</div></div><div style="display:flex; gap:8px; padding:0 14px 14px;"><button class="primary-btn">确认补丁</button><button class="ghost-btn">展开文件</button></div></div></section>
             <section class="security-panel" data-od-id="project-boundary-panel"><header><strong>项目边界</strong><span class="status green"><span class="dot"></span>enforced</span></header><div class="boundary-map"><div class="boundary-row"><strong>root</strong><span class="mono">/Users/swcrbt/develop/github/swcrbt/ai-team</span><span class="status green"><span class="dot"></span>write</span></div><div class="boundary-row"><strong>state</strong><span class="mono">state.json</span><span class="status green"><span class="dot"></span>local</span></div><div class="boundary-row"><strong>outside</strong><span class="mono">/Users/swcrbt/.ssh</span><span class="status red"><span class="dot"></span>blocked</span></div><div class="boundary-row"><strong>patch</strong><span class="mono">lib/ui/*.dart</span><span class="status amber"><span class="dot"></span>confirm</span></div></div></section>
