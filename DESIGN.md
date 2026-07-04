@@ -7,6 +7,7 @@
 - Evidence reviewed: `README.md`, `docs/architecture.md`, `lib/ui/app_shell.dart`, `lib/ui/sidebar.dart`, `lib/ui/conversation_sidebar.dart`, `lib/ui/chat/chat_pane.dart`, `lib/ui/chat/chat_controls.dart`, `lib/ui/management/config_management_pages.dart`, `lib/ui/management/chat_status_cards.dart`, `lib/ui/management/audit_log_page.dart`, `lib/ui/management/history_page.dart`.
 - Figma reference: https://www.figma.com/design/b661TshWPrgj83XFpvk04D
 - Figma revision status: Pending canvas sync; Figma MCP returned a Starter plan tool-call limit on 2026-07-04 before this revision could be applied to the file.
+- Open Design artifact: `docs/design/open-design/ai-team-codex-ui-redesign/index.html`
 
 ## Brand
 - Personality: quiet, dense, operational, Codex-like, and local-first.
