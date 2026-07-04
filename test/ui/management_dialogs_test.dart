@@ -893,9 +893,46 @@ void main() {
   testWidgets('sidebar project button opens an independent project page', (
     tester,
   ) async {
+    final state = AppState.seed().copyWith(
+      commandRequests: [
+        CommandRequest.pending(
+          id: 'command-project-test',
+          memberName: '秘书',
+          command: 'flutter test test/app_widget_test.dart',
+          workingDirectory: '/repo/ai-team',
+          decision: CommandDecision.requiresConfirmation,
+          conversationId: 'conv-member-secretary',
+          memberId: 'member-secretary',
+        ),
+        CommandRequest.pending(
+          id: 'command-project-diff',
+          memberName: '前端工程师',
+          command: 'git diff -- lib/ui/chat_view.dart',
+          workingDirectory: '/repo/ai-team',
+          decision: CommandDecision.allowed,
+          conversationId: 'conv-member-frontend',
+          memberId: 'member-frontend',
+        ),
+      ],
+      patchProposals: const [
+        PatchProposal(
+          id: 'patch-project',
+          filePath: 'lib/ui/chat_view.dart',
+          originalContent: 'old',
+          proposedContent: 'new',
+          memberName: '前端工程师',
+          diff: '--- lib/ui/chat_view.dart\n'
+              '+++ lib/ui/chat_view.dart\n'
+              '@@\n'
+              '-old composer\n'
+              '+fixed composer\n'
+              '+token meter\n',
+        ),
+      ],
+    );
     await tester.pumpWidget(
       AiTeamApp(
-        initialState: AppState.seed(),
+        initialState: state,
         modelGateway: FakeModelGateway(),
       ),
     );
@@ -912,5 +949,25 @@ void main() {
     expect(find.text('补丁确认'), findsOneWidget);
     expect(find.text('项目边界'), findsOneWidget);
     expect(find.text('审计摘要'), findsOneWidget);
+    expect(find.text('等待确认'), findsWidgets);
+    expect(find.widgetWithText(FilledButton, '允许'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, '阻断'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, '查看'), findsOneWidget);
+    expect(find.text('变更量'), findsOneWidget);
+    expect(find.text('文件'), findsOneWidget);
+    expect(find.text('hunks'), findsOneWidget);
+    expect(find.text('lib/ui/chat_view.dart'), findsWidgets);
+    expect(find.widgetWithText(OutlinedButton, '展开文件'), findsOneWidget);
+    expect(find.widgetWithText(OutlinedButton, '拒绝'), findsOneWidget);
+
+    final expandFiles = find.widgetWithText(OutlinedButton, '展开文件');
+    await tester.ensureVisible(expandFiles);
+    await tester.pumpAndSettle();
+    await tester.tap(expandFiles);
+    await tester.pumpAndSettle();
+    expect(find.text('补丁文件'), findsOneWidget);
+    expect(find.textContaining('fixed composer'), findsWidgets);
+    await tester.tap(find.text('关闭'));
+    await tester.pumpAndSettle();
   });
 }

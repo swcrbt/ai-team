@@ -1269,6 +1269,12 @@ class _CommandApprovalPanel extends StatelessWidget {
                               CommandRequestStatus.approved,
                             )
                         : null,
+                    onBlock: request.status == CommandRequestStatus.pending
+                        ? () => controller.updateCommandRequestStatus(
+                              request.id,
+                              CommandRequestStatus.denied,
+                            )
+                        : null,
                   ),
               ],
             ),
@@ -1277,10 +1283,15 @@ class _CommandApprovalPanel extends StatelessWidget {
 }
 
 class _CommandApprovalRow extends StatelessWidget {
-  const _CommandApprovalRow({required this.request, required this.onAllow});
+  const _CommandApprovalRow({
+    required this.request,
+    required this.onAllow,
+    required this.onBlock,
+  });
 
   final CommandRequest request;
   final VoidCallback? onAllow;
+  final VoidCallback? onBlock;
 
   @override
   Widget build(BuildContext context) {
@@ -1318,13 +1329,25 @@ class _CommandApprovalRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          if (request.status == CommandRequestStatus.pending)
-            FilledButton(onPressed: onAllow, child: const Text('允许'))
-          else
-            OutlinedButton(
-              onPressed: null,
-              child: Text(_commandStatusText(request.status)),
-            ),
+          _ProjectStatusPill(
+            label: _commandStatusText(request.status),
+            tone: _commandStatusTone(request.status),
+          ),
+          const SizedBox(width: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              if (request.status == CommandRequestStatus.pending) ...[
+                FilledButton(onPressed: onAllow, child: const Text('允许')),
+                OutlinedButton(onPressed: onBlock, child: const Text('阻断')),
+              ] else
+                OutlinedButton(
+                  onPressed: () => _showCommandRequestDetails(context, request),
+                  child: const Text('查看'),
+                ),
+            ],
+          ),
         ],
       ),
     );
@@ -1343,11 +1366,30 @@ class _PatchConfirmationPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final patch = patchProposals.isEmpty ? null : patchProposals.first;
-    final stats = patch == null ? null : _projectDiffStats(patch.diff);
+    if (patch == null) {
+      return const _Panel(
+        title: '补丁确认',
+        action: Text(
+          '0 pending',
+          style: TextStyle(
+            color: Color(0xFF64748B),
+            fontFamily: 'monospace',
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        child: _EmptyState(
+          icon: Icons.difference_rounded,
+          title: '暂无待确认补丁',
+          subtitle: '模型生成的 diff 会先停在这里等待确认。',
+        ),
+      );
+    }
+    final stats = _projectDiffStats(patch.diff);
     return _Panel(
       title: '补丁确认',
       action: Text(
-        stats == null ? '0 pending' : '+${stats.additions} -${stats.deletions}',
+        '+${stats.additions} -${stats.deletions}',
         style: const TextStyle(
           color: Color(0xFF64748B),
           fontFamily: 'monospace',
@@ -1355,33 +1397,127 @@ class _PatchConfirmationPanel extends StatelessWidget {
           fontWeight: FontWeight.w800,
         ),
       ),
-      child: patch == null
-          ? const _EmptyState(
-              icon: Icons.difference_rounded,
-              title: '暂无待确认补丁',
-              subtitle: '模型生成的 diff 会先停在这里等待确认。',
-            )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _ProjectDiffBox(diff: patch.diff),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    FilledButton(
-                      onPressed: () => controller.applyPatch(patch),
-                      child: const Text('确认补丁'),
-                    ),
-                    OutlinedButton(
-                      onPressed: () => controller.rejectPatch(patch),
-                      child: const Text('拒绝'),
-                    ),
-                  ],
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _PatchMetric(
+                  value: '+${stats.additions} -${stats.deletions}',
+                  label: '变更量',
                 ),
-              ],
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _PatchMetric(
+                  value: stats.files.toString(),
+                  label: '文件',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _PatchMetric(
+                  value: stats.hunks.toString(),
+                  label: 'hunks',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _PatchFileLabel(filePath: patch.filePath),
+          const SizedBox(height: 8),
+          _ProjectDiffBox(diff: patch.diff),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              FilledButton(
+                onPressed: () => controller.applyPatch(patch),
+                child: const Text('确认补丁'),
+              ),
+              OutlinedButton(
+                onPressed: () => _showPatchDiffDialog(context, patch),
+                child: const Text('展开文件'),
+              ),
+              OutlinedButton(
+                onPressed: () => controller.rejectPatch(patch),
+                child: const Text('拒绝'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PatchMetric extends StatelessWidget {
+  const _PatchMetric({required this.value, required this.label});
+
+  final String value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 15,
+              fontWeight: FontWeight.w800,
             ),
+          ),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PatchFileLabel extends StatelessWidget {
+  const _PatchFileLabel({required this.filePath});
+
+  final String filePath;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF6FF),
+        border: Border.all(color: const Color(0xFFBFDBFE)),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        filePath,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: Color(0xFF1D4ED8),
+          fontFamily: 'monospace',
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
     );
   }
 }
@@ -1801,6 +1937,16 @@ class _ProjectStatusPill extends StatelessWidget {
 
 enum _ProjectTone { green, amber, blue, red }
 
+_ProjectTone _commandStatusTone(CommandRequestStatus status) {
+  return switch (status) {
+    CommandRequestStatus.pending => _ProjectTone.amber,
+    CommandRequestStatus.approved => _ProjectTone.blue,
+    CommandRequestStatus.denied => _ProjectTone.red,
+    CommandRequestStatus.executed => _ProjectTone.green,
+    CommandRequestStatus.failed => _ProjectTone.red,
+  };
+}
+
 String _commandStatusText(CommandRequestStatus status) {
   return switch (status) {
     CommandRequestStatus.pending => '等待确认',
@@ -1811,9 +1957,93 @@ String _commandStatusText(CommandRequestStatus status) {
   };
 }
 
+void _showCommandRequestDetails(
+  BuildContext context,
+  CommandRequest request,
+) {
+  showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('命令请求'),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SelectableText(
+              request.command,
+              style: const TextStyle(fontFamily: 'monospace'),
+            ),
+            const SizedBox(height: 12),
+            _DetailRow(label: '申请成员', value: request.memberName),
+            _DetailRow(label: '状态', value: _commandStatusText(request.status)),
+            _DetailRow(label: '工作目录', value: request.workingDirectory),
+            if (request.output != null)
+              _DetailRow(label: '输出摘要', value: request.output!),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('关闭'),
+        ),
+      ],
+    ),
+  );
+}
+
+void _showPatchDiffDialog(BuildContext context, PatchProposal patch) {
+  showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('补丁文件'),
+      content: SizedBox(
+        width: 560,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _DetailRow(label: '文件', value: patch.filePath),
+            const SizedBox(height: 8),
+            Container(
+              constraints: const BoxConstraints(maxHeight: 320),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F172A),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: SingleChildScrollView(
+                child: SelectableText(
+                  patch.diff,
+                  style: const TextStyle(
+                    color: Color(0xFFE2E8F0),
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('关闭'),
+        ),
+      ],
+    ),
+  );
+}
+
 _ProjectDiffStats _projectDiffStats(String diff) {
   var additions = 0;
   var deletions = 0;
+  var gitFileHeaders = 0;
+  var plusFileHeaders = 0;
+  var hunks = 0;
   for (final line in diff.split('\n')) {
     if (line.startsWith('+') && !line.startsWith('+++')) {
       additions++;
@@ -1821,15 +2051,40 @@ _ProjectDiffStats _projectDiffStats(String diff) {
     if (line.startsWith('-') && !line.startsWith('---')) {
       deletions++;
     }
+    if (line.startsWith('diff --git ')) {
+      gitFileHeaders++;
+    }
+    if (line.startsWith('+++ ') && !line.startsWith('+++ /dev/null')) {
+      plusFileHeaders++;
+    }
+    if (line.startsWith('@@')) {
+      hunks++;
+    }
   }
-  return _ProjectDiffStats(additions: additions, deletions: deletions);
+  return _ProjectDiffStats(
+    additions: additions,
+    deletions: deletions,
+    files: gitFileHeaders > 0
+        ? gitFileHeaders
+        : plusFileHeaders == 0
+            ? 1
+            : plusFileHeaders,
+    hunks: hunks == 0 ? 1 : hunks,
+  );
 }
 
 class _ProjectDiffStats {
-  const _ProjectDiffStats({required this.additions, required this.deletions});
+  const _ProjectDiffStats({
+    required this.additions,
+    required this.deletions,
+    required this.files,
+    required this.hunks,
+  });
 
   final int additions;
   final int deletions;
+  final int files;
+  final int hunks;
 }
 
 class _Panel extends StatelessWidget {
