@@ -710,8 +710,10 @@ void main() {
     expect(find.byTooltip('返回聊天'), findsNothing);
     expect(find.text('项目管理'), findsOneWidget);
     expect(find.text('项目管理列表'), findsOneWidget);
-    expect(find.byTooltip('添加工作区'), findsOneWidget);
+    expect(find.byTooltip('添加项目'), findsOneWidget);
     expect(find.text('命令审批'), findsOneWidget);
     expect(find.text('补丁确认'), findsOneWidget);
+    expect(find.text('项目边界'), findsOneWidget);
+    expect(find.text('审计摘要'), findsOneWidget);
   });
 }

@@ -593,82 +593,749 @@ class _ProjectSafetySurface extends StatelessWidget {
     final patchProposals = controller.state.patchProposals
         .where((patch) => patch.status == PatchStatus.pending)
         .toList();
-    return Column(
-      children: [
-        _Panel(
-          title: '项目管理列表',
-          action: IconButton(
-            tooltip: '添加工作区',
-            onPressed: controller.pickAndAddWorkspace,
-            icon: const Icon(Icons.add_rounded),
+    final auditLog = controller.state.auditLog.toList()
+      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 980;
+        final panels = [
+          _ProjectManagementPanel(controller: controller),
+          _CommandApprovalPanel(
+            controller: controller,
+            commandRequests: commandRequests,
           ),
-          child: controller.state.workspaces.isEmpty
-              ? const Text('还没有选择本地项目目录')
-              : Column(
-                  children: [
-                    for (final workspace in controller.state.workspaces)
-                      _ObjectRow(
-                        title: workspace.name,
-                        subtitle: workspace.path,
-                      ),
-                  ],
-                ),
-        ),
-        const SizedBox(height: 12),
-        _EntityLayout(
-          list: _Panel(
-            title: '命令审批',
-            child: commandRequests.isEmpty
-                ? const Text('暂无命令请求')
-                : Column(
-                    children: [
-                      for (final request in commandRequests)
-                        _ObjectRow(
-                          title: request.command,
-                          subtitle:
-                              '${request.memberName} · ${request.status.name} · ${request.workingDirectory}',
-                        ),
-                    ],
-                  ),
+          _PatchConfirmationPanel(
+            controller: controller,
+            patchProposals: patchProposals,
           ),
-          detail: _Panel(
-            title: '补丁确认',
-            child: patchProposals.isEmpty
-                ? const Text('暂无待确认补丁')
-                : Column(
-                    children: [
-                      for (final patch in patchProposals)
-                        _ObjectRow(
-                          title: patch.filePath,
-                          subtitle: patch.diff.split('\n').take(3).join('\n'),
-                        ),
-                    ],
-                  ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        _Panel(
-          title: '项目边界',
-          child: Column(
+          _ProjectBoundaryPanel(controller: controller),
+          _AuditSummaryPanel(auditLog: auditLog),
+        ];
+        if (!wide) {
+          return Column(
             children: [
-              for (final workspace in controller.state.workspaces)
-                _DetailRow(label: workspace.name, value: workspace.path),
-              if (controller.state.workspaces.isEmpty)
-                const _DetailRow(label: '写入根目录', value: '未选择'),
+              for (final panel in panels) ...[
+                panel,
+                const SizedBox(height: 12),
+              ],
             ],
-          ),
-        ),
-      ],
+          );
+        }
+        return GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          childAspectRatio: 1.35,
+          children: panels,
+        );
+      },
     );
   }
 }
 
-class _Panel extends StatelessWidget {
-  const _Panel({
-    required this.title,
-    required this.child,
-    this.action,
+class _ProjectManagementPanel extends StatelessWidget {
+  const _ProjectManagementPanel({required this.controller});
+
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final workspaces = controller.state.workspaces;
+    return _Panel(
+      title: '项目管理列表',
+      action: IconButton(
+        tooltip: '添加项目',
+        onPressed: controller.pickAndAddWorkspace,
+        icon: const Icon(Icons.add_rounded),
+      ),
+      child: workspaces.isEmpty
+          ? const _EmptyState(
+              icon: Icons.folder_open_rounded,
+              title: '还没有添加项目',
+              subtitle: '添加项目后会在这里显示边界和补丁策略。',
+            )
+          : Column(
+              children: [
+                for (final indexed in workspaces.indexed)
+                  _ProjectCard(
+                    workspace: indexed.$2,
+                    selected: indexed.$1 == 0,
+                  ),
+              ],
+            ),
+    );
+  }
+}
+
+class _ProjectCard extends StatelessWidget {
+  const _ProjectCard({required this.workspace, required this.selected});
+
+  final ProjectWorkspace workspace;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: selected ? const Color(0xFFFFFBEB) : const Color(0xFFF8FAFC),
+        border: Border.all(
+          color: selected ? const Color(0xFFFDE68A) : const Color(0xFFE2E8F0),
+        ),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  workspace.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+              _ProjectStatusPill(
+                label: selected ? '边界复核' : '可用',
+                tone: selected ? _ProjectTone.amber : _ProjectTone.green,
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          Text(
+            workspace.path,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xFF64748B),
+              fontFamily: 'monospace',
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 5),
+          Text(
+            selected ? '当前项目 · 补丁需确认' : '项目 · 只读默认',
+            style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CommandApprovalPanel extends StatelessWidget {
+  const _CommandApprovalPanel({
+    required this.controller,
+    required this.commandRequests,
   });
+
+  final AppController controller;
+  final List<CommandRequest> commandRequests;
+
+  @override
+  Widget build(BuildContext context) {
+    return _Panel(
+      title: '命令审批',
+      action: _ProjectStatusPill(
+        label: commandRequests.any(
+          (request) => request.status == CommandRequestStatus.pending,
+        )
+            ? '等待确认'
+            : '无待处理',
+        tone: commandRequests.any(
+          (request) => request.status == CommandRequestStatus.pending,
+        )
+            ? _ProjectTone.amber
+            : _ProjectTone.green,
+      ),
+      child: commandRequests.isEmpty
+          ? const _EmptyState(
+              icon: Icons.terminal_rounded,
+              title: '暂无命令请求',
+              subtitle: '成员请求命令后会在这里集中审批。',
+            )
+          : Column(
+              children: [
+                for (final request in commandRequests)
+                  _CommandApprovalRow(
+                    request: request,
+                    onAllow: request.status == CommandRequestStatus.pending
+                        ? () => controller.updateCommandRequestStatus(
+                              request.id,
+                              CommandRequestStatus.approved,
+                            )
+                        : null,
+                  ),
+              ],
+            ),
+    );
+  }
+}
+
+class _CommandApprovalRow extends StatelessWidget {
+  const _CommandApprovalRow({required this.request, required this.onAllow});
+
+  final CommandRequest request;
+  final VoidCallback? onAllow;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  request.command,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${request.memberName} 申请 · ${_commandStatusText(request.status)} · ${request.workingDirectory}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Color(0xFF64748B)),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          if (request.status == CommandRequestStatus.pending)
+            FilledButton(onPressed: onAllow, child: const Text('允许'))
+          else
+            OutlinedButton(
+              onPressed: null,
+              child: Text(_commandStatusText(request.status)),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PatchConfirmationPanel extends StatelessWidget {
+  const _PatchConfirmationPanel({
+    required this.controller,
+    required this.patchProposals,
+  });
+
+  final AppController controller;
+  final List<PatchProposal> patchProposals;
+
+  @override
+  Widget build(BuildContext context) {
+    final patch = patchProposals.isEmpty ? null : patchProposals.first;
+    final stats = patch == null ? null : _projectDiffStats(patch.diff);
+    return _Panel(
+      title: '补丁确认',
+      action: Text(
+        stats == null ? '0 pending' : '+${stats.additions} -${stats.deletions}',
+        style: const TextStyle(
+          color: Color(0xFF64748B),
+          fontFamily: 'monospace',
+          fontSize: 12,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+      child: patch == null
+          ? const _EmptyState(
+              icon: Icons.difference_rounded,
+              title: '暂无待确认补丁',
+              subtitle: '模型生成的 diff 会先停在这里等待确认。',
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _ProjectDiffBox(diff: patch.diff),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    FilledButton(
+                      onPressed: () => controller.applyPatch(patch),
+                      child: const Text('确认补丁'),
+                    ),
+                    OutlinedButton(
+                      onPressed: () => controller.rejectPatch(patch),
+                      child: const Text('拒绝'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+class _ProjectDiffBox extends StatelessWidget {
+  const _ProjectDiffBox({required this.diff});
+
+  final String diff;
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = diff
+        .split('\n')
+        .where((line) => line.isNotEmpty)
+        .where(
+          (line) =>
+              line.startsWith('+') ||
+              line.startsWith('-') ||
+              line.startsWith('@@'),
+        )
+        .take(6)
+        .toList();
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [for (final line in lines) _ProjectDiffLine(line: line)],
+      ),
+    );
+  }
+}
+
+class _ProjectDiffLine extends StatelessWidget {
+  const _ProjectDiffLine({required this.line});
+
+  final String line;
+
+  @override
+  Widget build(BuildContext context) {
+    final added = line.startsWith('+') && !line.startsWith('+++');
+    final deleted = line.startsWith('-') && !line.startsWith('---');
+    final background = added
+        ? const Color(0xFFECFDF3)
+        : deleted
+            ? const Color(0xFFFFF1F2)
+            : Colors.white;
+    final foreground = added
+        ? const Color(0xFF047857)
+        : deleted
+            ? const Color(0xFFBE123C)
+            : const Color(0xFF64748B);
+    return Container(
+      constraints: const BoxConstraints(minHeight: 28),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      color: background,
+      child: Text(
+        line,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: foreground,
+          fontFamily: 'monospace',
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+}
+
+class _ProjectBoundaryPanel extends StatelessWidget {
+  const _ProjectBoundaryPanel({required this.controller});
+
+  final AppController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final workspaces = controller.state.workspaces;
+    return _Panel(
+      title: '项目边界',
+      action: const _ProjectStatusPill(
+        label: 'enforced',
+        tone: _ProjectTone.green,
+      ),
+      child: Column(
+        children: [
+          if (workspaces.isEmpty)
+            const _BoundaryRow(
+              label: 'root',
+              value: '未选择',
+              status: '未配置',
+              tone: _ProjectTone.amber,
+            )
+          else
+            for (final workspace in workspaces)
+              _BoundaryRow(
+                label: workspace.name,
+                value: workspace.path,
+                status: 'write',
+                tone: _ProjectTone.green,
+              ),
+          const _BoundaryRow(
+            label: 'patch',
+            value: '统一 diff 确认后应用',
+            status: 'confirm',
+            tone: _ProjectTone.amber,
+          ),
+          const _BoundaryRow(
+            label: 'outside',
+            value: '仓库外路径',
+            status: 'blocked',
+            tone: _ProjectTone.red,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BoundaryRow extends StatelessWidget {
+  const _BoundaryRow({
+    required this.label,
+    required this.value,
+    required this.status,
+    required this.tone,
+  });
+
+  final String label;
+  final String value;
+  final String status;
+  final _ProjectTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 78,
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFF64748B),
+                fontFamily: 'monospace',
+                fontSize: 12,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          _ProjectStatusPill(label: status, tone: tone),
+        ],
+      ),
+    );
+  }
+}
+
+class _AuditSummaryPanel extends StatelessWidget {
+  const _AuditSummaryPanel({required this.auditLog});
+
+  final List<AuditEntry> auditLog;
+
+  @override
+  Widget build(BuildContext context) {
+    final modelCalls = auditLog.where(
+      (entry) =>
+          entry.action.contains('model') || entry.action.contains('diagnostic'),
+    );
+    final blocked = auditLog.where(
+      (entry) =>
+          entry.action.contains('denied') ||
+          entry.action.contains('blocked') ||
+          entry.detail.contains('blocked'),
+    );
+    return _Panel(
+      title: '审计摘要',
+      action: const Text(
+        'newest first',
+        style: TextStyle(
+          color: Color(0xFF64748B),
+          fontFamily: 'monospace',
+          fontSize: 12,
+        ),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _AuditKpi(value: auditLog.length, label: 'events'),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _AuditKpi(
+                  value: modelCalls.length,
+                  label: 'model calls',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _AuditKpi(value: blocked.length, label: 'blocked'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (auditLog.isEmpty)
+            const _EmptyState(
+              icon: Icons.receipt_long_rounded,
+              title: '暂无审计记录',
+              subtitle: '命令、补丁和模型诊断会按最新优先写入。',
+            )
+          else
+            for (final entry in auditLog.take(3))
+              _AuditSummaryRow(entry: entry),
+        ],
+      ),
+    );
+  }
+}
+
+class _AuditKpi extends StatelessWidget {
+  const _AuditKpi({required this.value, required this.label});
+
+  final int value;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value.toString(),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+          ),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AuditSummaryRow extends StatelessWidget {
+  const _AuditSummaryRow({required this.entry});
+
+  final AuditEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        children: [
+          Text(
+            messageTimeText(entry.createdAt),
+            style: const TextStyle(
+              color: Color(0xFF64748B),
+              fontFamily: 'monospace',
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              '${entry.action} · ${entry.detail}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const _ProjectStatusPill(label: '写入', tone: _ProjectTone.blue),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xFF64748B), size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProjectStatusPill extends StatelessWidget {
+  const _ProjectStatusPill({required this.label, required this.tone});
+
+  final String label;
+  final _ProjectTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (tone) {
+      _ProjectTone.green => const Color(0xFF047857),
+      _ProjectTone.amber => const Color(0xFFB45309),
+      _ProjectTone.blue => const Color(0xFF2563EB),
+      _ProjectTone.red => const Color(0xFFBE123C),
+    };
+    final background = switch (tone) {
+      _ProjectTone.green => const Color(0xFFECFDF3),
+      _ProjectTone.amber => const Color(0xFFFFFBEB),
+      _ProjectTone.blue => const Color(0xFFEFF6FF),
+      _ProjectTone.red => const Color(0xFFFFF1F2),
+    };
+    final border = switch (tone) {
+      _ProjectTone.green => const Color(0xFFA7F3D0),
+      _ProjectTone.amber => const Color(0xFFFDE68A),
+      _ProjectTone.blue => const Color(0xFFBFDBFE),
+      _ProjectTone.red => const Color(0xFFFECDD3),
+    };
+    return Container(
+      height: 24,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: background,
+        border: Border.all(color: border),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+enum _ProjectTone { green, amber, blue, red }
+
+String _commandStatusText(CommandRequestStatus status) {
+  return switch (status) {
+    CommandRequestStatus.pending => '等待确认',
+    CommandRequestStatus.approved => '允许中',
+    CommandRequestStatus.denied => '已拒绝',
+    CommandRequestStatus.executed => '已执行',
+    CommandRequestStatus.failed => '失败',
+  };
+}
+
+_ProjectDiffStats _projectDiffStats(String diff) {
+  var additions = 0;
+  var deletions = 0;
+  for (final line in diff.split('\n')) {
+    if (line.startsWith('+') && !line.startsWith('+++')) {
+      additions++;
+    }
+    if (line.startsWith('-') && !line.startsWith('---')) {
+      deletions++;
+    }
+  }
+  return _ProjectDiffStats(additions: additions, deletions: deletions);
+}
+
+class _ProjectDiffStats {
+  const _ProjectDiffStats({required this.additions, required this.deletions});
+
+  final int additions;
+  final int deletions;
+}
+
+class _Panel extends StatelessWidget {
+  const _Panel({required this.title, required this.child, this.action});
 
   final String title;
   final Widget child;
