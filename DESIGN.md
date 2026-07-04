@@ -8,6 +8,7 @@
 - Figma reference: https://www.figma.com/design/b661TshWPrgj83XFpvk04D
 - Figma revision status: Pending canvas sync; Figma MCP returned a Starter plan tool-call limit on 2026-07-04 before this revision could be applied to the file.
 - Open Design artifact: `docs/design/open-design/ai-team-codex-ui-redesign/index.html`
+- Open Design desktop source: import the artifact folder directly from this repository; do not maintain a copied namespace version.
 
 ## Brand
 - Personality: quiet, dense, operational, Codex-like, and local-first.
