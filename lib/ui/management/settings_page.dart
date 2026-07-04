@@ -350,14 +350,127 @@ class _ImportExportPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    void openImportExport() => showExportDialog(context, controller);
+
     return _SettingsPanel(
       title: '导入导出',
-      action: IconButton(
-        tooltip: '导入 / 导出配置',
-        onPressed: () => showExportDialog(context, controller),
-        icon: const Icon(Icons.open_in_new_rounded),
+      action: Tooltip(
+        message: '导入 / 导出配置',
+        child: FilledButton.icon(
+          onPressed: openImportExport,
+          icon: const Icon(Icons.open_in_new_rounded, size: 17),
+          label: const Text('打开'),
+        ),
       ),
-      child: const Text('配置文件和密钥导出选项集中在这里管理。'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            '配置文件、脱敏导出和密钥导出选项集中在这里管理。',
+            style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+          ),
+          const SizedBox(height: 10),
+          _SettingsActionRow(
+            label: '导入配置',
+            description: '读取 JSON 配置文件并恢复团队、模型、角色和成员。',
+            value: 'JSON',
+            icon: Icons.file_upload_outlined,
+            onPressed: openImportExport,
+          ),
+          _SettingsActionRow(
+            label: '脱敏导出',
+            description: '默认导出不包含 API Key，适合备份和审阅。',
+            value: '默认',
+            icon: Icons.file_download_outlined,
+            onPressed: openImportExport,
+          ),
+          _SettingsActionRow(
+            label: '密钥导出',
+            description: '包含密钥时必须在弹窗中显式确认。',
+            value: '需确认',
+            icon: Icons.key_outlined,
+            onPressed: openImportExport,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsActionRow extends StatelessWidget {
+  const _SettingsActionRow({
+    required this.label,
+    required this.description,
+    required this.value,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String label;
+  final String description;
+  final String value;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: const Color(0xFF475569)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    Text(
+                      value,
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Tooltip(
+            message: '$label入口',
+            child: IconButton(
+              onPressed: onPressed,
+              icon: const Icon(Icons.chevron_right_rounded),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

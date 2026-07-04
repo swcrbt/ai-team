@@ -718,6 +718,11 @@ void main() {
     expect(find.byTooltip('清空目录'), findsNWidgets(4));
     expect(find.widgetWithText(OutlinedButton, '恢复默认'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, '保存目录'), findsOneWidget);
+    expect(find.text('导入导出'), findsOneWidget);
+    expect(find.text('导入配置'), findsOneWidget);
+    expect(find.text('脱敏导出'), findsOneWidget);
+    expect(find.text('密钥导出'), findsOneWidget);
+    expect(find.text('包含密钥时必须在弹窗中显式确认。'), findsOneWidget);
   });
 
   testWidgets('management object lists drive the selected detail panel', (
