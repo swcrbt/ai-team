@@ -130,7 +130,7 @@
     .component-row { display: flex; gap: 10px; flex-wrap: wrap; }
     .field-demo { height: 32px; border: 1px solid var(--border); border-radius: var(--r6); padding: 0 10px; display: flex; align-items: center; color: var(--muted); background: var(--surface); }
 
-    .app-frame { display: grid; grid-template-columns: 64px 282px minmax(0, 1fr) 300px; height: 100%; }
+    .app-frame { display: grid; grid-template-columns: 64px 282px minmax(0, 1fr); height: 960px; }
     .rail {
       background: var(--rail);
       color: oklch(70% 0.012 250);
@@ -159,8 +159,8 @@
     .rail-button.disabled { color: oklch(42% 0.01 250); pointer-events: none; }
 
     .conversation-pane { background: var(--surface-2); border-right: 1px solid var(--border); display: grid; grid-template-rows: 64px 42px 1fr; min-width: 0; }
-    .pane-header, .chat-header, .inspector-header, .admin-header { border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 18px; }
-    .pane-header h3, .chat-header h3, .inspector-header h3, .admin-header h3 { margin: 0; font-size: 14px; font-weight: 730; }
+    .pane-header, .chat-header, .admin-header { border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 18px; }
+    .pane-header h3, .chat-header h3, .admin-header h3 { margin: 0; font-size: 14px; font-weight: 730; }
     .tool-square { width: 28px; height: 28px; border: 1px solid var(--border); border-radius: var(--r6); background: var(--surface); color: var(--muted); display: grid; place-items: center; }
     .search-strip { padding: 7px 14px; border-bottom: 1px solid var(--border); }
     .search-box { height: 28px; border: 1px solid var(--border); border-radius: var(--r6); background: var(--surface); color: var(--muted); display: flex; align-items: center; padding: 0 9px; gap: 8px; }
@@ -171,7 +171,7 @@
     .session-top { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
     .session-meta { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-    .chat-pane { background: var(--workspace); display: grid; grid-template-rows: 64px minmax(0, 1fr) 150px; position: relative; min-width: 0; }
+    .chat-pane { background: var(--workspace); display: grid; grid-template-rows: 64px minmax(0, 1fr) 158px; position: relative; min-width: 0; }
     .chat-header { background: oklch(99% 0.002 250); }
     .header-left, .header-actions { display: flex; align-items: center; gap: 12px; min-width: 0; }
     .avatar-stack { display: flex; }
@@ -180,37 +180,43 @@
     .header-copy { min-width: 0; }
     .header-copy h3 { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
     .header-copy p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
-    .message-scroll { padding: 22px 28px 18px; overflow-y: auto; display: grid; gap: 14px; align-content: start; min-height: 0; }
+    .message-scroll { padding: 22px 28px 22px; overflow-y: auto; display: grid; gap: 14px; align-content: start; min-height: 0; }
     .message-row { display: grid; grid-template-columns: 34px minmax(0, 760px); gap: 10px; align-items: start; }
     .message-row.user { grid-template-columns: minmax(0, 760px) 34px; justify-content: end; }
-    .message-row.user .message-card { order: 1; }
+    .message-row.user .message-stack { order: 1; }
     .message-row.user .message-avatar { order: 2; background: var(--blue-soft); color: oklch(42% 0.16 255); }
     .message-avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--surface); border: 1px solid var(--border); display: grid; place-items: center; font-weight: 750; }
+    .message-stack { min-width: 0; display: grid; gap: 6px; }
+    .speaker-line { min-height: 18px; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+    .message-row.user .speaker-line { justify-content: flex-end; }
     .message-card { border: 1px solid var(--border); border-radius: var(--r8); background: var(--surface); overflow: hidden; }
+    .message-card.private { border-radius: var(--r8); }
     .message-head { height: 34px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 12px; }
     .message-body { padding: 12px; display: grid; gap: 10px; }
     .message-body p { margin: 0; }
+    .thinking-panel { border: 1px solid oklch(84% 0.05 255); border-radius: var(--r6); background: linear-gradient(180deg, var(--blue-soft), oklch(98.5% 0.012 255)); overflow: hidden; }
+    .thinking-head { min-height: 32px; padding: 7px 10px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid oklch(86% 0.04 255); color: oklch(38% 0.14 255); }
+    .thinking-steps { padding: 9px 10px; display: grid; gap: 6px; color: oklch(36% 0.03 250); }
+    .thinking-line { display: grid; grid-template-columns: 18px 1fr; gap: 8px; align-items: start; }
+    .thinking-line::before { content: ""; width: 6px; height: 6px; margin-top: 7px; border-radius: 50%; background: var(--blue); }
     .evidence-row { display: grid; grid-template-columns: 120px 1fr auto; gap: 10px; align-items: center; min-height: 34px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--r6); background: oklch(98.5% 0.002 250); }
     .code-line { font-family: var(--font-mono); font-size: 12px; color: oklch(34% 0.02 250); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .return-bottom { position: absolute; right: 22px; bottom: 164px; z-index: 3; height: 30px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--fg); display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 8px 20px oklch(20% 0.012 250 / 10%); }
-    .composer { border-top: 1px solid var(--border); background: oklch(99% 0.002 250); padding: 14px 18px 16px; display: grid; grid-template-rows: 1fr 32px; gap: 10px; }
-    .composer-box { border: 1px solid var(--border-strong); border-radius: var(--r8); background: var(--surface); padding: 10px 12px; display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start; }
-    .composer-text { color: var(--fg); min-height: 44px; }
+    .return-bottom { position: absolute; right: 22px; bottom: 172px; z-index: 3; height: 30px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--fg); display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 8px 20px oklch(20% 0.012 250 / 10%); }
+    .composer { border-top: 1px solid var(--border); background: oklch(99% 0.002 250); padding: 14px 18px 16px; display: grid; grid-template-rows: 1fr 28px; gap: 10px; }
+    .composer-box { border: 1px solid var(--border-strong); border-radius: var(--r8); background: var(--surface); padding: 10px 104px 44px 12px; min-height: 86px; position: relative; }
+    .composer-text { color: var(--fg); min-height: 42px; }
     .composer-foot { display: flex; align-items: center; justify-content: space-between; color: var(--muted); }
     .composer-tools { display: flex; gap: 8px; align-items: center; }
-    .send-btn { height: 32px; min-width: 76px; border: 0; border-radius: var(--r6); background: var(--blue); color: white; font-weight: 720; }
+    .send-btn { position: absolute; right: 10px; bottom: 10px; height: 32px; min-width: 76px; border: 0; border-radius: var(--r6); background: var(--blue); color: white; font-weight: 720; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+    .context-drawer { display: none; position: absolute; top: 76px; right: 22px; z-index: 4; width: 292px; border: 1px solid var(--border-strong); border-radius: var(--r8); background: var(--surface); box-shadow: 0 18px 42px oklch(18% 0.01 250 / 16%); overflow: hidden; }
+    .context-drawer > header { min-height: 42px; padding: 0 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .context-body { padding: 10px; display: grid; gap: 8px; }
+    .context-line { border: 1px solid var(--border); border-radius: var(--r6); padding: 8px 10px; display: grid; gap: 4px; background: oklch(99% 0.002 250); }
+    .context-trigger { display: inline-flex; align-items: center; gap: 8px; height: 32px; border-radius: var(--r6); border: 1px solid var(--border); background: var(--surface); padding: 0 10px; font-weight: 650; color: var(--fg); }
 
-    .inspector { background: oklch(98.5% 0.003 250); border-left: 1px solid var(--border); display: grid; grid-template-rows: 64px 1fr; min-width: 0; }
-    .inspector-body { padding: 14px; display: grid; gap: 12px; align-content: start; overflow: hidden; }
-    .inspector-section { border: 1px solid var(--border); border-radius: var(--r8); background: var(--surface); overflow: hidden; }
-    .inspector-section > header { height: 36px; padding: 0 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
-    .inspector-line { min-height: 42px; padding: 9px 12px; border-bottom: 1px solid var(--border); display: grid; gap: 3px; }
-    .inspector-line:last-child { border-bottom: 0; }
     .line-flex { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
-    .tiny-meter { height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
-    .tiny-meter span { display: block; height: 100%; background: var(--green); border-radius: inherit; }
 
-    .wide-shell { display: grid; grid-template-columns: 216px minmax(0, 1fr); height: 100%; background: var(--workspace); }
+    .wide-shell { display: grid; grid-template-columns: 216px minmax(0, 1fr); height: 960px; background: var(--workspace); }
     .wide-nav { background: var(--rail); color: oklch(72% 0.012 250); padding: 18px 12px; display: grid; grid-template-rows: auto 1fr auto; gap: 18px; }
     .wide-brand { display: flex; align-items: center; gap: 10px; color: white; font-weight: 760; padding: 0 6px; }
     .wide-logo { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; background: oklch(25% 0.018 250); border: 1px solid oklch(34% 0.014 250); }
@@ -231,8 +237,27 @@
     .data-row { display: grid; grid-template-columns: 1.2fr 1fr 1fr auto; gap: 12px; align-items: center; min-height: 42px; padding: 0 14px; border-bottom: 1px solid var(--border); }
     .data-row:last-child { border-bottom: 0; }
     .data-row.head { background: var(--surface-2); color: var(--muted); font-size: 12px; font-weight: 680; }
+    .route-board { padding: 22px; display: grid; grid-template-rows: 54px 1fr; gap: 16px; background: var(--workspace); }
+    .route-board > header { display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border); border-radius: var(--r8); background: var(--surface); padding: 0 16px; }
+    .route-board h3 { margin: 0; font-size: 16px; }
+    .route-grid { min-height: 0; display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .route-page { border: 1px solid var(--border); border-radius: var(--r8); background: var(--surface); overflow: hidden; display: grid; grid-template-rows: 42px 1fr; min-width: 0; }
+    .route-page > header { padding: 0 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .route-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .route-title strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .route-content { padding: 10px; display: grid; gap: 8px; align-content: start; overflow: hidden; }
+    .route-row { min-height: 34px; border: 1px solid var(--border); border-radius: var(--r6); padding: 7px 8px; display: grid; gap: 3px; background: oklch(99% 0.002 250); }
+    .route-row.split { grid-template-columns: 1fr auto; align-items: center; gap: 8px; }
+    .route-row > div { min-width: 0; display: grid; gap: 3px; }
+    .route-row strong, .route-row .caption { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .route-field { min-height: 32px; border: 1px solid var(--border); border-radius: var(--r6); padding: 7px 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); background: oklch(99% 0.002 250); }
+    .route-field > :first-child { flex: 0 0 auto; }
+    .route-field > :last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .route-mini-table { border: 1px solid var(--border); border-radius: var(--r6); overflow: hidden; }
+    .route-mini-row { min-height: 28px; padding: 0 8px; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; font-size: 12px; }
+    .route-mini-row:last-child { border-bottom: 0; }
 
-    .security-shell { display: grid; grid-template-columns: 64px minmax(0, 1fr); height: 100%; }
+    .security-shell { display: grid; grid-template-columns: 64px minmax(0, 1fr); height: 960px; }
     .security-main { display: grid; grid-template-rows: 64px 1fr; background: var(--workspace); }
     .security-grid { padding: 20px; display: grid; grid-template-columns: 1.08fr 0.92fr; grid-template-rows: 1fr 1fr; gap: 16px; min-height: 0; }
     .security-panel { border: 1px solid var(--border); border-radius: var(--r8); background: var(--surface); overflow: hidden; display: grid; grid-template-rows: 42px 1fr; min-height: 0; }
@@ -281,6 +306,7 @@
     <symbol id="i-search" viewBox="0 0 20 20"><circle cx="8.8" cy="8.8" r="4.8"/><path d="M12.5 12.5 16 16"/></symbol>
     <symbol id="i-plus" viewBox="0 0 20 20"><path d="M10 4v12M4 10h12"/></symbol>
     <symbol id="i-chevron" viewBox="0 0 20 20"><path d="M6 8 10 12 14 8"/></symbol>
+    <symbol id="i-send" viewBox="0 0 20 20"><path d="M3.2 10 16.5 3.8 12.2 16.4 9.2 10.9 3.2 10Z"/><path d="M9.2 10.9 16.5 3.8"/></symbol>
   </svg>
 
   <main class="page" data-od-id="design-main">
@@ -334,8 +360,8 @@
       </div></div>
     </section>
 
-    <section data-od-id="chat-main-board">
-      <div class="board-label"><h2>聊天主界面</h2><span>icon rail + sessions + fixed composer + safety inspector</span></div>
+    <section data-od-id="chat-main-board" data-od-variant="group">
+      <div class="board-label"><h2>群聊主界面</h2><span>icon rail + team sessions + fixed composer + on-demand safety drawer</span></div>
       <div class="board-scroll"><div class="artboard app-frame">
         <nav class="rail" data-od-id="left-icon-rail" aria-label="主侧边栏">
           <div class="rail-logo">ai</div>
@@ -354,9 +380,9 @@
           <header class="pane-header"><h3>消息</h3><button class="tool-square"><svg class="icon"><use href="#i-plus"/></svg></button></header>
           <div class="search-strip"><div class="search-box"><svg class="icon"><use href="#i-search"/></svg><span>搜索会话、成员、文件</span></div></div>
           <div class="session-list">
-            <div class="session-item active" data-od-id="session-secretary"><div class="session-top"><span class="session-name">秘书 / Team Desk</span><span class="mono caption">09:42</span></div><div class="session-meta">命令请求待确认 · lib/core/workspace.dart</div></div>
-            <div class="session-item"><div class="session-top"><span class="session-name">架构师 Kai</span><span class="status green"><span class="dot"></span>online</span></div><div class="session-meta">workspace 边界检查完成</div></div>
-            <div class="session-item"><div class="session-top"><span class="session-name">Reviewer Lin</span><span class="mono caption">09:31</span></div><div class="session-meta">补丁审阅 · chat_view.dart</div></div>
+            <div class="session-item active" data-od-id="session-team-desk"><div class="session-top"><span class="session-name">群聊 / Team Desk</span><span class="mono caption">09:42</span></div><div class="session-meta">命令请求待确认 · 3 名成员在线</div></div>
+            <div class="session-item"><div class="session-top"><span class="session-name">私聊 / 架构师 Kai</span><span class="status green"><span class="dot"></span>online</span></div><div class="session-meta">workspace 边界检查完成</div></div>
+            <div class="session-item"><div class="session-top"><span class="session-name">私聊 / Reviewer Lin</span><span class="mono caption">09:31</span></div><div class="session-meta">补丁审阅 · chat_view.dart</div></div>
             <div class="session-item"><div class="session-top"><span class="session-name">模型 / gpt-5-codex</span><span class="status blue"><span class="dot"></span>stream</span></div><div class="session-meta">审计记录写入中</div></div>
             <div class="session-item"><div class="session-top"><span class="session-name">项目 / ai-team</span><span class="mono caption">main</span></div><div class="session-meta">本地优先 · macOS desktop</div></div>
           </div>
@@ -364,29 +390,71 @@
         <section class="chat-pane" data-od-id="main-chat-area">
           <header class="chat-header" data-od-id="chat-header">
             <div class="header-left"><div class="avatar-stack"><div class="avatar">你</div><div class="avatar">Kai</div><div class="avatar">Lin</div></div><div class="header-copy"><h3>Team Desk · 工作区安全会话</h3><p>ai-team / 本地工作区 / 命令与补丁需要显式确认</p></div></div>
-            <div class="header-actions"><span class="status green"><span class="dot"></span>3 members</span><button class="ghost-btn">审计</button></div>
+            <div class="header-actions"><span class="status green"><span class="dot"></span>3 members</span><button class="context-trigger" data-od-id="safety-drawer-trigger"><svg class="icon"><use href="#i-audit"/></svg>安全状态<span class="status amber"><span class="dot"></span>1</span></button></div>
           </header>
           <div class="message-scroll" data-od-id="scrolling-message-flow">
-            <div class="message-row user" data-od-id="message-user-request"><div class="message-avatar">你</div><article class="message-card"><div class="message-head"><strong>你</strong><span class="mono">09:38:12</span></div><div class="message-body"><p>请检查 workspace 权限边界，并准备一个最小补丁。命令需要先给我确认。</p></div></article></div>
-            <div class="message-row"><div class="message-avatar">Kai</div><article class="message-card"><div class="message-head"><strong>架构师 Kai</strong><span class="mono">09:39:04</span></div><div class="message-body"><p>已读取工作区约束。当前可写范围只落在项目根目录；补丁前会先给出路径证据。</p><div class="evidence-row"><span class="status green"><span class="dot"></span>边界内</span><span class="code-line">/Users/swcrbt/develop/github/swcrbt/ai-team/lib/core/workspace.dart</span><span class="mono caption">read</span></div></div></article></div>
-            <div class="message-row"><div class="message-avatar">Lin</div><article class="message-card"><div class="message-head"><strong>Reviewer Lin</strong><span class="mono">09:41:26</span></div><div class="message-body"><p>发现 composer 应保持独立底部区域。消息滚动容器需要保留底部安全间距，不让输入框覆盖最后一条回复。</p><div class="evidence-row"><span class="status amber"><span class="dot"></span>待确认</span><span class="code-line">命令请求 · flutter test test/app_widget_test.dart</span><button class="ghost-btn">查看</button></div></div></article></div>
-            <div class="message-row"><div class="message-avatar">Sec</div><article class="message-card"><div class="message-head"><strong>秘书</strong><span class="mono">09:42:18</span></div><div class="message-body"><p>补丁摘要已生成。涉及聊天布局、侧边栏入口、右侧安全状态。未触碰模型配置。</p><div class="evidence-row"><span class="status blue"><span class="dot"></span>补丁</span><span class="code-line">lib/ui/chat_view.dart +42 -18 · lib/ui/sidebar.dart +30 -9</span><button class="primary-btn">确认</button></div></div></article></div>
+            <div class="message-row user" data-od-id="message-user-request"><div class="message-avatar">你</div><div class="message-stack"><div class="speaker-line"><strong>你</strong><span class="mono">09:38:12</span></div><article class="message-card"><div class="message-body"><p>请检查 workspace 权限边界，并准备一个最小补丁。命令需要先给我确认。</p></div></article></div></div>
+            <div class="message-row" data-od-id="message-thinking-sample"><div class="message-avatar">Kai</div><div class="message-stack"><div class="speaker-line"><strong>架构师 Kai</strong><span class="mono">09:39:04</span><span class="status blue"><span class="dot"></span>thinking</span></div><article class="message-card"><div class="message-body"><div class="thinking-panel" data-od-id="thinking-area"><div class="thinking-head"><strong>思考</strong><span class="mono caption">provider returned</span></div><div class="thinking-steps"><div class="thinking-line">识别当前可写根目录，并排除仓库外路径。</div><div class="thinking-line">将测试命令标记为需要用户确认后执行。</div></div></div><p>已读取工作区约束。当前可写范围只落在项目根目录；补丁前会先给出路径证据。</p><div class="evidence-row"><span class="status green"><span class="dot"></span>边界内</span><span class="code-line">/Users/swcrbt/develop/github/swcrbt/ai-team/lib/core/workspace.dart</span><span class="mono caption">read</span></div></div></article></div></div>
+            <div class="message-row"><div class="message-avatar">Lin</div><div class="message-stack"><div class="speaker-line"><strong>Reviewer Lin</strong><span class="mono">09:41:26</span></div><article class="message-card"><div class="message-body"><p>发现 composer 应保持独立底部区域。消息滚动容器需要保留底部安全间距，不让输入框覆盖最后一条回复。</p><div class="evidence-row"><span class="status amber"><span class="dot"></span>待确认</span><span class="code-line">命令请求 · flutter test test/app_widget_test.dart</span><button class="ghost-btn">查看</button></div></div></article></div></div>
+            <div class="message-row"><div class="message-avatar">Sec</div><div class="message-stack"><div class="speaker-line"><strong>秘书</strong><span class="mono">09:42:18</span></div><article class="message-card"><div class="message-body"><p>补丁摘要已生成。涉及聊天布局、侧边栏入口、安全状态抽屉。未触碰模型配置。</p><div class="evidence-row"><span class="status blue"><span class="dot"></span>补丁</span><span class="code-line">lib/ui/chat_view.dart +42 -18 · lib/ui/sidebar.dart +30 -9</span><button class="primary-btn">确认</button></div></div></article></div></div>
           </div>
           <button class="return-bottom" data-od-id="return-to-bottom"><svg class="icon"><use href="#i-chevron"/></svg>回到底部</button>
+          <div class="context-drawer" data-od-id="ephemeral-safety-drawer">
+            <header><strong>安全状态</strong><button class="tool-square" aria-label="收起安全状态"><svg class="icon"><use href="#i-chevron"/></svg></button></header>
+            <div class="context-body">
+              <div class="context-line"><div class="line-flex"><strong>命令审批</strong><span class="status amber"><span class="dot"></span>1</span></div><span class="mono caption">flutter test test/app_widget_test.dart</span></div>
+              <div class="context-line"><div class="line-flex"><strong>补丁确认</strong><span class="status amber"><span class="dot"></span>待确认</span></div><span class="quiet">chat_view.dart · composer 固定底部</span></div>
+              <div class="context-line"><div class="line-flex"><strong>审计摘要</strong><span class="mono">09:42</span></div><span class="quiet">模型调用 8 · 阻断 0</span></div>
+            </div>
+          </div>
           <footer class="composer" data-od-id="fixed-bottom-composer">
-            <div class="composer-box"><div class="composer-text">让 Reviewer Lin 再看一遍补丁摘要，并把命令审批留在右侧安全状态里。</div><button class="send-btn">发送</button></div>
+            <div class="composer-box"><div class="composer-text">让 Reviewer Lin 再看一遍补丁摘要，并把命令审批留在安全状态抽屉里。</div><button class="send-btn"><svg class="icon"><use href="#i-send"/></svg>发送</button></div>
             <div class="composer-foot"><span>当前会话 · Team Desk · 本地工作区</span><div class="composer-tools"><span class="mono">context 12.4k</span><span class="status green"><span class="dot"></span>safe</span></div></div>
           </footer>
         </section>
-        <aside class="inspector" data-od-id="session-safety-inspector">
-          <header class="inspector-header"><h3>会话上下文 / 安全状态</h3><span class="status green"><span class="dot"></span>OK</span></header>
-          <div class="inspector-body">
-            <section class="inspector-section" data-od-id="member-status"><header><strong>成员状态</strong><span class="mono caption">live</span></header><div class="inspector-line"><div class="line-flex"><strong>Kai · 架构师</strong><span class="status green"><span class="dot"></span>在线</span></div><div class="tiny-meter"><span style="width: 72%"></span></div></div><div class="inspector-line"><div class="line-flex"><strong>Lin · Reviewer</strong><span class="status green"><span class="dot"></span>在线</span></div><div class="tiny-meter"><span style="width: 54%"></span></div></div></section>
-            <section class="inspector-section" data-od-id="command-approval"><header><strong>命令审批</strong><span class="status amber"><span class="dot"></span>1</span></header><div class="inspector-line"><span class="mono">flutter test test/app_widget_test.dart</span><span class="quiet">申请者 Kai · 只读验证</span></div></section>
-            <section class="inspector-section" data-od-id="patch-confirm"><header><strong>补丁确认</strong><span class="status amber"><span class="dot"></span>待确认</span></header><div class="inspector-line"><div class="line-flex"><strong>chat_view.dart</strong><span class="mono">+42 -18</span></div><span class="quiet">composer 固定底部，消息区独立滚动</span></div></section>
-            <section class="inspector-section" data-od-id="audit-summary"><header><strong>审计摘要</strong><span class="mono caption">09:42</span></header><div class="inspector-line"><div class="line-flex"><span>模型调用</span><span class="mono">8</span></div></div><div class="inspector-line"><div class="line-flex"><span>命令请求</span><span class="mono">1</span></div></div><div class="inspector-line"><div class="line-flex"><span>阻断</span><span class="mono">0</span></div></div></section>
+      </div></div>
+    </section>
+
+    <section data-od-id="private-chat-main-board">
+      <div class="board-label"><h2>成员私聊界面</h2><span>same composer, no group speaker labels inside messages</span></div>
+      <div class="board-scroll"><div class="artboard app-frame">
+        <nav class="rail" data-od-id="private-left-icon-rail" aria-label="主侧边栏">
+          <div class="rail-logo">ai</div>
+          <button class="rail-button active" aria-label="消息"><svg class="icon"><use href="#i-chat"/></svg></button>
+          <button class="rail-button" aria-label="团队"><svg class="icon"><use href="#i-team"/></svg></button>
+          <button class="rail-button" aria-label="模型"><svg class="icon"><use href="#i-model"/></svg></button>
+          <button class="rail-button" aria-label="角色"><svg class="icon"><use href="#i-role"/></svg></button>
+          <button class="rail-button" aria-label="成员"><svg class="icon"><use href="#i-member"/></svg></button>
+          <button class="rail-button" aria-label="项目"><svg class="icon"><use href="#i-project"/></svg></button>
+          <button class="rail-button" aria-label="审计"><svg class="icon"><use href="#i-audit"/></svg></button>
+          <button class="rail-button" aria-label="设置"><svg class="icon"><use href="#i-settings"/></svg></button>
+        </nav>
+        <aside class="conversation-pane" data-od-id="private-conversation-list">
+          <header class="pane-header"><h3>私聊</h3><button class="tool-square"><svg class="icon"><use href="#i-plus"/></svg></button></header>
+          <div class="search-strip"><div class="search-box"><svg class="icon"><use href="#i-search"/></svg><span>搜索成员私聊</span></div></div>
+          <div class="session-list">
+            <div class="session-item"><div class="session-top"><span class="session-name">群聊 / Team Desk</span><span class="mono caption">09:42</span></div><div class="session-meta">命令请求待确认</div></div>
+            <div class="session-item"><div class="session-top"><span class="session-name">私聊 / 架构师 Kai</span><span class="mono caption">09:39</span></div><div class="session-meta">边界检查完成</div></div>
+            <div class="session-item active" data-od-id="session-lin-dm"><div class="session-top"><span class="session-name">私聊 / Reviewer Lin</span><span class="status green"><span class="dot"></span>online</span></div><div class="session-meta">补丁审阅 · chat_view.dart</div></div>
+            <div class="session-item"><div class="session-top"><span class="session-name">私聊 / 秘书</span><span class="mono caption">09:20</span></div><div class="session-meta">汇总下一步</div></div>
           </div>
         </aside>
+        <section class="chat-pane" data-od-id="private-chat-area">
+          <header class="chat-header">
+            <div class="header-left"><div class="avatar">Lin</div><div class="header-copy"><h3>Reviewer Lin</h3><p>私聊 · 补丁审阅 · 不显示群聊成员名行</p></div></div>
+            <div class="header-actions"><span class="status green"><span class="dot"></span>online</span><button class="context-trigger"><svg class="icon"><use href="#i-project"/></svg>工作区</button></div>
+          </header>
+          <div class="message-scroll" data-od-id="private-message-flow">
+            <div class="message-row"><div class="message-avatar">Lin</div><div class="message-stack"><article class="message-card private"><div class="message-body"><div class="thinking-panel"><div class="thinking-head"><strong>思考</strong><span class="mono caption">provider returned</span></div><div class="thinking-steps"><div class="thinking-line">对比消息区和 composer 的垂直边界。</div><div class="thinking-line">确认发送按钮不会抢占输入文字区域。</div></div></div><p>我会重点看 composer 右下角、滚动区底部留白、以及安全抽屉是否只在需要时出现。</p></div></article></div></div>
+            <div class="message-row user"><div class="message-avatar">你</div><div class="message-stack"><article class="message-card private"><div class="message-body"><p>请把这次审阅只放在我们私聊里，不要改变 Team Desk 的上下文。</p></div></article></div></div>
+            <div class="message-row"><div class="message-avatar">Lin</div><div class="message-stack"><article class="message-card private"><div class="message-body"><p>确认。私聊只保留当前成员身份、相关文件和审阅状态；群聊的成员状态和分工不在这里重复显示。</p><div class="evidence-row"><span class="status blue"><span class="dot"></span>审阅</span><span class="code-line">docs/design/open-design/ai-team-codex-ui-redesign/index.html</span><button class="ghost-btn">定位</button></div></div></article></div></div>
+          </div>
+          <button class="return-bottom"><svg class="icon"><use href="#i-chevron"/></svg>回到底部</button>
+          <footer class="composer" data-od-id="private-fixed-bottom-composer">
+            <div class="composer-box"><div class="composer-text">这里是给 Lin 的私聊回复，发送动作固定在输入框右下角。</div><button class="send-btn"><svg class="icon"><use href="#i-send"/></svg>发送</button></div>
+            <div class="composer-foot"><span>当前会话 · 私聊 / Reviewer Lin</span><div class="composer-tools"><span class="mono">context 4.8k</span><span class="status green"><span class="dot"></span>safe</span></div></div>
+          </footer>
+        </section>
       </div></div>
     </section>
 
@@ -432,6 +500,90 @@
       </div></div>
     </section>
 
+    <section data-od-id="sidebar-entry-page-board">
+      <div class="board-label"><h2>侧边栏入口页面设计</h2><span>each settings/management entry has its own concrete page state</span></div>
+      <div class="board-scroll"><div class="artboard route-board">
+        <header data-od-id="route-board-header"><div><h3>主侧边栏 8 个入口的页面矩阵</h3><span class="caption">从主侧边栏直接进入；每个页面都有独立内容、表单状态和操作区。</span></div><span class="status blue"><span class="dot"></span>single source</span></header>
+        <div class="route-grid" data-od-id="route-page-grid">
+          <section class="route-page" data-od-id="route-page-messages">
+            <header><div class="route-title"><svg class="icon"><use href="#i-chat"/></svg><strong>消息</strong></div><span class="status green"><span class="dot"></span>active</span></header>
+            <div class="route-content">
+              <div class="route-row split"><div><strong>群聊 / Team Desk</strong><span class="caption">命令请求待确认</span></div><span class="mono">09:42</span></div>
+              <div class="route-row split"><div><strong>私聊 / Reviewer Lin</strong><span class="caption">补丁审阅</span></div><span class="status green"><span class="dot"></span>online</span></div>
+              <div class="route-field"><span>默认打开</span><strong>秘书私聊</strong></div>
+              <div class="route-field"><span>输入区</span><strong>固定底部</strong></div>
+            </div>
+          </section>
+          <section class="route-page" data-od-id="route-page-teams">
+            <header><div class="route-title"><svg class="icon"><use href="#i-team"/></svg><strong>团队</strong></div><button class="tool-square"><svg class="icon"><use href="#i-plus"/></svg></button></header>
+            <div class="route-content">
+              <div class="route-row"><strong>Core Review</strong><span class="caption">Kai, Lin, Secretary · serial</span></div>
+              <div class="route-field"><span>协作模式</span><strong>串行</strong></div>
+              <div class="route-field"><span>成员可见性</span><strong>共享 prior chat</strong></div>
+              <div class="route-mini-table"><div class="route-mini-row"><span>Kai</span><span>架构师</span></div><div class="route-mini-row"><span>Lin</span><span>Reviewer</span></div></div>
+            </div>
+          </section>
+          <section class="route-page" data-od-id="route-page-models">
+            <header><div class="route-title"><svg class="icon"><use href="#i-model"/></svg><strong>模型</strong></div><span class="status green"><span class="dot"></span>ready</span></header>
+            <div class="route-content">
+              <div class="route-field"><span>默认模型</span><strong>gpt-5-codex</strong></div>
+              <div class="route-field"><span>Base URL</span><span class="mono">/v1</span></div>
+              <div class="route-field"><span>流式输出</span><strong>开启</strong></div>
+              <div class="route-row"><strong>诊断</strong><span class="caption">记录 requestUrl、latency、finish reason</span></div>
+            </div>
+          </section>
+          <section class="route-page" data-od-id="route-page-roles">
+            <header><div class="route-title"><svg class="icon"><use href="#i-role"/></svg><strong>角色</strong></div><button class="ghost-btn">编辑</button></header>
+            <div class="route-content">
+              <div class="route-row split"><strong>架构师</strong><span class="status blue"><span class="dot"></span>planning</span></div>
+              <div class="route-row split"><strong>Reviewer</strong><span class="status amber"><span class="dot"></span>approval</span></div>
+              <div class="route-row split"><strong>秘书</strong><span class="status green"><span class="dot"></span>summary</span></div>
+              <div class="route-field"><span>角色提示词</span><strong>版本化</strong></div>
+            </div>
+          </section>
+          <section class="route-page" data-od-id="route-page-members">
+            <header><div class="route-title"><svg class="icon"><use href="#i-member"/></svg><strong>成员</strong></div><span class="mono caption">5 total</span></header>
+            <div class="route-content">
+              <div class="route-row split"><div><strong>Kai</strong><span class="caption">gpt-5-codex · 架构师</span></div><span class="status green"><span class="dot"></span>在线</span></div>
+              <div class="route-row split"><div><strong>Lin</strong><span class="caption">gpt-5-codex · Reviewer</span></div><span class="status green"><span class="dot"></span>在线</span></div>
+              <div class="route-field"><span>权限</span><strong>命令需确认</strong></div>
+              <div class="route-field"><span>私聊入口</span><strong>启用</strong></div>
+            </div>
+          </section>
+          <section class="route-page" data-od-id="route-page-projects">
+            <header><div class="route-title"><svg class="icon"><use href="#i-project"/></svg><strong>项目</strong></div><span class="status amber"><span class="dot"></span>review</span></header>
+            <div class="route-content">
+              <div class="route-field"><span>当前项目</span><strong>ai-team</strong></div>
+              <div class="route-row"><strong class="mono">/Users/swcrbt/develop/github/swcrbt/ai-team</strong><span class="caption">唯一可写根目录</span></div>
+              <div class="route-field"><span>补丁策略</span><strong>确认后应用</strong></div>
+              <div class="route-field"><span>越界路径</span><strong>阻断</strong></div>
+            </div>
+          </section>
+          <section class="route-page" data-od-id="route-page-audit">
+            <header><div class="route-title"><svg class="icon"><use href="#i-audit"/></svg><strong>审计</strong></div><span class="mono caption">newest first</span></header>
+            <div class="route-content">
+              <div class="route-mini-table">
+                <div class="route-mini-row"><span>09:42 补丁确认</span><span>等待</span></div>
+                <div class="route-mini-row"><span>09:41 命令请求</span><span>审批</span></div>
+                <div class="route-mini-row"><span>09:39 工作区读取</span><span>通过</span></div>
+              </div>
+              <div class="route-field"><span>过滤</span><strong>模型 / 命令 / 补丁</strong></div>
+              <div class="route-field"><span>导出</span><strong>JSON</strong></div>
+            </div>
+          </section>
+          <section class="route-page" data-od-id="route-page-settings">
+            <header><div class="route-title"><svg class="icon"><use href="#i-settings"/></svg><strong>设置</strong></div><span class="status blue"><span class="dot"></span>local</span></header>
+            <div class="route-content">
+              <div class="route-field"><span>状态文件</span><strong>state.json</strong></div>
+              <div class="route-field"><span>主题</span><strong>跟随系统</strong></div>
+              <div class="route-field"><span>语言</span><strong>中文 / English</strong></div>
+              <div class="route-row"><strong>危险操作</strong><span class="caption">清除本地会话需二次确认</span></div>
+            </div>
+          </section>
+        </div>
+      </div></div>
+    </section>
+
     <section data-od-id="project-security-board">
       <div class="board-label"><h2>项目安全界面</h2><span>command approval + patch confirmation + audit + workspace boundary</span></div>
       <div class="board-scroll"><div class="artboard security-shell">
@@ -442,7 +594,7 @@
           <header class="admin-header"><h3>项目 / ai-team · 安全状态</h3><div class="header-actions"><span class="status amber"><span class="dot"></span>2 confirmations</span><button class="ghost-btn">导出审计</button></div></header>
           <div class="security-grid">
             <section class="security-panel" data-od-id="command-approval-panel"><header><strong>命令审批</strong><span class="status amber"><span class="dot"></span>等待确认</span></header><div><div class="approval-row"><div><strong class="mono">flutter test test/app_widget_test.dart</strong><p class="quiet">Kai 申请 · 只读验证 · 工作区内执行</p></div><button class="primary-btn">允许</button></div><div class="approval-row"><div><strong class="mono">git diff -- lib/ui/chat_view.dart</strong><p class="quiet">Lin 申请 · 读取补丁摘要</p></div><button class="ghost-btn">查看</button></div><div class="approval-row"><div><strong class="mono">rm -rf /tmp/outside-project</strong><p class="quiet">路径不属于当前工作区</p></div><button class="danger-btn">阻断</button></div></div></section>
-            <section class="security-panel" data-od-id="patch-confirmation-panel"><header><strong>补丁确认</strong><span class="mono caption">+42 -18</span></header><div><div class="diff-box"><div class="diff-line del">- composer 与消息流共享滚动区域</div><div class="diff-line add">+ chat pane uses header / scroll region / fixed composer rows</div><div class="diff-line add">+ return-to-bottom floats above composer</div><div class="diff-line add">+ inspector shows session context and safety status</div></div><div style="display:flex; gap:8px; padding:0 14px 14px;"><button class="primary-btn">确认补丁</button><button class="ghost-btn">展开文件</button></div></div></section>
+            <section class="security-panel" data-od-id="patch-confirmation-panel"><header><strong>补丁确认</strong><span class="mono caption">+42 -18</span></header><div><div class="diff-box"><div class="diff-line del">- composer 与消息流共享滚动区域</div><div class="diff-line add">+ chat pane uses header / scroll region / fixed composer rows</div><div class="diff-line add">+ return-to-bottom floats above composer</div><div class="diff-line add">+ safety drawer appears only when context is requested</div></div><div style="display:flex; gap:8px; padding:0 14px 14px;"><button class="primary-btn">确认补丁</button><button class="ghost-btn">展开文件</button></div></div></section>
             <section class="security-panel" data-od-id="workspace-boundary-panel"><header><strong>工作区边界</strong><span class="status green"><span class="dot"></span>enforced</span></header><div class="boundary-map"><div class="boundary-row"><strong>root</strong><span class="mono">/Users/swcrbt/develop/github/swcrbt/ai-team</span><span class="status green"><span class="dot"></span>write</span></div><div class="boundary-row"><strong>state</strong><span class="mono">state.json</span><span class="status green"><span class="dot"></span>local</span></div><div class="boundary-row"><strong>outside</strong><span class="mono">/Users/swcrbt/.ssh</span><span class="status red"><span class="dot"></span>blocked</span></div><div class="boundary-row"><strong>patch</strong><span class="mono">lib/ui/*.dart</span><span class="status amber"><span class="dot"></span>confirm</span></div></div></section>
             <section class="security-panel" data-od-id="audit-summary-panel"><header><strong>审计摘要</strong><span class="mono caption">newest first</span></header><div><div class="audit-kpis"><div class="kpi"><strong>236</strong><span>events</span></div><div class="kpi"><strong>12</strong><span>model calls</span></div><div class="kpi"><strong>0</strong><span>blocked today</span></div></div><div class="audit-list"><div class="audit-line"><span class="mono">09:42:18</span><span>补丁确认 · chat_view.dart</span><span class="status amber"><span class="dot"></span>等待</span></div><div class="audit-line"><span class="mono">09:41:26</span><span>命令请求 · flutter test</span><span class="status amber"><span class="dot"></span>审批</span></div><div class="audit-line"><span class="mono">09:39:04</span><span>工作区读取 · workspace.dart</span><span class="status green"><span class="dot"></span>通过</span></div></div></div></section>
           </div>
