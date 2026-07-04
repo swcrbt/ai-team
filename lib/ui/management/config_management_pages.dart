@@ -87,9 +87,20 @@ class _ModelManagementPageState extends State<ModelManagementPage> {
             for (final model in models)
               _ObjectRow(
                 key: ValueKey('model-row-${model.id}'),
+                icon: Icons.memory_rounded,
                 title: model.name,
                 subtitle:
-                    '${model.modelName} · ${model.baseUrl} · context ${model.contextWindowTokens}',
+                    '${_providerLabel(model)} · ${model.modelName} · ${model.baseUrl}',
+                chips: [
+                  _TeamMetaChip(
+                    label:
+                        '上下文 ${_formatTokenLimit(model.contextWindowTokens)}',
+                  ),
+                  _TeamMetaChip(label: model.streaming ? '流式 开启' : '流式 关闭'),
+                  _TeamMetaChip(
+                    label: '温度 ${model.temperature.toStringAsFixed(1)}',
+                  ),
+                ],
                 selected: model.id == selected?.id,
                 onTap: () => setState(() => selectedModelId = model.id),
                 trailing: IconButton(
@@ -149,8 +160,22 @@ class _RoleManagementPageState extends State<RoleManagementPage> {
             for (final role in roles)
               _ObjectRow(
                 key: ValueKey('role-row-${role.id}'),
+                icon: Icons.badge_outlined,
                 title: role.name,
                 subtitle: role.description,
+                chips: [
+                  _TeamMetaChip(
+                    label: role.canReadProject ? '读项目 允许' : '读项目 禁止',
+                  ),
+                  _TeamMetaChip(
+                    label: role.canProposePatch ? '补丁 允许' : '补丁 禁止',
+                  ),
+                  _TeamMetaChip(
+                    label: role.commandPolicy.requiresConfirmation
+                        ? '命令 需确认'
+                        : '命令 允许',
+                  ),
+                ],
                 selected: role.id == selected?.id,
                 onTap: () => setState(() => selectedRoleId = role.id),
                 trailing: IconButton(
@@ -215,9 +240,25 @@ class _MemberManagementPageState extends State<MemberManagementPage> {
             for (final member in members)
               _ObjectRow(
                 key: ValueKey('member-row-${member.id}'),
+                icon: Icons.person_outline_rounded,
                 title: member.name,
                 subtitle:
-                    '${roleName(widget.controller.state, member.roleId)} · ${modelName(widget.controller.state, member.modelId)}',
+                    '${roleName(widget.controller.state, member.roleId)} · ${modelName(widget.controller.state, member.modelId)} · ${_memberTeamNames(widget.controller.state, member)}',
+                chips: [
+                  _TeamMetaChip(
+                    label: member.isSecretary
+                        ? '秘书成员'
+                        : '优先级 ${member.executionPriority}',
+                  ),
+                  _TeamMetaChip(
+                    label:
+                        '角色 ${roleName(widget.controller.state, member.roleId)}',
+                  ),
+                  _TeamMetaChip(
+                    label:
+                        '模型 ${modelName(widget.controller.state, member.modelId)}',
+                  ),
+                ],
                 selected: member.id == selected?.id,
                 onTap: () => setState(() => selectedMemberId = member.id),
                 trailing: Wrap(
@@ -535,6 +576,101 @@ class _TeamMetaChip extends StatelessWidget {
   }
 }
 
+class _CapabilityItem {
+  const _CapabilityItem({required this.label, required this.value});
+
+  final String label;
+  final String value;
+}
+
+class _CapabilityGrid extends StatelessWidget {
+  const _CapabilityGrid({required this.rows});
+
+  final List<_CapabilityItem> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisSpacing: 8,
+      mainAxisSpacing: 8,
+      childAspectRatio: 3.4,
+      children: [
+        for (final row in rows)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    row.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF64748B),
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    row.value,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                      color: Color(0xFF0F172A),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _PromptPreview extends StatelessWidget {
+  const _PromptPreview({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      constraints: const BoxConstraints(minHeight: 88),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F172A),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        text,
+        maxLines: 4,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: Color(0xFFE2E8F0),
+          fontFamily: 'monospace',
+          fontSize: 12,
+          height: 1.35,
+        ),
+      ),
+    );
+  }
+}
+
 class _TeamCardSpec {
   const _TeamCardSpec({required this.objectName, required this.purpose});
 
@@ -570,9 +706,39 @@ _TeamCardSpec _teamCardSpec(Team team) {
       purpose: '负责方案拆解、代码修改、补丁提交。',
     );
   }
-  return const _TeamCardSpec(
-    objectName: '协作团队',
-    purpose: '按成员组合执行当前协作流程。',
+  return const _TeamCardSpec(objectName: '协作团队', purpose: '按成员组合执行当前协作流程。');
+}
+
+String _providerLabel(ModelProfile model) {
+  final baseUrl = model.baseUrl.toLowerCase();
+  if (baseUrl.contains('localhost') || baseUrl.contains('127.0.0.1')) {
+    return '本地端点';
+  }
+  return 'OpenAI-compatible';
+}
+
+String _formatTokenLimit(int tokens) {
+  if (tokens >= 1000 && tokens % 1000 == 0) {
+    return '${tokens ~/ 1000}k';
+  }
+  return tokens.toString();
+}
+
+String _memberTeamNames(AppState state, TeamMember member) {
+  final names = state.teams
+      .where((team) => team.memberIds.contains(member.id))
+      .map((team) => _teamCardSpec(team).objectName)
+      .toList();
+  if (names.isEmpty) {
+    return '未加入团队';
+  }
+  return names.join('、');
+}
+
+RoleTemplate _roleFor(AppState state, TeamMember member) {
+  return state.roles.firstWhere(
+    (role) => role.id == member.roleId,
+    orElse: () => state.roles.first,
   );
 }
 
@@ -636,15 +802,19 @@ class _ObjectList extends StatelessWidget {
 class _ObjectRow extends StatelessWidget {
   const _ObjectRow({
     super.key,
+    required this.icon,
     required this.title,
     required this.subtitle,
+    this.chips = const [],
     this.selected = false,
     this.onTap,
     this.trailing,
   });
 
+  final IconData icon;
   final String title;
   final String subtitle;
+  final List<Widget> chips;
   final bool selected;
   final VoidCallback? onTap;
   final Widget? trailing;
@@ -667,8 +837,20 @@ class _ObjectRow extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(10),
             child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: selected
+                        ? const Color(0xFFDBEAFE)
+                        : const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, size: 18, color: const Color(0xFF2563EB)),
+                ),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -686,9 +868,14 @@ class _ObjectRow extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(color: Color(0xFF64748B)),
                       ),
+                      if (chips.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Wrap(spacing: 6, runSpacing: 6, children: chips),
+                      ],
                     ],
                   ),
                 ),
+                const SizedBox(width: 8),
                 if (trailing != null) trailing!,
               ],
             ),
@@ -756,17 +943,29 @@ class _ModelDetail extends StatelessWidget {
       child: Column(
         children: [
           _DetailRow(label: '名称', value: model.name),
+          _DetailRow(label: 'Provider', value: _providerLabel(model)),
           _DetailRow(label: '模型名', value: model.modelName),
           _DetailRow(label: 'Base URL', value: model.baseUrl),
-          _DetailRow(label: '流式输出', value: model.streaming ? '开启' : '关闭'),
-          _DetailRow(label: '最大 Token', value: model.maxTokens.toString()),
           _DetailRow(
-            label: '上下文窗口',
-            value: model.contextWindowTokens.toString(),
+            label: '上下文上限',
+            value: _formatTokenLimit(model.contextWindowTokens),
           ),
+          _DetailRow(label: '最大 Token', value: model.maxTokens.toString()),
           _DetailRow(
             label: '深度思考',
             value: reasoningEffortLabel(model.reasoningEffort),
+          ),
+          const SizedBox(height: 10),
+          _CapabilityGrid(
+            rows: [
+              _CapabilityItem(
+                label: '流式输出',
+                value: model.streaming ? '开启' : '关闭',
+              ),
+              const _CapabilityItem(label: '工具调用', value: '按角色权限'),
+              const _CapabilityItem(label: '返回思考区', value: '仅真实字段'),
+              const _CapabilityItem(label: '审计诊断', value: '写入'),
+            ],
           ),
         ],
       ),
@@ -794,11 +993,26 @@ class _RoleDetail extends StatelessWidget {
         children: [
           _DetailRow(label: '角色名称', value: role.name),
           _DetailRow(label: '用途', value: role.description),
-          _DetailRow(label: '读取项目', value: role.canReadProject ? '允许' : '禁止'),
-          _DetailRow(label: '生成补丁', value: role.canProposePatch ? '允许' : '禁止'),
-          _DetailRow(
-            label: '命令策略',
-            value: role.commandPolicy.requiresConfirmation ? '需确认' : '允许',
+          _DetailRow(label: '输出格式', value: role.outputFormatPrompt),
+          const SizedBox(height: 10),
+          _PromptPreview(text: role.identityPrompt),
+          const SizedBox(height: 10),
+          _CapabilityGrid(
+            rows: [
+              _CapabilityItem(
+                label: '读取项目文件',
+                value: role.canReadProject ? '允许' : '禁止',
+              ),
+              _CapabilityItem(
+                label: '请求命令',
+                value: role.commandPolicy.requiresConfirmation ? '需确认' : '允许',
+              ),
+              _CapabilityItem(
+                label: '应用补丁',
+                value: role.canProposePatch ? '生成后确认' : '禁止',
+              ),
+              const _CapabilityItem(label: '私聊可见', value: '按成员'),
+            ],
           ),
         ],
       ),
@@ -814,6 +1028,7 @@ class _MemberDetail extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final role = _roleFor(controller.state, member);
     return _Panel(
       key: ValueKey('member-detail-${member.id}'),
       title: '编辑成员',
@@ -833,8 +1048,32 @@ class _MemberDetail extends StatelessWidget {
             label: '绑定模型',
             value: modelName(controller.state, member.modelId),
           ),
+          _DetailRow(
+            label: '所属团队',
+            value: _memberTeamNames(controller.state, member),
+          ),
           _DetailRow(label: '成员类型', value: member.isSecretary ? '秘书' : '普通成员'),
-          const _DetailRow(label: '私聊入口', value: '可打开'),
+          const _DetailRow(label: '私聊入口', value: '启用'),
+          const SizedBox(height: 10),
+          _CapabilityGrid(
+            rows: [
+              _CapabilityItem(
+                label: '读取文件',
+                value: role.canReadProject ? '允许' : '禁止',
+              ),
+              _CapabilityItem(
+                label: '请求命令',
+                value: role.commandPolicy.requiresConfirmation ? '需确认' : '允许',
+              ),
+              const _CapabilityItem(label: '代表用户发送', value: '禁止'),
+              _CapabilityItem(
+                label: '参与群聊',
+                value: _memberTeamNames(controller.state, member) == '未加入团队'
+                    ? '未加入'
+                    : '允许',
+              ),
+            ],
+          ),
         ],
       ),
     );

@@ -660,6 +660,11 @@ void main() {
     expect(find.text('模型管理'), findsOneWidget);
     expect(find.text('模型列表'), findsOneWidget);
     expect(find.byTooltip('新增模型'), findsOneWidget);
+    expect(find.text('上下文 32k'), findsWidgets);
+    expect(find.text('流式 开启'), findsWidgets);
+    expect(find.text('Provider'), findsOneWidget);
+    expect(find.text('返回思考区'), findsOneWidget);
+    expect(find.text('仅真实字段'), findsOneWidget);
   });
 
   testWidgets('sidebar role button opens an independent role page', (
@@ -679,6 +684,12 @@ void main() {
     expect(find.text('角色管理'), findsOneWidget);
     expect(find.text('角色列表'), findsOneWidget);
     expect(find.byTooltip('新增角色'), findsOneWidget);
+    expect(find.text('读项目 允许'), findsWidgets);
+    expect(find.text('补丁 允许'), findsWidgets);
+    expect(find.text('命令 需确认'), findsWidgets);
+    expect(find.text('输出格式'), findsOneWidget);
+    expect(find.text('应用补丁'), findsOneWidget);
+    expect(find.text('生成后确认'), findsOneWidget);
   });
 
   testWidgets('sidebar member button opens an independent member page', (
@@ -699,6 +710,13 @@ void main() {
     expect(find.text('成员列表'), findsOneWidget);
     expect(find.byTooltip('新增成员'), findsOneWidget);
     expect(find.byTooltip('打开私聊'), findsWidgets);
+    expect(find.text('秘书成员'), findsOneWidget);
+    expect(find.text('角色 秘书'), findsOneWidget);
+    expect(find.text('模型 OpenAI Compatible'), findsWidgets);
+    expect(find.text('所属团队'), findsOneWidget);
+    expect(find.text('开发团队'), findsOneWidget);
+    expect(find.text('代表用户发送'), findsOneWidget);
+    expect(find.text('参与群聊'), findsOneWidget);
   });
 
   testWidgets('settings storage panel exposes directory actions', (
