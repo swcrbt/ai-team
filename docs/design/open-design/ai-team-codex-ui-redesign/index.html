@@ -130,7 +130,7 @@
     .component-row { display: flex; gap: 10px; flex-wrap: wrap; }
     .field-demo { height: 32px; border: 1px solid var(--border); border-radius: var(--r6); padding: 0 10px; display: flex; align-items: center; color: var(--muted); background: var(--surface); }
 
-    .app-frame { display: grid; grid-template-columns: 64px 282px minmax(0, 1fr); height: 960px; }
+    .app-frame { display: grid; grid-template-columns: 64px 282px minmax(0, 1fr); height: 960px; overflow: hidden; }
     .rail {
       background: var(--rail);
       color: oklch(70% 0.012 250);
@@ -171,7 +171,7 @@
     .session-top { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
     .session-meta { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-    .chat-pane { background: var(--workbench-bg); display: grid; grid-template-rows: 64px minmax(0, 1fr) 164px; position: relative; min-width: 0; }
+    .chat-pane { background: var(--workbench-bg); display: grid; grid-template-rows: 64px minmax(0, 1fr) 164px; position: relative; min-width: 0; min-height: 0; height: 960px; overflow: hidden; }
     .chat-header { background: oklch(99% 0.002 250); }
     .header-left, .header-actions { display: flex; align-items: center; gap: 12px; min-width: 0; }
     .avatar-stack { display: flex; }
@@ -180,7 +180,10 @@
     .header-copy { min-width: 0; }
     .header-copy h3 { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
     .header-copy p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
-    .message-scroll { padding: 22px 28px 22px; overflow-y: auto; display: grid; gap: 14px; align-content: start; min-height: 0; }
+    .message-scroll { padding: 22px 18px 22px 28px; overflow-y: auto; display: grid; gap: 14px; align-content: start; min-height: 0; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: oklch(70% 0.018 250) oklch(91% 0.006 250); }
+    .message-scroll::-webkit-scrollbar { width: 10px; }
+    .message-scroll::-webkit-scrollbar-track { background: oklch(91% 0.006 250); border-radius: 999px; }
+    .message-scroll::-webkit-scrollbar-thumb { background: oklch(70% 0.018 250); border: 2px solid oklch(91% 0.006 250); border-radius: 999px; }
     .message-row { display: grid; grid-template-columns: 34px minmax(0, 760px); gap: 10px; align-items: start; }
     .message-row.user { grid-template-columns: minmax(0, 760px) 34px; justify-content: end; }
     .message-row.user .message-stack { order: 1; }
@@ -203,9 +206,10 @@
     .code-line { font-family: var(--font-mono); font-size: 12px; color: oklch(34% 0.02 250); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .command-card, .patch-card { border: 1px solid var(--border); border-radius: var(--r8); background: oklch(99% 0.002 250); overflow: hidden; }
     .command-card > header, .patch-card > header { min-height: 38px; padding: 0 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-    .command-flow { padding: 10px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .command-flow { padding: 10px; display: grid; gap: 8px; }
     .command-state { min-height: 86px; border: 1px solid var(--border); border-radius: var(--r6); padding: 9px; display: grid; gap: 8px; align-content: start; background: var(--surface); }
     .command-state.pending { border-color: oklch(86% 0.07 78); background: var(--amber-soft); }
+    .command-state.approved { border-color: oklch(84% 0.05 255); background: var(--blue-soft); }
     .command-state.rejected { border-color: oklch(84% 0.07 28); background: var(--red-soft); }
     .command-state.executed { border-color: oklch(84% 0.05 150); background: var(--green-soft); }
     .command-state strong { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -237,7 +241,7 @@
     .token-ring span { position: relative; z-index: 1; font: 10px var(--font-mono); color: var(--fg); }
     .token-label { display: grid; gap: 1px; font-size: 11px; color: var(--muted); }
     .token-label strong { color: var(--fg); font-size: 12px; }
-    .token-popover { position: absolute; right: 0; bottom: 40px; width: 212px; border: 1px solid var(--border-strong); border-radius: var(--r8); background: var(--surface); box-shadow: 0 14px 36px oklch(18% 0.01 250 / 14%); padding: 10px; display: grid; gap: 7px; z-index: 5; }
+    .token-popover { position: absolute; right: 0; bottom: 40px; width: 224px; border: 1px solid var(--border-strong); border-radius: var(--r8); background: var(--surface); box-shadow: 0 14px 36px oklch(18% 0.01 250 / 14%); padding: 10px; display: grid; gap: 7px; z-index: 5; }
     .token-popover::after { content: ""; position: absolute; right: 14px; bottom: -6px; width: 10px; height: 10px; transform: rotate(45deg); background: var(--surface); border-right: 1px solid var(--border-strong); border-bottom: 1px solid var(--border-strong); }
     .token-popover-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
     .token-bar { height: 5px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
@@ -289,6 +293,11 @@
     .prompt-box { min-height: 88px; border: 1px solid var(--border); border-radius: var(--r6); background: oklch(98.5% 0.002 250); padding: 9px; font-family: var(--font-mono); font-size: 12px; color: oklch(34% 0.02 250); overflow: hidden; }
     .chip-list { display: flex; gap: 6px; flex-wrap: wrap; }
     .mini-chip { min-height: 24px; border: 1px solid var(--border); border-radius: 999px; padding: 3px 8px; background: var(--surface); color: var(--muted); font-size: 12px; }
+    .team-management-row { min-height: 54px; padding: 8px 10px; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+    .team-management-row:last-child { border-bottom: 0; }
+    .team-management-row.active { background: var(--blue-soft); }
+    .team-name { min-width: 0; display: grid; gap: 3px; }
+    .team-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .route-board { padding: 22px; display: grid; grid-template-rows: 54px 1fr; gap: 16px; background: var(--workbench-bg); }
     .route-board > header { display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border); border-radius: var(--r8); background: var(--surface); padding: 0 16px; }
     .route-board h3 { margin: 0; font-size: 16px; }
@@ -447,7 +456,10 @@
           <div class="message-scroll" data-od-id="scrolling-message-flow">
             <div class="message-row user" data-od-id="message-user-request"><div class="message-avatar">你</div><div class="message-stack"><div class="speaker-line"><strong>你</strong><span class="mono">09:38:12</span></div><article class="message-card"><div class="message-body"><p>请检查项目权限边界，并准备一个最小补丁。命令需要先给我确认。</p></div></article></div></div>
             <div class="message-row" data-od-id="message-thinking-sample"><div class="message-avatar">Kai</div><div class="message-stack"><div class="speaker-line"><strong>架构师 Kai</strong><span class="mono">09:39:04</span><span class="status blue"><span class="dot"></span>thinking</span></div><article class="message-card"><div class="message-body"><div class="thinking-panel" data-od-id="thinking-area"><div class="thinking-head"><strong>思考</strong><span class="mono caption">provider returned</span></div><div class="thinking-steps"><div class="thinking-line">识别当前项目根目录，并排除仓库外路径。</div><div class="thinking-line">将测试命令标记为需要用户确认后执行。</div></div></div><p>已读取项目约束。当前可写范围只落在项目根目录；补丁前会先给出路径证据。</p><div class="evidence-row"><span class="status green"><span class="dot"></span>边界内</span><span class="code-line">lib/core/commands.dart · read-only evidence</span><span class="mono caption">read</span></div></div></article></div></div>
-            <div class="message-row"><div class="message-avatar">Lin</div><div class="message-stack"><div class="speaker-line"><strong>Reviewer Lin</strong><span class="mono">09:41:26</span></div><article class="message-card"><div class="message-body"><p>发现 composer 应保持独立底部区域。消息滚动容器需要保留底部安全间距，不让输入框覆盖最后一条回复。</p><div class="command-card" data-od-id="command-interaction-states"><header><strong>命令请求</strong><span class="mono">flutter test test/app_widget_test.dart</span></header><div class="command-flow"><div class="command-state pending"><strong>待确认<span class="status amber"><span class="dot"></span>pending</span></strong><span class="caption">用户需要明确允许或拒绝，默认不执行。</span><div class="command-actions"><button class="primary-btn">允许</button><button class="danger-btn">拒绝</button></div></div><div class="command-state"><strong>已允许<span class="mono caption">09:41:40</span></strong><span class="caption">进入执行中，按钮替换为停止和查看日志。</span><div class="command-actions"><button class="ghost-btn">停止</button><button class="ghost-btn">日志</button></div></div><div class="command-state rejected"><strong>已拒绝<span class="status red"><span class="dot"></span>denied</span></strong><span class="caption">不进入执行队列，记录拒绝原因与操作者。</span><span class="mono caption">user rejected</span></div><div class="command-state executed"><strong>已执行<span class="status green"><span class="dot"></span>exit 0</span></strong><span class="caption">输出摘要进入消息流，并写入审计。</span><span class="mono caption">312 tests · 0 failed</span></div></div></div></div></article></div></div>
+            <div class="message-row" data-od-id="command-pending-message"><div class="message-avatar">Lin</div><div class="message-stack"><div class="speaker-line"><strong>Reviewer Lin</strong><span class="mono">09:41:26</span></div><article class="message-card"><div class="message-body"><p>发现 composer 应保持独立底部区域。消息滚动容器需要保留底部安全间距，不让输入框覆盖最后一条回复。</p><div class="command-card" data-od-id="command-pending-card"><header><strong>命令请求</strong><span class="mono">flutter test test/app_widget_test.dart</span></header><div class="command-flow"><div class="command-state pending"><strong>待确认<span class="status amber"><span class="dot"></span>pending</span></strong><span class="caption">用户需要明确允许或拒绝，默认不执行。</span><div class="command-actions"><button class="primary-btn">允许</button><button class="danger-btn">拒绝</button></div></div></div></div></div></article></div></div>
+            <div class="message-row user" data-od-id="command-approved-message"><div class="message-avatar">你</div><div class="message-stack"><div class="speaker-line"><strong>你</strong><span class="mono">09:41:40</span></div><article class="message-card"><div class="message-body"><p>允许执行这条只读验证命令。</p><div class="command-card" data-od-id="command-approved-card"><header><strong>命令已允许</strong><span class="mono">flutter test test/app_widget_test.dart</span></header><div class="command-flow"><div class="command-state approved"><strong>执行中<span class="status blue"><span class="dot"></span>running</span></strong><span class="caption">按钮替换为停止和查看日志，状态会继续写回消息流。</span><div class="command-actions"><button class="ghost-btn">停止</button><button class="ghost-btn">日志</button></div></div></div></div></div></article></div></div>
+            <div class="message-row" data-od-id="command-executed-message"><div class="message-avatar">Kai</div><div class="message-stack"><div class="speaker-line"><strong>架构师 Kai</strong><span class="mono">09:42:05</span></div><article class="message-card"><div class="message-body"><p>命令执行完成，摘要进入消息流并写入审计。</p><div class="command-card" data-od-id="command-executed-card"><header><strong>命令结果</strong><span class="mono">flutter test test/app_widget_test.dart</span></header><div class="command-flow"><div class="command-state executed"><strong>已执行<span class="status green"><span class="dot"></span>exit 0</span></strong><span class="caption">312 tests · 0 failed</span><span class="mono caption">duration 18.4s</span></div></div></div></div></article></div></div>
+            <div class="message-row" data-od-id="command-rejected-message"><div class="message-avatar">Sec</div><div class="message-stack"><div class="speaker-line"><strong>秘书</strong><span class="mono">09:42:10</span></div><article class="message-card"><div class="message-body"><p>另一条越界命令作为拒绝状态示例；拒绝后只留下原因和审计记录。</p><div class="command-card" data-od-id="command-rejected-card"><header><strong>命令已拒绝</strong><span class="mono">rm -rf /tmp/outside-project</span></header><div class="command-flow"><div class="command-state rejected"><strong>已拒绝<span class="status red"><span class="dot"></span>denied</span></strong><span class="caption">不进入执行流程，记录拒绝原因与操作者。</span><span class="mono caption">user rejected</span></div></div></div></div></article></div></div>
             <div class="message-row"><div class="message-avatar">Sec</div><div class="message-stack"><div class="speaker-line"><strong>秘书</strong><span class="mono">09:42:18</span></div><article class="message-card"><div class="message-body"><p>补丁摘要已生成。涉及聊天布局、侧边栏入口、安全状态抽屉。未触碰模型配置。</p><div class="patch-card" data-od-id="diff-review-interaction"><header><strong>Diff review</strong><span class="status amber"><span class="dot"></span>待确认</span></header><div class="patch-meta"><div class="patch-metric"><strong>+42 -18</strong><span class="caption">变更量</span></div><div class="patch-metric"><strong>2</strong><span class="caption">文件</span></div><div class="patch-metric"><strong>3</strong><span class="caption">hunks</span></div></div><div class="file-tabs"><span class="file-tab active">chat_view.dart</span><span class="file-tab">sidebar.dart</span></div><div class="diff-view"><div class="diff-row neutral"><span>@@</span><span>composer layout</span></div><div class="diff-row del"><span>-</span><span>message flow owns input controls</span></div><div class="diff-row add"><span>+</span><span>composer stays fixed at bottom with token meter</span></div><div class="diff-row add"><span>+</span><span>command and diff approvals render as interaction cards</span></div></div><div class="review-actions"><div class="command-actions"><button class="ghost-btn">展开 diff</button><button class="danger-btn">拒绝</button><button class="primary-btn">确认应用</button></div><span class="status green"><span class="dot"></span>已应用状态示例</span></div></div></div></article></div></div>
           </div>
           <button class="return-bottom" data-od-id="return-to-bottom"><svg class="icon"><use href="#i-chevron"/></svg>回到底部</button>
@@ -461,7 +473,7 @@
           </div>
           <footer class="composer" data-od-id="fixed-bottom-composer">
             <div class="composer-box"><div class="composer-text">让 Reviewer Lin 再看一遍补丁摘要，并把命令审批留在安全状态抽屉里。</div><button class="send-btn"><svg class="icon"><use href="#i-send"/></svg>发送</button></div>
-            <div class="composer-foot"><span class="composer-channel">当前会话 · Team Desk</span><div class="composer-tools"><div class="token-widget" data-od-id="context-token-meter"><div class="token-popover"><div class="token-popover-row"><strong>上下文</strong><span class="mono">12.4k / 32k</span></div><div class="token-bar"><span></span></div><div class="token-popover-row"><span>输入 tokens</span><strong class="mono">8.2k</strong></div><div class="token-popover-row"><span>输出 tokens</span><strong class="mono">4.2k</strong></div></div><div class="token-ring" style="--percent: 39"><span>39%</span></div><div class="token-label"><strong>12.4k</strong><span>tokens</span></div></div><span class="status green"><span class="dot"></span>safe</span></div></div>
+            <div class="composer-foot"><span class="composer-channel">当前会话 · Team Desk</span><div class="composer-tools"><div class="token-widget" data-od-id="context-token-meter"><div class="token-popover"><div class="token-popover-row"><strong>上下文</strong><span class="mono">12.4k / 32k</span></div><div class="token-bar"><span></span></div><div class="token-popover-row"><span>输入 tokens</span><strong class="mono">8.2k</strong></div><div class="token-popover-row"><span>输出 tokens</span><strong class="mono">4.2k</strong></div><div class="token-popover-row"><span>命中缓存</span><strong class="mono">3.6k</strong></div></div><div class="token-ring" style="--percent: 39"><span>39%</span></div><div class="token-label"><strong>12.4k</strong><span>tokens</span></div></div><span class="status green"><span class="dot"></span>safe</span></div></div>
           </footer>
         </section>
       </div></div>
@@ -504,7 +516,7 @@
           <button class="return-bottom"><svg class="icon"><use href="#i-chevron"/></svg>回到底部</button>
           <footer class="composer" data-od-id="private-fixed-bottom-composer">
             <div class="composer-box"><div class="composer-text">这里是给 Lin 的私聊回复，发送动作固定在输入框右下角。</div><button class="send-btn"><svg class="icon"><use href="#i-send"/></svg>发送</button></div>
-            <div class="composer-foot"><span class="composer-channel">当前会话 · 私聊 / Reviewer Lin</span><div class="composer-tools"><div class="token-widget" data-od-id="private-context-token-meter"><div class="token-popover"><div class="token-popover-row"><strong>上下文</strong><span class="mono">4.8k / 32k</span></div><div class="token-bar"><span style="width:15%"></span></div><div class="token-popover-row"><span>输入 tokens</span><strong class="mono">3.1k</strong></div><div class="token-popover-row"><span>输出 tokens</span><strong class="mono">1.7k</strong></div></div><div class="token-ring" style="--percent: 15"><span>15%</span></div><div class="token-label"><strong>4.8k</strong><span>tokens</span></div></div><span class="status green"><span class="dot"></span>safe</span></div></div>
+            <div class="composer-foot"><span class="composer-channel">当前会话 · 私聊 / Reviewer Lin</span><div class="composer-tools"><div class="token-widget" data-od-id="private-context-token-meter"><div class="token-popover"><div class="token-popover-row"><strong>上下文</strong><span class="mono">4.8k / 32k</span></div><div class="token-bar"><span style="width:15%"></span></div><div class="token-popover-row"><span>输入 tokens</span><strong class="mono">3.1k</strong></div><div class="token-popover-row"><span>输出 tokens</span><strong class="mono">1.7k</strong></div><div class="token-popover-row"><span>命中缓存</span><strong class="mono">0.8k</strong></div></div><div class="token-ring" style="--percent: 15"><span>15%</span></div><div class="token-label"><strong>4.8k</strong><span>tokens</span></div></div><span class="status green"><span class="dot"></span>safe</span></div></div>
           </footer>
         </section>
       </div></div>
@@ -532,7 +544,7 @@
           <div class="admin-content">
             <div class="entry-grid" data-od-id="top-level-entry-grid">
               <article class="entry-cell"><header><div><h3>消息</h3><p>Team Desk 与成员私聊</p></div><div class="entry-mark"><svg class="icon"><use href="#i-chat"/></svg></div></header><span class="mono caption">12 conversations</span><span class="status green"><span class="dot"></span>active</span></article>
-              <article class="entry-cell"><header><div><h3>团队</h3><p>协作模式与成员组合</p></div><div class="entry-mark"><svg class="icon"><use href="#i-team"/></svg></div></header><span class="mono caption">Core Review</span><span class="status blue"><span class="dot"></span>configured</span></article>
+              <article class="entry-cell"><header><div><h3>团队</h3><p>团体列表与成员组合</p></div><div class="entry-mark"><svg class="icon"><use href="#i-team"/></svg></div></header><span class="mono caption">3 groups</span><span class="status blue"><span class="dot"></span>configured</span></article>
               <article class="entry-cell"><header><div><h3>模型</h3><p>OpenAI-compatible profiles</p></div><div class="entry-mark"><svg class="icon"><use href="#i-model"/></svg></div></header><span class="mono caption">gpt-5-codex</span><span class="status green"><span class="dot"></span>ready</span></article>
               <article class="entry-cell"><header><div><h3>角色</h3><p>架构师、Reviewer、秘书</p></div><div class="entry-mark"><svg class="icon"><use href="#i-role"/></svg></div></header><span class="mono caption">7 roles</span><span class="status blue"><span class="dot"></span>mapped</span></article>
               <article class="entry-cell"><header><div><h3>成员</h3><p>模型实例与权限</p></div><div class="entry-mark"><svg class="icon"><use href="#i-member"/></svg></div></header><span class="mono caption">5 members</span><span class="status green"><span class="dot"></span>online</span></article>
@@ -542,7 +554,7 @@
             </div>
             <div class="data-table" data-od-id="management-table">
               <div class="data-row head"><span>入口</span><span>当前对象</span><span>状态</span><span>更新时间</span></div>
-              <div class="data-row"><strong>团队</strong><span>Core Review</span><span class="status green"><span class="dot"></span>可用</span><span class="mono">09:12</span></div>
+              <div class="data-row"><strong>团队</strong><span>3 个团体</span><span class="status green"><span class="dot"></span>可用</span><span class="mono">09:12</span></div>
               <div class="data-row"><strong>模型</strong><span>gpt-5-codex</span><span class="status green"><span class="dot"></span>可调用</span><span class="mono">09:18</span></div>
               <div class="data-row"><strong>项目</strong><span>ai-team</span><span class="status amber"><span class="dot"></span>边界复核</span><span class="mono">09:42</span></div>
               <div class="data-row"><strong>审计</strong><span>model_request_diagnostic</span><span class="status blue"><span class="dot"></span>写入</span><span class="mono">09:42</span></div>
@@ -573,11 +585,11 @@
           <header class="admin-header"><h3>管理设置 · 按侧边栏顺序展开</h3><div class="header-actions"><span class="status blue"><span class="dot"></span>4 pages</span><button class="primary-btn">保存更改</button></div></header>
           <div class="detail-content">
             <article class="detail-page" data-od-id="team-settings-detail">
-              <header><h3><span class="mono">01</span><svg class="icon"><use href="#i-team"/></svg>团队</h3><span class="status green"><span class="dot"></span>可用</span></header>
+              <header><h3><span class="mono">01</span><svg class="icon"><use href="#i-team"/></svg>团队</h3><button class="primary-btn">新建团体</button></header>
               <div class="setting-stack">
-                <section class="setting-group"><header><strong>基础信息</strong><button class="ghost-btn">重命名</button></header><div class="setting-row"><span>团队名称</span><strong>Core Review</strong></div><div class="setting-row"><span>默认入口</span><strong>Team Desk</strong></div><div class="setting-row"><span>秘书成员</span><strong>Secretary</strong></div></section>
-                <section class="setting-group"><header><strong>协作模式</strong><span class="caption">default</span></header><div class="setting-row"><span>执行模式</span><div class="segmented"><span class="segment active">串行</span><span class="segment">并行</span></div></div><div class="setting-row"><span>失败策略</span><strong>重试一次</strong></div><div class="setting-row"><span>可见范围</span><strong>共享 prior chat</strong></div></section>
-                <section class="setting-group"><header><strong>成员编排</strong><button class="tool-square"><svg class="icon"><use href="#i-plus"/></svg></button></header><div class="setting-row"><span>Kai</span><span class="status blue"><span class="dot"></span>架构师</span></div><div class="setting-row"><span>Lin</span><span class="status amber"><span class="dot"></span>Reviewer</span></div><div class="setting-row"><span>Secretary</span><span class="status green"><span class="dot"></span>汇总</span></div></section>
+                <section class="setting-group"><header><strong>团体列表</strong><span class="caption">3 groups</span></header><div class="team-management-row active"><div class="team-name"><strong>Core Review</strong><span class="caption">Kai, Lin, Secretary · 串行审阅</span></div><span class="status green"><span class="dot"></span>启用</span></div><div class="team-management-row"><div class="team-name"><strong>Bug Bash</strong><span class="caption">Runner, Reviewer · 并行排查</span></div><span class="status blue"><span class="dot"></span>模板</span></div><div class="team-management-row"><div class="team-name"><strong>Release Gate</strong><span class="caption">Architect, QA, Secretary · 发布检查</span></div><span class="status amber"><span class="dot"></span>草稿</span></div></section>
+                <section class="setting-group"><header><strong>团体操作</strong><span class="caption">collection</span></header><div class="setting-row"><span>创建方式</span><strong>空白 / 从模板</strong></div><div class="setting-row"><span>批量操作</span><strong>复制 · 停用 · 归档</strong></div><div class="setting-row"><span>排序</span><strong>最近使用优先</strong></div></section>
+                <section class="setting-group"><header><strong>选中团体摘要</strong><button class="ghost-btn">编辑成员</button></header><div class="setting-row"><span>成员数</span><strong>3 members</strong></div><div class="setting-row"><span>默认秘书</span><strong>Secretary</strong></div><div class="setting-row"><span>可见范围</span><strong>共享 prior chat</strong></div></section>
               </div>
             </article>
             <article class="detail-page" data-od-id="model-settings-detail">
@@ -627,9 +639,9 @@
             <header><div class="route-title"><svg class="icon"><use href="#i-team"/></svg><strong>团队</strong></div><button class="tool-square"><svg class="icon"><use href="#i-plus"/></svg></button></header>
             <div class="route-content">
               <div class="route-row"><strong>Core Review</strong><span class="caption">Kai, Lin, Secretary · serial</span></div>
-              <div class="route-field"><span>协作模式</span><strong>串行</strong></div>
-              <div class="route-field"><span>成员可见性</span><strong>共享 prior chat</strong></div>
-              <div class="route-mini-table"><div class="route-mini-row"><span>Kai</span><span>架构师</span></div><div class="route-mini-row"><span>Lin</span><span>Reviewer</span></div></div>
+              <div class="route-field"><span>团体数量</span><strong>3 groups</strong></div>
+              <div class="route-field"><span>批量操作</span><strong>复制 / 停用 / 归档</strong></div>
+              <div class="route-mini-table"><div class="route-mini-row"><span>Bug Bash</span><span>模板</span></div><div class="route-mini-row"><span>Release Gate</span><span>草稿</span></div></div>
             </div>
           </section>
           <section class="route-page" data-od-id="route-page-models">

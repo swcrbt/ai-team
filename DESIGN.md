@@ -45,8 +45,8 @@
 
 ## Components
 - Existing components to reuse: Flutter Material 3 widgets, existing sidebars, chat pane, split send button, shared dialog frame, management panels, and audit rows.
-- New/changed components: fixed-bottom chat composer with lower-right send action, circular token meter with input/output token breakdown, returned-thinking panel inside messages, command approval state card, diff review card, on-demand safety drawer, safety-oriented project review panel, audit detail drawer, sidebar icon components, compact state pills, concrete page layouts for every sidebar entry.
-- Variants and states: sidebar icon default/hover/active/disabled, command pending/approved/executed/denied/failed, patch pending/applied/rejected, diff collapsed/expanded/applied, model streaming/stopped/failed, empty project.
+- New/changed components: fixed-bottom chat composer with lower-right send action, circular token meter with input/output/cache-hit token breakdown, returned-thinking panel inside messages, command approval state card, diff review card, team collection management page, on-demand safety drawer, safety-oriented project review panel, audit detail drawer, sidebar icon components, compact state pills, concrete page layouts for every sidebar entry.
+- Variants and states: sidebar icon default/hover/active/disabled, command pending/approved/executed/denied/failed as separate message variants rather than simultaneous state panels, patch pending/applied/rejected, diff collapsed/expanded/applied, model streaming/stopped/failed, empty project.
 - Token/component ownership: keep tokens local to `lib/ui` theme unless a broader design-system refactor is approved.
 
 ## Accessibility
@@ -66,6 +66,7 @@
 - Empty: no project, no audit, and no command request states should provide one clear primary action.
 - Error: model/command/project errors show source, recoverable action, and audit reference.
 - Success: applied patches and executed commands enter audit immediately.
+- Management: the team page manages the collection of team/group objects; member composition is shown as selected-team summary, not as the page's only purpose.
 - Disabled: blocked actions state why, especially missing project or secretary constraints.
 - Offline/slow network: model request diagnostics and retry/stop states stay visible.
 
