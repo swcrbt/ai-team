@@ -162,16 +162,16 @@ class _SidebarButtonState extends State<_SidebarButton> {
 
   @override
   Widget build(BuildContext context) {
-    final foreground = widget.selected
-        ? Colors.white
+    final visualState = widget.selected
+        ? SidebarIconVisualState.active
         : hovered
-            ? const Color(0xFFE6E8EC)
-            : const Color(0xFFA8AFBD);
-    final background = widget.selected
-        ? const Color(0xFF282C35)
-        : hovered
-            ? const Color(0xFF22262E)
-            : Colors.transparent;
+            ? SidebarIconVisualState.hover
+            : SidebarIconVisualState.normal;
+    final background = switch (visualState) {
+      SidebarIconVisualState.active => const Color(0xFF282C35),
+      SidebarIconVisualState.hover => const Color(0xFF22262E),
+      _ => Colors.transparent,
+    };
     return Tooltip(
       message: widget.label,
       child: MouseRegion(
@@ -217,7 +217,10 @@ class _SidebarButtonState extends State<_SidebarButton> {
                       ),
                     ),
                     child: Center(
-                      child: SidebarLinearIcon(widget.icon, color: foreground),
+                      child: SidebarLinearIcon(
+                        widget.icon,
+                        state: visualState,
+                      ),
                     ),
                   ),
                 ),
@@ -241,23 +244,46 @@ enum SidebarIconKind {
   settings,
 }
 
+enum SidebarIconVisualState {
+  normal,
+  hover,
+  active,
+  disabled,
+}
+
 class SidebarLinearIcon extends StatelessWidget {
   const SidebarLinearIcon(
     this.kind, {
     super.key,
-    this.color = const Color(0xFFA8AFBD),
+    this.state = SidebarIconVisualState.normal,
+    this.color,
+    this.size = 20,
   });
 
   final SidebarIconKind kind;
-  final Color color;
+  final SidebarIconVisualState state;
+  final Color? color;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      size: const Size.square(20),
-      painter: _SidebarIconPainter(kind: kind, color: color),
+      size: Size.square(size),
+      painter: _SidebarIconPainter(
+        kind: kind,
+        color: color ?? _sidebarIconColor(state),
+      ),
     );
   }
+}
+
+Color _sidebarIconColor(SidebarIconVisualState state) {
+  return switch (state) {
+    SidebarIconVisualState.active => Colors.white,
+    SidebarIconVisualState.hover => const Color(0xFFE6E8EC),
+    SidebarIconVisualState.disabled => const Color(0xFF666D78),
+    SidebarIconVisualState.normal => const Color(0xFFA8AFBD),
+  };
 }
 
 class _SidebarIconPainter extends CustomPainter {

@@ -85,4 +85,3 @@
 
 ## Open questions
 - [ ] Should Inter become an explicit app font, or should implementation keep Flutter platform defaults while matching spacing and hierarchy?
-- [ ] Should the custom sidebar icons ship as local vector assets, custom painters, or a mapped Material Icons implementation?

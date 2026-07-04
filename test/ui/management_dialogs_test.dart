@@ -1,3 +1,5 @@
+import 'package:ai_team/ui/sidebar.dart';
+
 import 'app_widget_test_support.dart';
 
 void main() {
@@ -35,6 +37,76 @@ void main() {
         lessThan(tester.getTopLeft(find.byTooltip(labels[index + 1])).dy),
       );
     }
+  });
+
+  testWidgets('left sidebar renders custom semantic icons and states', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    final icons = tester
+        .widgetList<SidebarLinearIcon>(find.byType(SidebarLinearIcon))
+        .toList();
+    expect(
+      icons.map((icon) => icon.kind),
+      orderedEquals(SidebarIconKind.values),
+    );
+    expect(icons.map((icon) => icon.size), everyElement(20));
+    expect(icons.first.state, SidebarIconVisualState.active);
+    expect(
+      icons.skip(1).map((icon) => icon.state),
+      everyElement(SidebarIconVisualState.normal),
+    );
+
+    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await gesture.addPointer(location: tester.getCenter(find.byTooltip('团队')));
+    await tester.pump();
+
+    final hoveredIcons = tester
+        .widgetList<SidebarLinearIcon>(find.byType(SidebarLinearIcon))
+        .toList();
+    final teamIcon = hoveredIcons.singleWhere(
+      (icon) => icon.kind == SidebarIconKind.teams,
+    );
+    expect(teamIcon.state, SidebarIconVisualState.hover);
+
+    await gesture.removePointer();
+  });
+
+  testWidgets('sidebar icon component covers eight semantics and four states', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      Directionality(
+        textDirection: TextDirection.ltr,
+        child: Wrap(
+          children: [
+            for (final kind in SidebarIconKind.values)
+              for (final state in SidebarIconVisualState.values)
+                SidebarLinearIcon(kind, state: state),
+          ],
+        ),
+      ),
+    );
+
+    final icons = tester
+        .widgetList<SidebarLinearIcon>(find.byType(SidebarLinearIcon))
+        .toList();
+    expect(icons.length, SidebarIconKind.values.length * 4);
+    for (final kind in SidebarIconKind.values) {
+      for (final state in SidebarIconVisualState.values) {
+        expect(
+          icons.where((icon) => icon.kind == kind && icon.state == state),
+          hasLength(1),
+        );
+      }
+    }
+    expect(icons.map((icon) => icon.size), everyElement(20));
   });
 
   testWidgets('sidebar team button opens team management', (tester) async {
