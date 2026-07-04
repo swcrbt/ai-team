@@ -1,94 +1,92 @@
 # AI Team
 
-AI Team 是一个本地优先的 Flutter 桌面应用，用聊天方式驱动多模型协同开发团队。用户可以配置 OpenAI 兼容模型、角色提示词、团队成员和本地项目工作区，由默认秘书成员在团队会话中分配任务、汇总成员输出，并通过受控补丁流程修改本地文件。
+AI Team 是一个本地优先的 Flutter 桌面应用，用 Codex-like 的聊天工作台组织多模型协作团队。用户可以配置 OpenAI 兼容模型、角色、成员、团队和项目安全策略，通过群聊或私聊驱动成员完成分析、命令审批、diff 审阅和审计留痕。
 
 ## 当前能力
 
-- 飞书式聊天工作台：深色应用栏、群聊/私聊会话列表、聊天主区，以及独立的模型、角色、成员、团队、项目和设置管理页。
-- OpenAI 兼容模型配置：`baseUrl`、`apiKey`、`modelName`、流式开关、温度和最大 Token。
-- 角色配置：身份、目标、约束、输出格式、命令白名单、命令黑名单、目录限制和命令确认策略。
-- 成员配置：成员名称、角色、模型和默认秘书成员。
-- 团队管理：创建团队名称，把已有成员加入团队，选择串行或并行协同模式，并从选定团队发起群聊。
-- 团队会话：创建团队时可选择串行或并行协同；用户任务先生成标题进入队列，秘书分工后成员按团队协同模式执行，秘书按规则生成增量或最终汇总。
-- 任务队列：群聊和私聊都支持任务优先级、暂停继续、删除确认、追加备注、历史记录和关联聊天跳转。
-- 成员调度：成员可配置执行优先级；失败时自动重试一次，仍失败则按同角色优先级转派，无法转派时记录失败并进入汇总。
-- 成员私聊：默认保留和秘书的私聊；其他成员从成员管理发起聊天后出现，输出与团队会话分离保存。
-- 设置中心：命令、导入导出和审计集中在设置页管理；模型、角色、成员、团队和项目工作区分别在独立管理页维护。
-- 本地项目：选择工作区后可浏览安全相对路径、读取文件、生成 diff 补丁，并且必须经用户确认后才应用。
-- 命令审批：角色命令策略先评估命令，允许的命令也可要求用户确认，执行结果进入审计日志。
-- 本地持久化：应用状态保存在本机，API Key 通过 secret store 抽象保存，普通 JSON 状态默认不写入密钥。
-- 配置导入导出：导出密钥需要显式选择包含密钥，导入失败时保留当前状态。
+- Codex-like 工作台：64px 深色图标侧边栏，入口顺序为消息、团队、模型、角色、成员、项目、审计和设置。
+- 消息体验：消息栏只展示群聊和私聊，聊天区采用顶部 header、中间消息流、底部固定 composer。
+- 输入区：发送按钮固定在右下角，token 圆形进度位于发送按钮左侧，弹层展示上下文、输入、输出和缓存命中。
+- 模型管理：按模型列表维护 provider、模型名、Base URL、上下文窗口、流式开关、温度和最大 Token。
+- 角色管理：按角色列表维护职责、提示词、命令策略和项目读取/补丁权限。
+- 成员管理：按成员列表维护角色与模型绑定，并可从成员行打开私聊。
+- 团队管理：用卡片管理开发团队、测试团队等团队对象，编辑成员组合与协作模式，并从团队发起群聊。
+- 项目管理：集中展示项目列表、边界状态、命令审批和补丁确认。
+- 命令审批：命令请求以独立消息状态呈现，待审批可允许或拒绝，已允许可执行、停止或查看日志。
+- Diff 审阅：补丁以文件 tab、增删统计和展开视图呈现，用户确认后才应用。
+- 审计日志：按最新优先展示命令、补丁、模型诊断和配置变更记录，支持过滤和详情查看。
+- 设置中心：管理持久化存储目录、导入导出和应用级配置。
 
 ## 数据边界
 
-应用不依赖后端服务。默认数据文件位于用户主目录下的应用数据目录，密钥不进入常规配置 JSON。导出配置时，只有用户显式选择包含密钥，才会把 API Key 写入导出文件。
+应用不依赖后端服务。普通状态、会话、审计和缓存使用应用内配置的持久化目录；API Key 通过 secret store 抽象保存，默认不会写入普通 JSON 配置。导出配置时，只有用户显式选择包含密钥，才会把 API Key 写入导出文件。
 
-本地项目写入采用补丁确认模式。模型和成员不能直接改文件，应用会先生成 unified diff，用户确认后才写入目标工作区文件。
+项目写入采用补丁确认模式。模型和成员不能直接改文件，应用会先生成 unified diff，用户确认后才写入目标项目文件。
+
+思考内容只展示模型 provider 返回的 reasoning/thinking 字段，不生成或转述隐藏推理。
 
 ## 开发环境
 
 项目使用 Flutter 桌面端，当前主要验证 macOS。
 
-架构边界见 [docs/architecture.md](docs/architecture.md)。旧的公共导入
-`app.dart`、`core/domain.dart`、`core/orchestrator.dart` 和
-`core/model_gateway.dart` 保持兼容；新增代码优先使用更聚焦的
-`application`、`ui`、`core/workspace`、`core/commands`、`core/orchestration`
-和 `core/model` 模块。
+架构边界见 [docs/architecture.md](docs/architecture.md)。旧的公共导入 `app.dart`、`core/domain.dart`、`core/orchestrator.dart` 和 `core/model_gateway.dart` 保持兼容；新增代码优先使用更聚焦的 `application`、`ui`、`core/workspace`、`core/commands`、`core/orchestration` 和 `core/model` 模块。
+
+准备依赖：
 
 ```sh
-/Users/swcrbt/develop/flutter/bin/flutter --version
-/Users/swcrbt/develop/flutter/bin/flutter pub get
+flutter --version
+flutter pub get
 ```
 
 运行桌面应用：
 
 ```sh
-/Users/swcrbt/develop/flutter/bin/flutter run -d macos
+flutter run -d macos
 ```
 
 构建 debug 包：
 
 ```sh
-/Users/swcrbt/develop/flutter/bin/flutter build macos --debug
+flutter build macos --debug
 ```
 
 ## 验证命令
 
-每个实现阶段提交前至少运行：
+实现类改动提交前至少运行：
 
 ```sh
-/Users/swcrbt/develop/flutter/bin/flutter test
-/Users/swcrbt/develop/flutter/bin/flutter analyze
-/Users/swcrbt/develop/flutter/bin/flutter build macos --debug
+flutter test
+flutter analyze
+flutter build macos --debug
 ```
 
-文档或注释类变更仍应确认工作区只包含预期文件，并在提交信息的 `Tested:` / `Not-tested:` trailer 中说明验证范围。
+如果改动影响聊天滚动、composer 或会话切换，再运行：
+
+```sh
+flutter test integration_test/chat_scroll_position_e2e_test.dart -d macos
+```
+
+文档或注释类变更可只运行：
+
+```sh
+git diff --check
+```
 
 ## Git 提交约定
 
 任务只有在相关改动完成验证并提交到 git 后才算完成。不要把未提交的工作区变更报告为已完成；如果确实不能提交，必须明确说明阻塞原因和未提交文件。
 
-每个阶段独立提交。提交信息遵循 Lore 协议：
-
-```text
-<intent line: why the change was made>
-
-Constraint: <external constraint>
-Rejected: <alternative> | <reason>
-Confidence: <low|medium|high>
-Scope-risk: <narrow|moderate|broad>
-Directive: <future warning>
-Tested: <verified commands>
-Not-tested: <known gaps>
-```
+每个阶段独立提交。提交信息应说明意图、约束、验证命令和未覆盖风险。
 
 ## MVP 验收清单
 
-- 无后端依赖，数据保留本地。
 - 可以配置多个 OpenAI 兼容模型。
 - 可以配置角色提示词和权限。
 - 可以创建团队和成员，并为成员选择角色与模型。
-- 默认秘书能在团队会话中自动分配任务。
+- 消息栏只展示群聊和私聊。
+- 聊天 composer 固定在底部。
+- 默认秘书能在团队会话中分配任务并汇总结果。
 - 成员消息能在团队会话和成员私聊中查看。
-- 本地项目修改必须经过 diff 确认。
+- 命令执行必须经过策略和审批链路。
+- 项目修改必须经过 diff 确认。
 - 配置可导入导出，密钥导出必须显式确认。
