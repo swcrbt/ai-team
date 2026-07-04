@@ -21,6 +21,8 @@ void main() {
       expect(find.text('群聊'), findsOneWidget);
       expect(find.text('私聊'), findsOneWidget);
       expect(find.text('默认开发团队'), findsOneWidget);
+      expect(find.text('3 名'), findsOneWidget);
+      expect(find.text('BOT'), findsNothing);
       expect(find.text('秘书'), findsWidgets);
       expect(find.text('前端工程师'), findsWidgets);
       expect(find.byTooltip('关闭聊天'), findsNothing);

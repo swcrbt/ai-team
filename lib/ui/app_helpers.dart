@@ -222,16 +222,13 @@ String? conversationListBadge(
   Conversation conversation,
 ) {
   if (conversation.memberId == null) {
-    return controller.state.teams
+    final memberCount = controller.state.teams
         .firstWhere((team) => team.id == conversation.teamId)
         .memberIds
-        .length
-        .toString();
+        .length;
+    return '$memberCount 名';
   }
-  final member = controller.state.members.firstWhere(
-    (item) => item.id == conversation.memberId,
-  );
-  return member.isSecretary ? 'BOT' : null;
+  return null;
 }
 
 String? conversationStatusPill(
