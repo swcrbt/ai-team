@@ -71,6 +71,8 @@ void main() {
     )));
     await tester.pumpAndSettle();
 
+    expect(find.text('context'), findsNothing);
+    expect(find.text('tokens'), findsOneWidget);
     expect(find.text('输入 tokens'), findsOneWidget);
     expect(find.text('输出 tokens'), findsOneWidget);
     expect(find.text('命中缓存'), findsOneWidget);

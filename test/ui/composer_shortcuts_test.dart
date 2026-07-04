@@ -42,7 +42,8 @@ void main() {
 
     expect(find.byTooltip('表情'), findsNothing);
     expect(find.byTooltip('提及'), findsNothing);
-    expect(find.text('发送(S)'), findsOneWidget);
+    expect(find.text('发送(S)'), findsNothing);
+    expect(find.widgetWithText(InkWell, '发送'), findsOneWidget);
     expect(
       tester
           .getSize(

@@ -75,13 +75,24 @@ class SplitSendButton extends StatelessWidget {
                                 ),
                               ],
                             )
-                          : Text(
-                              '发送(S)',
-                              style: TextStyle(
-                                color: foregroundColor,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                              ),
+                          : Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.arrow_upward_rounded,
+                                  size: 14,
+                                  color: foregroundColor,
+                                ),
+                                const SizedBox(width: 3),
+                                Text(
+                                  '发送',
+                                  style: TextStyle(
+                                    color: foregroundColor,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
                             ),
                     ),
                   ),
@@ -228,19 +239,19 @@ class _TokenUsageMeterState extends State<TokenUsageMeter> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'context',
-                          style: TextStyle(
-                            fontSize: 10,
-                            color: Color(0xFF64748B),
-                          ),
-                        ),
                         Text(
                           _tokenText(widget.data.totalTokens),
                           style: const TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w800,
                             fontFamily: 'monospace',
+                          ),
+                        ),
+                        const Text(
+                          'tokens',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Color(0xFF64748B),
                           ),
                         ),
                       ],
