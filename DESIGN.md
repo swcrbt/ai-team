@@ -3,7 +3,7 @@
 ## Source of truth
 - Status: Active
 - Last refreshed: 2026-07-04
-- Primary product surfaces: group chat command center, member private chat, team/model/role/member/project/audit/settings pages, project workspace and patch review, command approval, sidebar icon system.
+- Primary product surfaces: group chat command center, member private chat, team/model/role/member/project/audit/settings pages, project safety and patch review, command approval, sidebar icon system.
 - Evidence reviewed: `README.md`, `docs/architecture.md`, `lib/ui/app_shell.dart`, `lib/ui/sidebar.dart`, `lib/ui/conversation_sidebar.dart`, `lib/ui/chat/chat_pane.dart`, `lib/ui/chat/chat_controls.dart`, `lib/ui/management/config_management_pages.dart`, `lib/ui/management/chat_status_cards.dart`, `lib/ui/management/audit_log_page.dart`, `lib/ui/management/history_page.dart`.
 - Figma reference: https://www.figma.com/design/b661TshWPrgj83XFpvk04D
 - Figma revision status: Legacy external reference; current active mockup is the repo-local Open Design artifact.
@@ -45,8 +45,8 @@
 
 ## Components
 - Existing components to reuse: Flutter Material 3 widgets, existing sidebars, chat pane, split send button, shared dialog frame, management panels, and audit rows.
-- New/changed components: fixed-bottom chat composer with lower-right send action, returned-thinking panel inside messages, on-demand safety drawer, safety-oriented project review panel, audit detail drawer, sidebar icon components, compact state pills, concrete page layouts for every sidebar entry.
-- Variants and states: sidebar icon default/hover/active/disabled, command pending/approved/executed/denied/failed, patch pending/applied/rejected, model streaming/stopped/failed, empty workspace.
+- New/changed components: fixed-bottom chat composer with lower-right send action, circular token meter with input/output token breakdown, returned-thinking panel inside messages, command approval state card, diff review card, on-demand safety drawer, safety-oriented project review panel, audit detail drawer, sidebar icon components, compact state pills, concrete page layouts for every sidebar entry.
+- Variants and states: sidebar icon default/hover/active/disabled, command pending/approved/executed/denied/failed, patch pending/applied/rejected, diff collapsed/expanded/applied, model streaming/stopped/failed, empty project.
 - Token/component ownership: keep tokens local to `lib/ui` theme unless a broader design-system refactor is approved.
 
 ## Accessibility
@@ -63,15 +63,15 @@
 
 ## Interaction states
 - Loading: streaming messages show real generation status and optional returned thinking/reasoning only when the provider response includes it.
-- Empty: no workspace, no audit, and no command request states should provide one clear primary action.
-- Error: model/command/workspace errors show source, recoverable action, and audit reference.
+- Empty: no project, no audit, and no command request states should provide one clear primary action.
+- Error: model/command/project errors show source, recoverable action, and audit reference.
 - Success: applied patches and executed commands enter audit immediately.
-- Disabled: blocked actions state why, especially missing workspace or secretary constraints.
+- Disabled: blocked actions state why, especially missing project or secretary constraints.
 - Offline/slow network: model request diagnostics and retry/stop states stay visible.
 
 ## Content voice
 - Tone: concise, operational, and explicit.
-- Terminology: use existing terms such as 团队, 成员, 角色, 模型, 工作区, 命令请求, 补丁, 审计.
+- Terminology: use existing terms such as 团队, 成员, 角色, 模型, 项目, 命令请求, 补丁, Diff, 审计.
 - Microcopy rules: do not invent model reasoning; label confirmations by consequence, not by generic warnings.
 
 ## Implementation constraints
