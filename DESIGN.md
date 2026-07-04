@@ -4,7 +4,7 @@
 - Status: Active
 - Last refreshed: 2026-07-04
 - Primary product surfaces: group chat command center, member private chat, team/model/role/member/project/audit/settings pages, project safety and patch review, command approval, sidebar icon system.
-- Evidence reviewed: `README.md`, `docs/architecture.md`, `lib/ui/app_shell.dart`, `lib/ui/sidebar.dart`, `lib/ui/conversation_sidebar.dart`, `lib/ui/chat/chat_pane.dart`, `lib/ui/chat/chat_controls.dart`, `lib/ui/management/config_management_pages.dart`, `lib/ui/management/chat_status_cards.dart`, `lib/ui/management/audit_log_page.dart`, `lib/ui/management/history_page.dart`.
+- Evidence reviewed: `README.md`, `docs/architecture.md`, `lib/ui/app_shell.dart`, `lib/ui/sidebar.dart`, `lib/ui/conversation_sidebar.dart`, `lib/ui/chat/chat_pane.dart`, `lib/ui/chat/chat_controls.dart`, `lib/ui/management/config_management_pages.dart`, `lib/ui/management/chat_status_cards.dart`, `lib/ui/management/audit_log_page.dart`, `lib/ui/management/settings_page.dart`.
 - Figma reference: https://www.figma.com/design/b661TshWPrgj83XFpvk04D
 - Figma revision status: Legacy external reference; current active mockup is the repo-local Open Design artifact.
 - Open Design artifact: `docs/design/open-design/ai-team-codex-ui-redesign/index.html`

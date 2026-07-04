@@ -578,6 +578,8 @@ void main() {
 
     expect(find.textContaining('队列 2'), findsNothing);
     expect(find.textContaining('登录任务'), findsNothing);
+    expect(find.textContaining('优先级'), findsNothing);
+    expect(find.byTooltip('删除历史任务'), findsNothing);
   });
 
   testWidgets('main sidebar no longer exposes task history', (tester) async {
@@ -783,6 +785,8 @@ void main() {
     expect(find.byTooltip('新增成员'), findsOneWidget);
     expect(find.byTooltip('打开私聊'), findsWidgets);
     expect(find.text('秘书成员'), findsOneWidget);
+    expect(find.text('私聊已启用'), findsWidgets);
+    expect(find.textContaining('优先级'), findsNothing);
     expect(find.text('角色 秘书'), findsOneWidget);
     expect(find.text('模型 OpenAI Compatible'), findsWidgets);
     expect(find.text('所属团队'), findsOneWidget);
@@ -931,10 +935,7 @@ void main() {
       ],
     );
     await tester.pumpWidget(
-      AiTeamApp(
-        initialState: state,
-        modelGateway: FakeModelGateway(),
-      ),
+      AiTeamApp(initialState: state, modelGateway: FakeModelGateway()),
     );
 
     await tester.tap(find.byTooltip('项目'));

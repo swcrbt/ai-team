@@ -245,11 +245,7 @@ class _MemberManagementPageState extends State<MemberManagementPage> {
                 subtitle:
                     '${roleName(widget.controller.state, member.roleId)} · ${modelName(widget.controller.state, member.modelId)} · ${_memberTeamNames(widget.controller.state, member)}',
                 chips: [
-                  _TeamMetaChip(
-                    label: member.isSecretary
-                        ? '秘书成员'
-                        : '优先级 ${member.executionPriority}',
-                  ),
+                  _TeamMetaChip(label: member.isSecretary ? '秘书成员' : '私聊已启用'),
                   _TeamMetaChip(
                     label:
                         '角色 ${roleName(widget.controller.state, member.roleId)}',
@@ -1410,10 +1406,7 @@ class _PatchConfirmationPanel extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: _PatchMetric(
-                  value: stats.files.toString(),
-                  label: '文件',
-                ),
+                child: _PatchMetric(value: stats.files.toString(), label: '文件'),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -1957,10 +1950,7 @@ String _commandStatusText(CommandRequestStatus status) {
   };
 }
 
-void _showCommandRequestDetails(
-  BuildContext context,
-  CommandRequest request,
-) {
+void _showCommandRequestDetails(BuildContext context, CommandRequest request) {
   showDialog<void>(
     context: context,
     builder: (context) => AlertDialog(

@@ -32,9 +32,7 @@ String conversationMeta(AppController controller, Conversation conversation) {
   if (conversation.memberId == null) {
     return '${members.length} 位成员 · 第 ${conversation.currentRound} 轮 · $status';
   }
-  final member = members.firstWhere(
-    (item) => item.id == conversation.memberId,
-  );
+  final member = members.firstWhere((item) => item.id == conversation.memberId);
   return '${roleName(controller.state, member.roleId)} · ${modelName(controller.state, member.modelId)} · $status';
 }
 
@@ -240,14 +238,14 @@ String? conversationStatusPill(
   AppController controller,
   Conversation conversation,
 ) {
-  if (controller.commandRequestsForConversation(conversation.id).any(
-        (request) => request.status == CommandRequestStatus.pending,
-      )) {
+  if (controller
+      .commandRequestsForConversation(conversation.id)
+      .any((request) => request.status == CommandRequestStatus.pending)) {
     return '待审批';
   }
-  if (controller.commandRequestsForConversation(conversation.id).any(
-        (request) => request.status == CommandRequestStatus.approved,
-      )) {
+  if (controller
+      .commandRequestsForConversation(conversation.id)
+      .any((request) => request.status == CommandRequestStatus.approved)) {
     return '允许中';
   }
   if (controller.state.patchProposals.any(
@@ -330,28 +328,6 @@ List<TeamMember> typingMembers(
       .toList();
 }
 
-QueuedTask? firstTaskWithStatus(
-  List<QueuedTask> tasks,
-  QueuedTaskStatus status,
-) {
-  for (final task in tasks) {
-    if (task.status == status) {
-      return task;
-    }
-  }
-  return null;
-}
-
-String queuedTaskStatusText(QueuedTaskStatus status) {
-  return switch (status) {
-    QueuedTaskStatus.pending => '待执行',
-    QueuedTaskStatus.running => '执行中',
-    QueuedTaskStatus.paused => '已暂停',
-    QueuedTaskStatus.completed => '已完成',
-    QueuedTaskStatus.failed => '失败',
-  };
-}
-
 String statusText(ConversationStatus status) {
   return switch (status) {
     ConversationStatus.idle => '待命',
@@ -366,25 +342,5 @@ String collaborationModeLabel(TeamCollaborationMode mode) {
   return switch (mode) {
     TeamCollaborationMode.serial => '串行',
     TeamCollaborationMode.parallel => '并行',
-  };
-}
-
-String taskStatusText(TaskAssignmentStatus status) {
-  return switch (status) {
-    TaskAssignmentStatus.pending => '待执行',
-    TaskAssignmentStatus.running => '执行中',
-    TaskAssignmentStatus.completed => '已完成',
-    TaskAssignmentStatus.failed => '失败',
-    TaskAssignmentStatus.cancelled => '已取消',
-  };
-}
-
-Color taskStatusColor(TaskAssignmentStatus status) {
-  return switch (status) {
-    TaskAssignmentStatus.pending => const Color(0xFF6B7280),
-    TaskAssignmentStatus.running => const Color(0xFF2563EB),
-    TaskAssignmentStatus.completed => const Color(0xFF047857),
-    TaskAssignmentStatus.failed => const Color(0xFFBE123C),
-    TaskAssignmentStatus.cancelled => const Color(0xFF92400E),
   };
 }

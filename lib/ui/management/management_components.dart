@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../core/domain.dart';
-import '../app_helpers.dart';
-
 class ManagementPageFrame extends StatelessWidget {
   const ManagementPageFrame({
     super.key,
@@ -24,9 +21,7 @@ class ManagementPageFrame extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 24),
           decoration: const BoxDecoration(
             color: Colors.white,
-            border: Border(
-              bottom: BorderSide(color: Color(0xFFE5E7EB)),
-            ),
+            border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
           ),
           child: Row(
             children: [
@@ -101,10 +96,7 @@ class ManagementPanel extends StatelessWidget {
             ],
           ),
           if (action != null)
-            Align(
-              alignment: Alignment.centerRight,
-              child: action!,
-            ),
+            Align(alignment: Alignment.centerRight, child: action!),
           const SizedBox(height: 8),
           child,
         ],
@@ -149,80 +141,11 @@ class ManagementKeyValueRow extends StatelessWidget {
                   style: const TextStyle(fontWeight: FontWeight.w700),
                 ),
               ),
-              if (actions.isNotEmpty)
-                Wrap(
-                  spacing: 2,
-                  children: actions,
-                ),
+              if (actions.isNotEmpty) Wrap(spacing: 2, children: actions),
             ],
           ),
           const SizedBox(height: 4),
           Text(value, style: TextStyle(color: Colors.grey.shade700)),
-        ],
-      ),
-    );
-  }
-}
-
-class TaskAssignmentCard extends StatelessWidget {
-  const TaskAssignmentCard({super.key, required this.assignment});
-
-  final TaskAssignment assignment;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  '第 ${assignment.round} 轮 · ${assignment.memberName}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-              Text(
-                taskStatusText(assignment.status),
-                style: TextStyle(
-                  color: taskStatusColor(assignment.status),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            assignment.roleName,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: Colors.grey.shade700),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            assignment.instruction,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          if (assignment.summary != null) ...[
-            const SizedBox(height: 4),
-            Text(
-              assignment.summary!,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: Colors.grey.shade700),
-            ),
-          ],
         ],
       ),
     );
