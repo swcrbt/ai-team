@@ -693,6 +693,79 @@ void main() {
     expect(find.byTooltip('打开私聊'), findsWidgets);
   });
 
+  testWidgets('management object lists drive the selected detail panel', (
+    tester,
+  ) async {
+    final seed = AppState.seed();
+    final state = seed.copyWith(
+      teams: [
+        ...seed.teams,
+        const Team(
+          id: 'team-test',
+          name: '测试团队',
+          memberIds: ['member-secretary', 'member-tester'],
+          secretaryMemberId: 'member-secretary',
+          maxRounds: 7,
+        ),
+      ],
+    );
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: state,
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('团队'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('team-detail-team-default')),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('测试团队'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('team-detail-team-test')), findsOneWidget);
+
+    await tester.tap(find.byTooltip('模型'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('model-detail-model-main')),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Local Compatible'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('model-detail-model-local')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byTooltip('角色'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('role-detail-role-secretary')),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('测试工程师').first);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('role-detail-role-tester')),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byTooltip('成员'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('member-detail-member-secretary')),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('测试工程师').first);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('member-detail-member-tester')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('sidebar project button opens an independent project page', (
     tester,
   ) async {

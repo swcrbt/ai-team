@@ -7,7 +7,7 @@ import '../app_helpers.dart';
 import '../dialogs/config_dialogs.dart';
 import 'management_components.dart';
 
-class TeamManagementPage extends StatelessWidget {
+class TeamManagementPage extends StatefulWidget {
   const TeamManagementPage({
     super.key,
     required this.controller,
@@ -18,35 +18,63 @@ class TeamManagementPage extends StatelessWidget {
   final VoidCallback onStartChat;
 
   @override
+  State<TeamManagementPage> createState() => _TeamManagementPageState();
+}
+
+class _TeamManagementPageState extends State<TeamManagementPage> {
+  String? selectedTeamId;
+
+  @override
   Widget build(BuildContext context) {
-    final teams = controller.state.teams;
-    final selected = teams.isEmpty ? null : teams.first;
+    final teams = widget.controller.state.teams;
+    final selected = _selectedTeam(teams);
     return ManagementPageFrame(
       title: '团队管理',
       subtitle: '按开发团队、测试团队等团队对象管理成员组合',
       child: _EntityLayout(
         list: _TeamCardGrid(
-          controller: controller,
+          controller: widget.controller,
           teams: teams,
-          onStartChat: onStartChat,
+          selectedTeamId: selected?.id,
+          onSelectTeam: (teamId) => setState(() => selectedTeamId = teamId),
+          onStartChat: widget.onStartChat,
         ),
         detail: selected == null
             ? const _EmptyDetail(title: '暂无团队')
-            : _TeamDetail(controller: controller, team: selected),
+            : _TeamDetail(controller: widget.controller, team: selected),
       ),
     );
   }
+
+  Team? _selectedTeam(List<Team> teams) {
+    if (teams.isEmpty) {
+      return null;
+    }
+    for (final team in teams) {
+      if (team.id == selectedTeamId) {
+        return team;
+      }
+    }
+    return teams.first;
+  }
 }
 
-class ModelManagementPage extends StatelessWidget {
+class ModelManagementPage extends StatefulWidget {
   const ModelManagementPage({super.key, required this.controller});
 
   final AppController controller;
 
   @override
+  State<ModelManagementPage> createState() => _ModelManagementPageState();
+}
+
+class _ModelManagementPageState extends State<ModelManagementPage> {
+  String? selectedModelId;
+
+  @override
   Widget build(BuildContext context) {
-    final models = controller.state.models;
-    final selected = models.isEmpty ? null : models.first;
+    final models = widget.controller.state.models;
+    final selected = _selectedModel(models);
     return ManagementPageFrame(
       title: '模型管理',
       subtitle: '按模型列表维护 provider、模型名和上下文窗口',
@@ -54,17 +82,20 @@ class ModelManagementPage extends StatelessWidget {
         list: _ObjectList(
           title: '模型列表',
           actionLabel: '新增模型',
-          onAdd: () => showModelDialog(context, controller),
+          onAdd: () => showModelDialog(context, widget.controller),
           children: [
             for (final model in models)
               _ObjectRow(
+                key: ValueKey('model-row-${model.id}'),
                 title: model.name,
                 subtitle:
                     '${model.modelName} · ${model.baseUrl} · context ${model.contextWindowTokens}',
+                selected: model.id == selected?.id,
+                onTap: () => setState(() => selectedModelId = model.id),
                 trailing: IconButton(
                   tooltip: '编辑模型',
                   onPressed: () =>
-                      showModelDialog(context, controller, model: model),
+                      showModelDialog(context, widget.controller, model: model),
                   icon: const Icon(Icons.edit_rounded),
                 ),
               ),
@@ -72,21 +103,40 @@ class ModelManagementPage extends StatelessWidget {
         ),
         detail: selected == null
             ? const _EmptyDetail(title: '暂无模型')
-            : _ModelDetail(controller: controller, model: selected),
+            : _ModelDetail(controller: widget.controller, model: selected),
       ),
     );
   }
+
+  ModelProfile? _selectedModel(List<ModelProfile> models) {
+    if (models.isEmpty) {
+      return null;
+    }
+    for (final model in models) {
+      if (model.id == selectedModelId) {
+        return model;
+      }
+    }
+    return models.first;
+  }
 }
 
-class RoleManagementPage extends StatelessWidget {
+class RoleManagementPage extends StatefulWidget {
   const RoleManagementPage({super.key, required this.controller});
 
   final AppController controller;
 
   @override
+  State<RoleManagementPage> createState() => _RoleManagementPageState();
+}
+
+class _RoleManagementPageState extends State<RoleManagementPage> {
+  String? selectedRoleId;
+
+  @override
   Widget build(BuildContext context) {
-    final roles = controller.state.roles;
-    final selected = roles.isEmpty ? null : roles.first;
+    final roles = widget.controller.state.roles;
+    final selected = _selectedRole(roles);
     return ManagementPageFrame(
       title: '角色管理',
       subtitle: '按角色列表维护职责、提示词和命令策略',
@@ -94,16 +144,19 @@ class RoleManagementPage extends StatelessWidget {
         list: _ObjectList(
           title: '角色列表',
           actionLabel: '新增角色',
-          onAdd: () => showRoleDialog(context, controller),
+          onAdd: () => showRoleDialog(context, widget.controller),
           children: [
             for (final role in roles)
               _ObjectRow(
+                key: ValueKey('role-row-${role.id}'),
                 title: role.name,
                 subtitle: role.description,
+                selected: role.id == selected?.id,
+                onTap: () => setState(() => selectedRoleId = role.id),
                 trailing: IconButton(
                   tooltip: '编辑角色',
                   onPressed: () =>
-                      showRoleDialog(context, controller, role: role),
+                      showRoleDialog(context, widget.controller, role: role),
                   icon: const Icon(Icons.edit_rounded),
                 ),
               ),
@@ -111,13 +164,25 @@ class RoleManagementPage extends StatelessWidget {
         ),
         detail: selected == null
             ? const _EmptyDetail(title: '暂无角色')
-            : _RoleDetail(controller: controller, role: selected),
+            : _RoleDetail(controller: widget.controller, role: selected),
       ),
     );
   }
+
+  RoleTemplate? _selectedRole(List<RoleTemplate> roles) {
+    if (roles.isEmpty) {
+      return null;
+    }
+    for (final role in roles) {
+      if (role.id == selectedRoleId) {
+        return role;
+      }
+    }
+    return roles.first;
+  }
 }
 
-class MemberManagementPage extends StatelessWidget {
+class MemberManagementPage extends StatefulWidget {
   const MemberManagementPage({
     super.key,
     required this.controller,
@@ -128,9 +193,16 @@ class MemberManagementPage extends StatelessWidget {
   final VoidCallback onStartChat;
 
   @override
+  State<MemberManagementPage> createState() => _MemberManagementPageState();
+}
+
+class _MemberManagementPageState extends State<MemberManagementPage> {
+  String? selectedMemberId;
+
+  @override
   Widget build(BuildContext context) {
-    final members = controller.currentMembers;
-    final selected = members.isEmpty ? null : members.first;
+    final members = widget.controller.currentMembers;
+    final selected = _selectedMember(members);
     return ManagementPageFrame(
       title: '成员管理',
       subtitle: '按成员列表维护模型与角色绑定',
@@ -138,21 +210,24 @@ class MemberManagementPage extends StatelessWidget {
         list: _ObjectList(
           title: '成员列表',
           actionLabel: '新增成员',
-          onAdd: () => showMemberDialog(context, controller),
+          onAdd: () => showMemberDialog(context, widget.controller),
           children: [
             for (final member in members)
               _ObjectRow(
+                key: ValueKey('member-row-${member.id}'),
                 title: member.name,
                 subtitle:
-                    '${roleName(controller.state, member.roleId)} · ${modelName(controller.state, member.modelId)}',
+                    '${roleName(widget.controller.state, member.roleId)} · ${modelName(widget.controller.state, member.modelId)}',
+                selected: member.id == selected?.id,
+                onTap: () => setState(() => selectedMemberId = member.id),
                 trailing: Wrap(
                   spacing: 4,
                   children: [
                     IconButton(
                       tooltip: '打开私聊',
                       onPressed: () {
-                        controller.startMemberChat(member.id);
-                        onStartChat();
+                        widget.controller.startMemberChat(member.id);
+                        widget.onStartChat();
                       },
                       icon: const Icon(Icons.chat_bubble_outline_rounded),
                     ),
@@ -160,7 +235,7 @@ class MemberManagementPage extends StatelessWidget {
                       tooltip: '编辑成员',
                       onPressed: () => showMemberDialog(
                         context,
-                        controller,
+                        widget.controller,
                         member: member,
                       ),
                       icon: const Icon(Icons.edit_rounded),
@@ -172,17 +247,26 @@ class MemberManagementPage extends StatelessWidget {
         ),
         detail: selected == null
             ? const _EmptyDetail(title: '暂无成员')
-            : _MemberDetail(controller: controller, member: selected),
+            : _MemberDetail(controller: widget.controller, member: selected),
       ),
     );
+  }
+
+  TeamMember? _selectedMember(List<TeamMember> members) {
+    if (members.isEmpty) {
+      return null;
+    }
+    for (final member in members) {
+      if (member.id == selectedMemberId) {
+        return member;
+      }
+    }
+    return members.first;
   }
 }
 
 class ProjectPage extends StatelessWidget {
-  const ProjectPage({
-    super.key,
-    required this.controller,
-  });
+  const ProjectPage({super.key, required this.controller});
 
   final AppController controller;
 
@@ -200,11 +284,15 @@ class _TeamCardGrid extends StatelessWidget {
   const _TeamCardGrid({
     required this.controller,
     required this.teams,
+    required this.selectedTeamId,
+    required this.onSelectTeam,
     required this.onStartChat,
   });
 
   final AppController controller;
   final List<Team> teams;
+  final String? selectedTeamId;
+  final ValueChanged<String> onSelectTeam;
   final VoidCallback onStartChat;
 
   @override
@@ -216,8 +304,11 @@ class _TeamCardGrid extends StatelessWidget {
       children: [
         for (final team in teams)
           _TeamObjectCard(
+            key: ValueKey('team-row-${team.id}'),
             controller: controller,
             team: team,
+            selected: team.id == selectedTeamId,
+            onSelect: () => onSelectTeam(team.id),
             onStartChat: () {
               controller.startTeamChat(team.id);
               onStartChat();
@@ -230,13 +321,18 @@ class _TeamCardGrid extends StatelessWidget {
 
 class _TeamObjectCard extends StatelessWidget {
   const _TeamObjectCard({
+    super.key,
     required this.controller,
     required this.team,
+    required this.selected,
+    required this.onSelect,
     required this.onStartChat,
   });
 
   final AppController controller;
   final Team team;
+  final bool selected;
+  final VoidCallback onSelect;
   final VoidCallback onStartChat;
 
   @override
@@ -246,72 +342,79 @@ class _TeamObjectCard extends StatelessWidget {
         .toList();
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  team.name,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              Text(
-                collaborationModeLabel(team.collaborationMode),
-                style: const TextStyle(
-                  color: Color(0xFF64748B),
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
+      child: Material(
+        color: selected ? const Color(0xFFEFF6FF) : Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+          side: BorderSide(
+            color: selected ? const Color(0xFFBFDBFE) : const Color(0xFFE2E8F0),
           ),
-          const SizedBox(height: 8),
-          Text(
-            members.map((member) => member.name).join('、'),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(color: Color(0xFF475569)),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              FilledButton(
-                onPressed: onStartChat,
-                child: const Text('发起聊天'),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                tooltip: '编辑团队',
-                onPressed: () => showTeamDialog(
-                  context,
-                  controller,
-                  team: team,
-                ),
-                icon: const Icon(Icons.edit_rounded),
-              ),
-              IconButton(
-                tooltip: '删除团队',
-                onPressed: controller.state.teams.length <= 1
-                    ? null
-                    : () => runConfigAction(
-                          context,
-                          () => controller.deleteTeam(team.id),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onSelect,
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        team.name,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
                         ),
-                icon: const Icon(Icons.delete_outline_rounded),
-              ),
-            ],
+                      ),
+                    ),
+                    Text(
+                      collaborationModeLabel(team.collaborationMode),
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  members.map((member) => member.name).join('、'),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: Color(0xFF475569)),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    FilledButton(
+                      onPressed: onStartChat,
+                      child: const Text('发起聊天'),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      tooltip: '编辑团队',
+                      onPressed: () =>
+                          showTeamDialog(context, controller, team: team),
+                      icon: const Icon(Icons.edit_rounded),
+                    ),
+                    IconButton(
+                      tooltip: '删除团队',
+                      onPressed: controller.state.teams.length <= 1
+                          ? null
+                          : () => runConfigAction(
+                                context,
+                                () => controller.deleteTeam(team.id),
+                              ),
+                      icon: const Icon(Icons.delete_outline_rounded),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-        ],
+        ),
       ),
     );
   }
@@ -329,13 +432,7 @@ class _EntityLayout extends StatelessWidget {
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 880;
         if (!wide) {
-          return Column(
-            children: [
-              list,
-              const SizedBox(height: 12),
-              detail,
-            ],
-          );
+          return Column(children: [list, const SizedBox(height: 12), detail]);
         }
         return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -382,50 +479,65 @@ class _ObjectList extends StatelessWidget {
 
 class _ObjectRow extends StatelessWidget {
   const _ObjectRow({
+    super.key,
     required this.title,
     required this.subtitle,
+    this.selected = false,
+    this.onTap,
     this.trailing,
   });
 
   final String title;
   final String subtitle;
+  final bool selected;
+  final VoidCallback? onTap;
   final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: Material(
+        color: selected ? const Color(0xFFEFF6FF) : const Color(0xFFF8FAFC),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(6),
+          side: BorderSide(
+            color: selected ? const Color(0xFFBFDBFE) : const Color(0xFFE2E8F0),
+          ),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(6),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        subtitle,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Color(0xFF64748B)),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: Color(0xFF64748B)),
-                ),
+                if (trailing != null) trailing!,
               ],
             ),
           ),
-          if (trailing != null) trailing!,
-        ],
+        ),
       ),
     );
   }
@@ -444,6 +556,7 @@ class _TeamDetail extends StatelessWidget {
       orElse: () => controller.state.members.first,
     );
     return _Panel(
+      key: ValueKey('team-detail-${team.id}'),
       title: '编辑团队',
       action: IconButton(
         tooltip: '编辑团队',
@@ -459,10 +572,7 @@ class _TeamDetail extends StatelessWidget {
           ),
           _DetailRow(label: '秘书成员', value: secretary.name),
           _DetailRow(label: '最大轮次', value: team.maxRounds.toString()),
-          _DetailRow(
-            label: '成员数量',
-            value: team.memberIds.length.toString(),
-          ),
+          _DetailRow(label: '成员数量', value: team.memberIds.length.toString()),
         ],
       ),
     );
@@ -478,6 +588,7 @@ class _ModelDetail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _Panel(
+      key: ValueKey('model-detail-${model.id}'),
       title: '编辑模型',
       action: IconButton(
         tooltip: '编辑模型',
@@ -489,10 +600,7 @@ class _ModelDetail extends StatelessWidget {
           _DetailRow(label: '名称', value: model.name),
           _DetailRow(label: '模型名', value: model.modelName),
           _DetailRow(label: 'Base URL', value: model.baseUrl),
-          _DetailRow(
-            label: '流式输出',
-            value: model.streaming ? '开启' : '关闭',
-          ),
+          _DetailRow(label: '流式输出', value: model.streaming ? '开启' : '关闭'),
           _DetailRow(label: '最大 Token', value: model.maxTokens.toString()),
           _DetailRow(
             label: '上下文窗口',
@@ -517,6 +625,7 @@ class _RoleDetail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _Panel(
+      key: ValueKey('role-detail-${role.id}'),
       title: '编辑角色',
       action: IconButton(
         tooltip: '编辑角色',
@@ -527,14 +636,8 @@ class _RoleDetail extends StatelessWidget {
         children: [
           _DetailRow(label: '角色名称', value: role.name),
           _DetailRow(label: '用途', value: role.description),
-          _DetailRow(
-            label: '读取项目',
-            value: role.canReadProject ? '允许' : '禁止',
-          ),
-          _DetailRow(
-            label: '生成补丁',
-            value: role.canProposePatch ? '允许' : '禁止',
-          ),
+          _DetailRow(label: '读取项目', value: role.canReadProject ? '允许' : '禁止'),
+          _DetailRow(label: '生成补丁', value: role.canProposePatch ? '允许' : '禁止'),
           _DetailRow(
             label: '命令策略',
             value: role.commandPolicy.requiresConfirmation ? '需确认' : '允许',
@@ -554,6 +657,7 @@ class _MemberDetail extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _Panel(
+      key: ValueKey('member-detail-${member.id}'),
       title: '编辑成员',
       action: IconButton(
         tooltip: '编辑成员',
@@ -571,10 +675,7 @@ class _MemberDetail extends StatelessWidget {
             label: '绑定模型',
             value: modelName(controller.state, member.modelId),
           ),
-          _DetailRow(
-            label: '成员类型',
-            value: member.isSecretary ? '秘书' : '普通成员',
-          ),
+          _DetailRow(label: '成员类型', value: member.isSecretary ? '秘书' : '普通成员'),
           const _DetailRow(label: '私聊入口', value: '可打开'),
         ],
       ),
@@ -1335,7 +1436,12 @@ class _ProjectDiffStats {
 }
 
 class _Panel extends StatelessWidget {
-  const _Panel({required this.title, required this.child, this.action});
+  const _Panel({
+    super.key,
+    required this.title,
+    required this.child,
+    this.action,
+  });
 
   final String title;
   final Widget child;
