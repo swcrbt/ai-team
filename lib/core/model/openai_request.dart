@@ -51,9 +51,15 @@ List<Map<String, Object?>> _toolRoundMessages(List<ModelToolRound> rounds) {
   ];
 }
 
-Uri openAiCompatibleChatCompletionsEndpoint(ModelProfile model) => Uri.parse(
-      '${model.baseUrl.replaceFirst(RegExp(r'/$'), '')}/chat/completions',
-    );
+Uri openAiCompatibleChatCompletionsEndpoint(ModelProfile model) {
+  final baseUrl = model.baseUrl.replaceFirst(RegExp(r'/$'), '');
+  final endpoint = switch (model.protocol) {
+    ModelProtocol.anthropic => '/v1/messages',
+    ModelProtocol.responses => '/responses',
+    ModelProtocol.chatCompletions => '/chat/completions',
+  };
+  return Uri.parse('$baseUrl$endpoint');
+}
 
 String? _normalizeOptionalRequestText(String value) {
   return value.trim().isEmpty ? null : value;

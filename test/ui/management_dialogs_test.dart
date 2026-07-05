@@ -596,6 +596,9 @@ void main() {
   testWidgets('sidebar audit button opens an independent audit page', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    
     final state = AppState.seed().copyWith(
       auditLog: [
         AuditEntry(
@@ -666,8 +669,8 @@ void main() {
     await tester.tap(find.widgetWithText(ChoiceChip, '全部'));
     await tester.pumpAndSettle();
 
-    expect(find.text('old_action'), findsOneWidget);
-    await tester.tap(find.byTooltip('查看详情'));
+    expect(find.text('new_action'), findsOneWidget);
+    await tester.tap(find.text('new_action'));
     await tester.pumpAndSettle();
 
     expect(find.text('审计详情'), findsOneWidget);
@@ -684,6 +687,8 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('model-main'), findsNothing);
+    
+    tester.view.resetPhysicalSize();
   });
 
   testWidgets('model dialog saves selected reasoning effort', (tester) async {
@@ -737,8 +742,8 @@ void main() {
     expect(find.text('上下文 32k'), findsWidgets);
     expect(find.text('流式 开启'), findsWidgets);
     expect(find.text('Provider'), findsOneWidget);
-    expect(find.text('返回思考区'), findsOneWidget);
-    expect(find.text('仅真实字段'), findsOneWidget);
+    expect(find.text('协议'), findsOneWidget);
+    expect(find.text('chat/completions（OpenAI）'), findsOneWidget);
   });
 
   testWidgets('sidebar role button opens an independent role page', (

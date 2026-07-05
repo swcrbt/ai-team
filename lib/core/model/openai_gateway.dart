@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../domain.dart';
+import 'anthropic_request.dart';
+import 'anthropic_response.dart';
 import 'gateway_contracts.dart';
 import 'model_gateway_exception.dart';
 import 'openai_request.dart';
@@ -99,16 +101,34 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
     final requestUrl = endpoint.toString();
     final request = await _openRequest(endpoint, cancellation);
     request.headers.contentType = ContentType.json;
-    request.headers
-        .set(HttpHeaders.authorizationHeader, 'Bearer ${model.apiKey}');
-    final requestBody = buildOpenAiCompatibleRequestBody(
-      model: model,
-      systemPrompt: systemPrompt,
-      messages: messages,
-      tools: tools,
-      toolChoice: toolChoice,
-      toolRounds: toolRounds,
-    );
+    
+    // 根据协议设置不同的请求头
+    if (model.protocol == ModelProtocol.anthropic) {
+      request.headers.set('x-api-key', model.apiKey);
+      request.headers.set('anthropic-version', '2023-06-01');
+    } else {
+      request.headers.set(HttpHeaders.authorizationHeader, 'Bearer ${model.apiKey}');
+    }
+    
+    // 根据协议构建不同的请求体
+    final requestBody = model.protocol == ModelProtocol.anthropic
+        ? buildAnthropicRequestBody(
+            model: model,
+            systemPrompt: systemPrompt,
+            messages: messages,
+            tools: tools,
+            toolChoice: toolChoice,
+            toolRounds: toolRounds,
+          )
+        : buildOpenAiCompatibleRequestBody(
+            model: model,
+            systemPrompt: systemPrompt,
+            messages: messages,
+            tools: tools,
+            toolChoice: toolChoice,
+            toolRounds: toolRounds,
+          );
+    
     request.write(jsonEncode(requestBody));
     cancellation?.throwIfCancelled();
     final response = await _awaitResponse(request, cancellation);
@@ -128,6 +148,15 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
       );
     }
     if (model.streaming) {
+      if (model.protocol == ModelProtocol.anthropic) {
+        return parseAnthropicStreamingResponse(
+          responseStream: response,
+          requestBody: requestBody,
+          requestUrl: requestUrl,
+          cancellation: cancellation,
+          onDelta: onDelta,
+        );
+      }
       return _parseStreamingContent(
         response,
         requestBody: requestBody,
@@ -138,6 +167,15 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
     }
     final body = await utf8.decodeStream(response);
     final decoded = jsonDecode(body) as Map<String, Object?>;
+    
+    if (model.protocol == ModelProtocol.anthropic) {
+      return parseAnthropicResponse(
+        response: decoded,
+        requestBody: requestBody,
+        requestUrl: requestUrl,
+      );
+    }
+    
     final choices = decoded['choices'] as List;
     final first = choices.first as Map<String, Object?>;
     final message = first['message'] as Map<String, Object?>;

@@ -1,5 +1,17 @@
 import 'commands_and_tasks.dart';
 
+/// 模型 API 协议类型
+enum ModelProtocol {
+  /// chat/completions 协议（OpenAI 传统标准）
+  chatCompletions,
+  
+  /// responses 协议（OpenAI 新标准）
+  responses,
+  
+  /// messages 协议（Anthropic Claude API）
+  anthropic,
+}
+
 class ModelProfile {
   static const defaultContextWindowTokens = 32000;
 
@@ -14,6 +26,7 @@ class ModelProfile {
     this.maxTokens = 1600,
     this.contextWindowTokens = defaultContextWindowTokens,
     this.reasoningEffort,
+    this.protocol = ModelProtocol.chatCompletions,
   });
 
   final String id;
@@ -26,6 +39,7 @@ class ModelProfile {
   final int maxTokens;
   final int contextWindowTokens;
   final String? reasoningEffort;
+  final ModelProtocol protocol;
 
   ModelProfile copyWith({
     String? id,
@@ -38,20 +52,21 @@ class ModelProfile {
     int? maxTokens,
     int? contextWindowTokens,
     String? reasoningEffort,
-  }) {
-    return ModelProfile(
-      id: id ?? this.id,
-      name: name ?? this.name,
-      baseUrl: baseUrl ?? this.baseUrl,
-      modelName: modelName ?? this.modelName,
-      apiKey: apiKey ?? this.apiKey,
-      streaming: streaming ?? this.streaming,
-      temperature: temperature ?? this.temperature,
-      maxTokens: maxTokens ?? this.maxTokens,
-      contextWindowTokens: contextWindowTokens ?? this.contextWindowTokens,
-      reasoningEffort: reasoningEffort ?? this.reasoningEffort,
-    );
-  }
+    ModelProtocol? protocol,
+  }) =>
+      ModelProfile(
+        id: id ?? this.id,
+        name: name ?? this.name,
+        baseUrl: baseUrl ?? this.baseUrl,
+        modelName: modelName ?? this.modelName,
+        apiKey: apiKey ?? this.apiKey,
+        streaming: streaming ?? this.streaming,
+        temperature: temperature ?? this.temperature,
+        maxTokens: maxTokens ?? this.maxTokens,
+        contextWindowTokens: contextWindowTokens ?? this.contextWindowTokens,
+        reasoningEffort: reasoningEffort ?? this.reasoningEffort,
+        protocol: protocol ?? this.protocol,
+      );
 
   Map<String, Object?> toJson({bool includeSecrets = false}) {
     final json = <String, Object?>{
@@ -64,6 +79,7 @@ class ModelProfile {
       'maxTokens': maxTokens,
       if (contextWindowTokens != defaultContextWindowTokens)
         'contextWindowTokens': contextWindowTokens,
+      'protocol': protocol.name,
       if (reasoningEffort != null) 'reasoningEffort': reasoningEffort,
     };
     if (includeSecrets) {
@@ -84,7 +100,19 @@ class ModelProfile {
         contextWindowTokens: (json['contextWindowTokens'] as num?)?.toInt() ??
             ModelProfile.defaultContextWindowTokens,
         reasoningEffort: _optionalJsonString(json['reasoningEffort']),
+        protocol: _parseProtocol(json['protocol']),
       );
+}
+
+ModelProtocol _parseProtocol(Object? value) {
+  if (value is String) {
+    try {
+      return ModelProtocol.values.byName(value);
+    } catch (_) {
+      // 向后兼容：默认 chatCompletions
+    }
+  }
+  return ModelProtocol.chatCompletions;
 }
 
 String? _optionalJsonString(Object? value) {

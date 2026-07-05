@@ -43,38 +43,90 @@ class TeamOrchestrator {
     ModelRequestCancellation? cancellation,
     void Function(AppState state)? onProgress,
     StreamingMessageDraftHandler? onStreamingDraft,
-  }) {
+  }) async {
     final task = state.queuedTasks.firstWhere((item) => item.id == taskId);
     final conversation = state.conversations.firstWhere(
       (item) => item.id == task.conversationId,
     );
-    final userText = [
-      task.originalText,
-      if (task.notes.isNotEmpty) ...[
-        '',
-        '备注:',
-        ...task.notes.map((note) => '- $note'),
-      ],
-    ].join('\n');
-    if (conversation.memberId == null) {
-      return dispatchTeamTask(
+    
+    try {
+      final userText = [
+        task.originalText,
+        if (task.notes.isNotEmpty) ...[
+          '',
+          '备注:',
+          ...task.notes.map((note) => '- $note'),
+        ],
+      ].join('\n');
+      if (conversation.memberId == null) {
+        return await dispatchTeamTask(
+          state,
+          teamId: conversation.teamId,
+          conversationId: conversation.id,
+          userText: userText,
+          cancellation: cancellation,
+          onProgress: onProgress,
+          onStreamingDraft: onStreamingDraft,
+        );
+      }
+      return await dispatchMemberChat(
         state,
-        teamId: conversation.teamId,
         conversationId: conversation.id,
         userText: userText,
         cancellation: cancellation,
         onProgress: onProgress,
         onStreamingDraft: onStreamingDraft,
       );
+    } on ModelGatewayException catch (exception) {
+      // 创建错误消息并添加到对话中
+      final errorMessage = ChatMessage(
+        id: orchestrationId('error-${task.id}'),
+        authorName: '系统',
+        content: exception.message,
+        createdAt: DateTime.now(),
+        memberId: conversation.memberId,
+        contentBlocks: [
+          ChatMessageContentBlock.toolError(exception.message),
+        ],
+        generationStatus: ChatMessageGenerationStatus.complete,
+      );
+      
+      final updatedConversation = conversation.copyWith(
+        messages: [...conversation.messages, errorMessage],
+        status: ConversationStatus.idle,
+      );
+      
+      final updatedState = replaceConversation(state, updatedConversation);
+      
+      // 通知进度更新，让 UI 立即显示错误消息
+      onProgress?.call(updatedState);
+      
+      // 重新抛出异常，让 dispatch_controller 标记任务为 failed
+      rethrow;
+    } catch (exception) {
+      // 处理其他未预期的异常
+      final errorMessage = ChatMessage(
+        id: orchestrationId('error-${task.id}'),
+        authorName: '系统',
+        content: exception.toString(),
+        createdAt: DateTime.now(),
+        memberId: conversation.memberId,
+        contentBlocks: [
+          ChatMessageContentBlock.toolError(exception.toString()),
+        ],
+        generationStatus: ChatMessageGenerationStatus.complete,
+      );
+      
+      final updatedConversation = conversation.copyWith(
+        messages: [...conversation.messages, errorMessage],
+        status: ConversationStatus.idle,
+      );
+      
+      final updatedState = replaceConversation(state, updatedConversation);
+      onProgress?.call(updatedState);
+      
+      rethrow;
     }
-    return dispatchMemberChat(
-      state,
-      conversationId: conversation.id,
-      userText: userText,
-      cancellation: cancellation,
-      onProgress: onProgress,
-      onStreamingDraft: onStreamingDraft,
-    );
   }
 
   Future<AppState> dispatchTeamTask(

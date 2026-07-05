@@ -29,6 +29,7 @@ Future<void> showModelDialog(
   );
   var streaming = model?.streaming ?? true;
   var reasoningEffort = model?.reasoningEffort ?? reasoningEffortOffValue;
+  var protocol = model?.protocol ?? ModelProtocol.chatCompletions;
   String? validationError;
   await showDialog<void>(
     context: context,
@@ -48,6 +49,31 @@ Future<void> showModelDialog(
                   DialogField(controller: name, label: '名称'),
                   DialogField(controller: baseUrl, label: 'Base URL'),
                   DialogField(controller: modelName, label: '模型名称'),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<ModelProtocol>(
+                    initialValue: protocol,
+                    decoration: dialogInputDecoration('协议'),
+                    items: const [
+                      DropdownMenuItem(
+                        value: ModelProtocol.chatCompletions,
+                        child: Text('chat/completions（OpenAI）'),
+                      ),
+                      DropdownMenuItem(
+                        value: ModelProtocol.responses,
+                        child: Text('responses（OpenAI）'),
+                      ),
+                      DropdownMenuItem(
+                        value: ModelProtocol.anthropic,
+                        child: Text('messages（Anthropic）'),
+                      ),
+                    ],
+                    onChanged: (value) {
+                      if (value != null) {
+                        setDialogState(() => protocol = value);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
                   DialogField(
                     controller: apiKey,
                     label: 'API Key',
@@ -132,6 +158,7 @@ Future<void> showModelDialog(
                   reasoningEffort: reasoningEffort == reasoningEffortOffValue
                       ? null
                       : reasoningEffort,
+                  protocol: protocol,
                 );
                 if (model == null) {
                   controller.addModel(next);

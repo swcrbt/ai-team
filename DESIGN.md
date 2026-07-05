@@ -11,7 +11,7 @@
 - Open Design desktop source: import the artifact folder directly from this repository; do not maintain a copied namespace version.
 
 ## Brand
-- Personality: quiet, dense, operational, Codex-like, and local-first.
+- Personality: quiet, dense, operational, local-first.
 - Trust signals: explicit command approval, visible diff confirmation, audit trail, model/request diagnostics, and clear local data boundaries.
 - Avoid: landing-page composition, decorative gradients, large marketing cards, fake reasoning, and UI text that explains features instead of supporting work.
 

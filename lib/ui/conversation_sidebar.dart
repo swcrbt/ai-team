@@ -23,6 +23,8 @@ class ConversationList extends StatefulWidget {
 
 class _ConversationListState extends State<ConversationList> {
   late final ScrollController conversationScrollController;
+  late final TextEditingController searchController;
+  String searchQuery = '';
 
   @override
   void initState() {
@@ -31,22 +33,59 @@ class _ConversationListState extends State<ConversationList> {
       initialScrollOffset: widget.controller.conversationListScrollOffset,
       keepScrollOffset: false,
     );
+    searchController = TextEditingController();
   }
 
   @override
   void dispose() {
     _saveConversationListScrollOffset();
     conversationScrollController.dispose();
+    searchController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final visibleConversations = widget.controller.visibleConversations;
-    final groupConversations = visibleConversations
+    
+    // 应用搜索过滤
+    final filteredConversations = searchQuery.isEmpty
+        ? visibleConversations
+        : visibleConversations.where((conversation) {
+            final titleLower = conversationListTitle(widget.controller, conversation).toLowerCase();
+            final subtitleLower = conversationListSubtitle(widget.controller, conversation).toLowerCase();
+            final searchLower = searchQuery.toLowerCase();
+            
+            // 搜索会话标题和副标题
+            if (titleLower.contains(searchLower) || subtitleLower.contains(searchLower)) {
+              return true;
+            }
+            
+            // 搜索成员名称（如果是私聊）
+            if (conversation.memberId != null) {
+              final member = widget.controller.state.members
+                  .where((m) => m.id == conversation.memberId)
+                  .firstOrNull;
+              if (member != null && member.name.toLowerCase().contains(searchLower)) {
+                return true;
+              }
+            }
+            
+            // 搜索团队名称
+            final team = widget.controller.state.teams
+                .where((t) => t.id == conversation.teamId)
+                .firstOrNull;
+            if (team != null && team.name.toLowerCase().contains(searchLower)) {
+              return true;
+            }
+            
+            return false;
+          }).toList();
+    
+    final groupConversations = filteredConversations
         .where((conversation) => conversation.memberId == null)
         .toList();
-    final privateConversations = visibleConversations
+    final privateConversations = filteredConversations
         .where((conversation) => conversation.memberId != null)
         .toList();
     return ColoredBox(
@@ -94,7 +133,7 @@ class _ConversationListState extends State<ConversationList> {
             child: SizedBox(
               height: 30,
               child: TextField(
-                enabled: false,
+                controller: searchController,
                 decoration: InputDecoration(
                   prefixIcon: const Icon(Icons.search_rounded, size: 17),
                   hintText: '搜索会话、成员、文件',
@@ -106,11 +145,34 @@ class _ConversationListState extends State<ConversationList> {
                     borderRadius: BorderRadius.circular(6),
                     borderSide: const BorderSide(color: Color(0xFFE1E5EA)),
                   ),
-                  disabledBorder: OutlineInputBorder(
+                  enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(6),
                     borderSide: const BorderSide(color: Color(0xFFE1E5EA)),
                   ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(6),
+                    borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.5),
+                  ),
+                  suffixIcon: searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear_rounded, size: 16),
+                          onPressed: () {
+                            searchController.clear();
+                            setState(() {
+                              searchQuery = '';
+                            });
+                          },
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          tooltip: '清除搜索',
+                        )
+                      : null,
                 ),
+                onChanged: (value) {
+                  setState(() {
+                    searchQuery = value;
+                  });
+                },
               ),
             ),
           ),

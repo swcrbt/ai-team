@@ -339,16 +339,6 @@ class ChatPaneState extends State<ChatPane> {
             ],
           ),
         ),
-        if (widget.controller.error != null)
-          Container(
-            width: double.infinity,
-            color: const Color(0xFFFFF1F2),
-            padding: const EdgeInsets.all(10),
-            child: Text(
-              widget.controller.error!,
-              style: const TextStyle(color: Color(0xFFBE123C)),
-            ),
-          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(24, 10, 24, 18),
           child: DecoratedBox(

@@ -940,6 +940,14 @@ class _ModelDetail extends StatelessWidget {
         children: [
           _DetailRow(label: '名称', value: model.name),
           _DetailRow(label: 'Provider', value: _providerLabel(model)),
+          _DetailRow(
+            label: '协议',
+            value: switch (model.protocol) {
+              ModelProtocol.anthropic => 'messages（Anthropic）',
+              ModelProtocol.responses => 'responses（OpenAI）',
+              ModelProtocol.chatCompletions => 'chat/completions（OpenAI）',
+            },
+          ),
           _DetailRow(label: '模型名', value: model.modelName),
           _DetailRow(label: 'Base URL', value: model.baseUrl),
           _DetailRow(
@@ -951,17 +959,9 @@ class _ModelDetail extends StatelessWidget {
             label: '深度思考',
             value: reasoningEffortLabel(model.reasoningEffort),
           ),
-          const SizedBox(height: 10),
-          _CapabilityGrid(
-            rows: [
-              _CapabilityItem(
-                label: '流式输出',
-                value: model.streaming ? '开启' : '关闭',
-              ),
-              const _CapabilityItem(label: '工具调用', value: '按角色权限'),
-              const _CapabilityItem(label: '返回思考区', value: '仅真实字段'),
-              const _CapabilityItem(label: '审计诊断', value: '写入'),
-            ],
+          _DetailRow(
+            label: '流式输出',
+            value: model.streaming ? '开启' : '关闭',
           ),
         ],
       ),

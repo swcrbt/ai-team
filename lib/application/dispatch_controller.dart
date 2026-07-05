@@ -92,18 +92,18 @@ class DispatchController {
         commit(updated);
         taskQueue.updateTaskStatus(next.id, QueuedTaskStatus.completed);
       }
-    } on ModelGatewayException catch (exception) {
+    } on ModelGatewayException {
       if (cancellation.isCancelled) {
         taskQueue.updateTaskStatus(next.id, QueuedTaskStatus.paused);
       } else {
-        error = exception.toString();
+        // 错误消息已在 orchestrator 中添加到对话中，不需要设置 error 字段
         taskQueue.updateTaskStatus(next.id, QueuedTaskStatus.failed);
       }
     } catch (exception) {
       if (cancellation.isCancelled) {
         taskQueue.updateTaskStatus(next.id, QueuedTaskStatus.paused);
       } else {
-        error = exception.toString();
+        // 错误消息已在 orchestrator 中添加到对话中，不需要设置 error 字段
         taskQueue.updateTaskStatus(next.id, QueuedTaskStatus.failed);
       }
     } finally {
