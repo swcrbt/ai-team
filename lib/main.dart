@@ -6,26 +6,40 @@ import 'package:path_provider/path_provider.dart';
 import 'app.dart';
 import 'core/local_store.dart';
 import 'core/model_gateway.dart';
+import 'core/storage_directories.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final store = JsonLocalStore.applicationSupportStore(
-    await getApplicationSupportDirectory(),
+  final applicationSupportDirectory = await getApplicationSupportDirectory();
+  final storageConfigStore = StorageDirectoryConfigStore.applicationSupport(
+    applicationSupportDirectory,
   );
-  await _migrateLegacyState(store);
-  final state = await store.load();
+  final storageDirectories = await storageConfigStore.load();
+  final store = JsonLocalStore(
+    File(storageDirectories.stateFilePath),
+  );
+  final legacyStore = JsonLocalStore.defaultStore();
+  await _migrateLegacyState(store, legacyStore);
+  final state = await JsonLocalStore.loadWithLegacyRecovery(
+    targetStore: store,
+    legacyStore: legacyStore,
+  );
   runApp(AiTeamApp(
     initialState: state,
     modelGateway: OpenAiCompatibleGateway(),
     onStateChanged: store.save,
+    storageDirectories: storageDirectories,
+    storageDirectoryConfigStore: storageConfigStore,
   ));
 }
 
-Future<void> _migrateLegacyState(JsonLocalStore targetStore) async {
+Future<void> _migrateLegacyState(
+  JsonLocalStore targetStore,
+  JsonLocalStore legacyStore,
+) async {
   if (await targetStore.file.exists()) {
     return;
   }
-  final legacyStore = JsonLocalStore.defaultStore();
   if (!await legacyStore.file.exists()) {
     return;
   }
