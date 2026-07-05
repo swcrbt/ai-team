@@ -2,20 +2,22 @@
 
 ## 背景
 
-当前项目已经有图片附件雏形：聊天输入支持选择、拖入和剪贴板图片；消息模型能持久化 `MessageAttachment`；OpenAI 与 Anthropic 请求能把本地图片转成 data URL 或 base64 image block；消息气泡也有图片网格和弹窗预览。
+当前项目已有图片附件雏形：聊天输入支持选择、拖入和剪贴板图片；消息模型能持久化 `MessageAttachment`；OpenAI 与 Anthropic 请求能把本地图片转成 data URL 或 base64 image block；消息气泡也有图片网格和弹窗预览。
 
-参考项目 Codex 的强项不是图片缩略图，而是完整可靠的附件链路：剪贴板图片读取、粘贴路径识别、附件状态管理、模型图片能力校验、失败恢复、队列和历史保真。Flutter GUI 应保留真实缩略图预览，同时达到 Codex 的可靠性。
+参考项目 Codex 的强项不是图片缩略图，而是可靠的附件链路：剪贴板图片读取、粘贴路径识别、附件状态管理、模型图片能力校验、失败恢复、队列和历史保真。Flutter GUI 应保留真实缩略图预览，同时达到 Codex 的可靠性。
+
+本版本吸收独立审查结论，重点修正：异步粘贴拦截、剪贴板文件列表、模型能力默认策略、队列消息归属、提交失败事务边界和测试矩阵。
 
 ## 目标
 
-- 支持从文件选择、拖入、剪贴板图片、粘贴图片路径添加图片。
-- 支持识别 `file://`、引号路径、shell escaped 路径、Windows 路径、WSL 风格路径和普通本地路径中的图片。
+- 支持从文件选择、拖入、剪贴板图片、剪贴板图片文件、粘贴图片路径添加图片。
+- 支持识别 `file://`、引号路径、shell escaped 路径、Windows 路径、UNC 路径、WSL drive path 和普通本地路径中的图片。
 - 待发送区展示真实缩略图、编号、删除入口、错误状态和无障碍标签。
-- 提交前校验当前模型是否支持图片；不支持时阻止提交并保留文本和图片草稿。
+- 当前模型不支持图片时，在添加入口即时拒绝图片，并在提交层二次校验。
 - 图片保存、读取、编码或模型请求失败时给出明确反馈，不静默丢图。
 - 队列任务、会话历史、失败恢复和应用重启后都能保留图片附件语义。
 - 删除会话时清理该会话拥有的图片文件。
-- 用测试覆盖 Codex 同等级关键链路。
+- 用测试覆盖 Codex 同等级关键链路，特别是粘贴事件消费/放行矩阵。
 
 ## 非目标
 
@@ -26,10 +28,12 @@
 ## 设计原则
 
 - 结构化附件是事实来源，文本中不插入也不解析 `[Image #N]`。
+- 粘贴必须走可控通道；不能依赖异步剪贴板读取后再决定 `Focus.onKeyEvent` 返回 `handled` 或 `ignored`。
 - 显式图片粘贴失败要可见；普通文本粘贴路径识别失败则退回普通文本，不打断用户输入。
-- UI 入口校验和提交层校验都要存在，避免模型切换或状态延迟导致错误提交。
+- 图片能力门禁分两层：添加入口即时反馈，提交层防止状态变化和非 UI 调用绕过。
 - 提交失败不能损坏用户草稿；用户应能换模型、删图或重试。
-- 临时文件和持久文件的所有权明确，只有应用创建且未提交的临时文件可自动删除。
+- 草稿附件和已提交附件分离；队列任务不拥有图片，队列中的用户消息拥有 `MessageAttachment`。
+- 临时文件和持久文件的所有权明确，只有应用创建且未提交的文件可自动删除。
 
 ## 架构
 
@@ -39,7 +43,7 @@
 
 `PendingImageAttachment` 字段：
 - `id`：草稿期稳定 ID。
-- `source`：`pickedFile`、`droppedFile`、`clipboardImage`、`pastedPath`。
+- `source`：`pickedFile`、`droppedFile`、`clipboardFile`、`clipboardImage`、`pastedPath`。
 - `file`：当前可读文件。
 - `ownedTemporaryFile`：是否由应用创建且需要取消/销毁时删除。
 - `mimeType`、`fileSize`、`width`、`height`。
@@ -47,20 +51,43 @@
 - `errorMessage`：用于 UI 提示和测试断言。
 
 Controller 负责：
-- 从 `File`、`XFile`、剪贴板 bytes、粘贴文本创建草稿附件。
+- 从 `File`、`XFile`、剪贴板文件、剪贴板 bytes、粘贴文本创建草稿附件。
 - 校验 MIME、扩展名、图片解码和文件可读性。
-- 去重同一路径或同一剪贴板临时文件。
+- 去重同一路径、同一剪贴板文件或同一临时文件。
 - 维护顺序和编号。
 - 删除单张、清空所有、提交成功后释放临时文件所有权、提交失败后保持草稿。
 
 ### 粘贴服务
 
-新增 `ImagePasteService`，把 Codex 的两类粘贴能力拆开：
+新增 `ImagePasteService`，把 Codex 的两类粘贴能力拆开。
 
-- `readClipboardImages()`：读取系统剪贴板里的 PNG、JPEG、GIF、WebP 数据，写入应用临时文件，再交给草稿 controller。
-- `parsePastedImagePath(String text)`：识别单一路径输入，包括 `file://`、单双引号、shell escaped、Windows drive path、UNC path 和普通本地路径。路径存在且可解码为图片时添加附件；否则让 TextField 按普通文本粘贴。
+`readClipboardImageCandidates()`：
+- 优先遍历剪贴板 items 中的图片文件或文件列表，包括系统能提供的本地文件、文件 URI、可读文件对象。
+- 多个文件候选按剪贴板 item 顺序保留；非图片文件静默过滤，不因单个非图片文件中断整批读取。
+- 看起来是图片但不可读或不可解码的文件返回结构化错误，不静默丢弃。
+- 文件候选只接受当前平台可读且可解码的图片。
+- 没有可读图片文件时，再读取 PNG、JPEG、GIF、WebP 等图片 bytes，写入应用临时文件。
+- 剪贴板不可用或图片 bytes 编码失败时返回结构化错误；剪贴板没有图片时返回空结果。
 
-Flutter 桌面不需要 Codex 的终端 paste burst 状态机，因为系统 paste 事件由 TextField 和键盘事件提供；但保留“图片粘贴”和“文本路径粘贴”两条路径的分层。
+`parsePastedImagePath(String text)`：
+- 只处理单一路径输入。
+- 支持 `file://`、单双引号、shell escaped、Windows drive path、UNC path、普通本地路径。
+- WSL drive path 转换仅在 Linux/WSL 环境生效；其他平台只做字符串识别，不强行映射。
+- 解析出的路径必须存在、当前平台可读且可解码为图片，才添加附件。
+- 解析失败或不是图片时返回 `notImagePath`，由粘贴 action 当普通文本插入。
+
+### 可控粘贴通道
+
+聊天输入不再用 `Focus.onKeyEvent` 异步读取剪贴板后返回 `ignored` 来放行原生粘贴。实现时要接管 paste shortcut：
+
+- 用 `Shortcuts`/`Actions` 覆盖聊天输入的 paste intent。
+- Paste action 内同步消费这次快捷键，然后异步读取剪贴板。
+- 如果读到图片文件或图片 bytes，添加附件，不修改文本。
+- 如果剪贴板文本是单一图片路径，添加附件，不把路径插入输入框。
+- 如果是普通文本，代码按当前 `TextEditingController.selection` 替换选区、清空 composing、更新光标位置，保持原生粘贴语义。
+- 如果剪贴板读取失败且无法判定文本内容，显示错误并不修改输入框。
+
+这样避免图片和路径重复插入，也避免普通文本粘贴被异步事件吞掉。
 
 ### 持久图片服务
 
@@ -69,26 +96,58 @@ Flutter 桌面不需要 Codex 的终端 paste burst 状态机，因为系统 pas
 - 支持从草稿附件保存到 `images/<conversationId>/`。
 - 图片保存失败返回结构化错误，不静默跳过。
 - `readImageAsDataUrl` 失败时抛出可展示错误，由 gateway 或 dispatch 层转成用户可见消息。
-- 会话删除时调用 `cleanupConversationImages(conversationId)`。
+- 会话删除成功后调用 `cleanupConversationImages(conversationId)`；清理失败记录错误，但不回滚会话删除。
+
+### 提交事务边界
+
+提交采用准备阶段和提交阶段两段式处理：
+
+1. UI 层读取当前文本和草稿附件快照，不清空输入。
+2. 校验当前模型是否支持图片；不支持则拒绝并保留草稿。
+3. 校验所有草稿附件都是 `ready`；失败则标记对应附件并保留草稿。
+4. 生成最终用户消息 ID。
+5. `ImageService` 保存所有图片并生成 `MessageAttachment`，同时记录本次新建文件。
+6. 如果任一图片保存失败，删除本次已保存文件，输入和草稿保持原状，只更新失败附件状态。
+7. dispatch/orchestrator 使用同一个用户消息 ID 创建 `ChatMessage`，并在用户消息写入状态后触发 `onUserMessageCommitted`。
+8. UI 收到 `onUserMessageCommitted` 后才清空输入和草稿，并释放草稿临时文件所有权。
+9. 如果用户消息写入前发生失败，删除本次已保存文件，输入和草稿保持原状。
+10. 如果用户消息已写入后模型请求失败，用户消息和附件保留，由系统错误消息解释失败。
+
+此设计避免 dispatch 失败后再把 `List<File>` 反向恢复为草稿状态。
 
 ### 模型能力
 
-给 `ModelProfile` 增加 `supportsImages`，默认值为 `true`，避免老配置被硬阻塞。模型管理 UI 提供“支持图片输入”开关。后续如需扩展，可迁移为 `inputModalities`。
+给 `ModelProfile` 增加 `supportsImages`。
 
-提交前检查当前会话实际使用的模型：
+默认策略：
+- 已有配置缺字段时按 `true` 迁移，避免升级后现有用户流程被突然硬阻塞。
+- 新建自定义模型默认 `false`，用户需要显式开启“支持图片输入”。
+- 项目内置或模板模型可按已知模型能力设置默认值；未知模型不得自动推断为支持图片。
+
+UI 与提交层规则：
+- 文件选择、拖入、剪贴板图片、图片路径粘贴在当前模型不支持图片时即时拒绝，并显示短错误提示。
+- 普通文本粘贴不受图片能力限制。
+- 提交层再次检查当前会话实际使用的模型。
 - 成员私聊检查该成员模型。
 - 团队会话检查秘书模型；如果后续图片会传给工作成员，再扩展为参与成员全量检查。
-- 不支持图片时不调用 dispatch，保留文本和附件并显示错误。
-
-dispatch 层再次校验，作为 UI 外调用和状态变化的安全网。
+- dispatch 层保留同样校验，作为 UI 外调用和状态变化的安全网。
 
 ### 队列和历史
 
-`QueuedTask` 增加 `attachments: List<MessageAttachment>` 字段。排队、暂停、恢复和运行时都保留附件。
+队列任务不直接保存图片附件。当前项目入队时会创建用户消息，并用 `QueuedTask.messageIds` 关联该消息；图片应归属于这条排队用户消息，而不是归属于 `QueuedTask`。
 
-`ChatMessage.attachments` 继续作为已提交消息的事实来源。失败恢复时保留草稿层 `PendingImageAttachment`；成功提交后只持久化 `MessageAttachment`。
+队列流程：
+- 用户排队时，先生成排队用户消息 ID，再把草稿图片保存为该消息的 `MessageAttachment`。
+- 只有图片全部保存成功后，才创建排队用户消息和 `QueuedTask`。
+- 只有排队用户消息和 `QueuedTask` 都持久化成功后，才清空输入和草稿。
+- 如果 `QueuedTask` 创建失败，删除本次创建的排队用户消息和图片，输入和草稿保持原状。
+- `QueuedTask.messageIds` 继续包含排队用户消息 ID；`QueuedTask` 不新增图片字段。
+- 运行队列任务时复用已有排队用户消息及其附件，不再创建第二条用户消息。
+- 任务备注可作为额外请求上下文加入模型输入，但不改变原排队用户消息的附件归属。
+- 删除队列任务时，通过 `messageIds` 找到该任务创建和拥有的关联消息，并清理这些消息拥有的图片附件。
+- 会话删除时清理该会话所有已提交图片，包括排队用户消息的图片。
 
-跨会话历史菜单继续显示文本预览；如果首条消息只有图片，预览显示“图片 N 张”。
+`ChatMessage.attachments` 继续作为已提交消息的事实来源。跨会话历史菜单继续显示文本预览；如果首条消息只有图片，预览显示“图片 N 张”。
 
 ## UI 行为
 
@@ -97,14 +156,17 @@ dispatch 层再次校验，作为 UI 外调用和状态变化的安全网。
 - 输入框上方显示横向缩略图条。
 - 每张图片显示编号、删除按钮、错误图标或加载状态。
 - 点击缩略图打开预览对话框，可左右切换、放大缩小、关闭。
-- 删除按钮使用 `IconButton`/`Semantics`，提供明确 label。
+- 删除按钮使用 `IconButton` 和 `Semantics`，提供明确 label。
+- 当前模型不支持图片时，添加按钮禁用；拖入和粘贴图片显示短错误提示。
 - 不使用解释性教学文案；错误只在实际失败时显示简短提示。
 
 ### 粘贴体验
 
-- `Cmd/Ctrl+V` 时先尝试读取剪贴板图片；如果读到图片，消费本次粘贴事件并添加附件；如果没有图片，放行 TextField 原生文本粘贴。
-- 文本粘贴前检查剪贴板文本；如果文本是单一图片路径，则消费本次粘贴事件并添加附件；如果不是图片路径，则放行原生文本粘贴。
-- 显式图片粘贴失败显示 snackbar 或输入区错误状态。
+- `Cmd/Ctrl+V` 在聊天输入聚焦时进入自定义 paste action。
+- 剪贴板图片文件优先，图片 bytes 其次，图片路径文本再次，普通文本最后。
+- 图片或单一图片路径命中时添加附件，不插入文本。
+- 普通文本按当前 selection 插入，保持用户熟悉的粘贴行为。
+- 显式图片读取失败显示 snackbar 或输入区错误状态。
 
 ### 提交体验
 
@@ -118,67 +180,96 @@ dispatch 层再次校验，作为 UI 外调用和状态变化的安全网。
 - 用户消息和模型消息均可显示图片附件网格。
 - 单图使用较大的预览，多图使用稳定尺寸网格，移动或窄宽时不溢出。
 - 图片缺失或损坏时显示稳定占位，不破坏消息布局。
+- 复制消息文本时只复制文本和“图片 N 张”摘要，不隐式复制本地路径。
 
 ## 数据流
 
+### 即时提交
+
 1. 用户选择、拖入或粘贴图片。
-2. `ImagePasteService` 或 picker/drop handler 产出文件或 bytes。
+2. `ImagePasteService` 或 picker/drop handler 产出文件候选或 bytes。
 3. `PendingImageAttachmentController` 校验并加入草稿。
 4. UI 渲染缩略图列表。
 5. 用户提交。
 6. UI 与 dispatch 层检查模型图片能力。
-7. dispatch 创建最终用户消息 ID。
+7. 生成最终用户消息 ID。
 8. `ImageService` 把草稿图片保存为 `MessageAttachment`。
-9. orchestrator 将带附件的 `ChatMessage` 写入会话并发给模型。
-10. gateway 读取附件 data URL，构造 OpenAI 或 Anthropic 图片请求。
-11. 成功后清理草稿临时文件所有权；失败按发生阶段恢复或保留状态。
+9. orchestrator 使用同一个用户消息 ID 写入带附件的 `ChatMessage`。
+10. UI 收到用户消息已写入回调后清空输入和草稿。
+11. gateway 读取附件 data URL，构造 OpenAI 或 Anthropic 图片请求。
+
+### 队列提交
+
+1. 用户排队。
+2. 生成排队用户消息 ID。
+3. `ImageService` 把草稿图片保存为排队用户消息的 `MessageAttachment`。
+4. 全部保存成功后，创建带附件的排队用户消息和 `QueuedTask`。
+5. 排队用户消息和 `QueuedTask` 都持久化成功后，清空输入和草稿。
+6. 队列运行时复用排队用户消息及其附件向模型请求，不创建重复用户消息。
+7. 任务删除时通过 `QueuedTask.messageIds` 清理该任务拥有的关联消息和图片。
 
 ## 错误处理
 
 - 剪贴板不可用：显示“剪贴板不可用”。
-- 剪贴板无图片：不报错，让普通粘贴继续。
-- 路径不是图片：不报错，作为文本粘贴。
+- 剪贴板无图片：继续检查文本；普通文本按 selection 插入。
+- 路径不是图片：作为文本粘贴。
 - 图片不可读或解码失败：附件进入错误状态，不允许提交该附件。
-- 模型不支持图片：阻止提交，保留草稿。
+- 模型不支持图片：添加入口拒绝图片，提交层阻止提交，保留草稿。
 - 保存图片失败：阻止提交，保留草稿并标记失败图片。
+- 保存多张图片时任一失败：删除本次已保存文件，保留草稿并标记失败图片。
+- 队列图片保存失败：排队失败，删除本次已保存文件并保留草稿。
+- 队列任务创建失败：删除本次创建的排队用户消息和图片，保留草稿。
 - 请求编码图片失败：模型调用失败消息中说明图片读取失败，避免静默丢图。
+- 删除会话图片清理失败：记录错误，不阻止会话删除。
 
 ## 测试策略
 
 ### 单元测试
 
-- `ImagePasteService` 路径解析：`file://`、单双引号、shell escaped、空格路径、Windows drive path、UNC path、非图片文本。
+- `ImagePasteService` 路径解析：`file://`、单双引号、shell escaped、空格路径、Windows drive path、UNC path、WSL drive path、非图片文本。
+- `ImagePasteService` 候选优先级：剪贴板图片文件优先，图片 bytes fallback，普通文本 fallback。
+- `ImagePasteService` 多文件读取：多张图片保序添加，混合图片和非图片文件时过滤非图片。
 - `PendingImageAttachmentController`：添加、去重、删除、临时文件清理、错误状态。
-- `ImageService`：保存图片、尺寸读取、data URL、保存失败。
-- `ModelProfile` 序列化默认 `supportsImages=true`。
+- `ImageService`：保存图片、尺寸读取、data URL、保存失败、部分保存失败回滚。
+- `ModelProfile`：旧配置迁移默认 `supportsImages=true`，新建自定义模型默认 `false`。
 
 ### 应用层测试
 
 - 支持图片的模型能提交文本加图片。
-- 不支持图片的模型阻止提交并保留草稿。
-- 队列任务保留图片附件。
-- 删除会话清理图片目录。
+- 不支持图片的模型在添加入口拒绝图片。
+- 不支持图片的模型在提交层阻止提交并保留草稿。
+- 保存图片失败时输入和草稿不丢失。
+- 队列任务的排队用户消息保留图片附件，运行时不创建重复用户消息。
+- 删除队列任务通过 `messageIds` 清理关联消息图片。
+- 删除会话清理已提交图片，包括排队用户消息中的图片。
 - gateway 图片读取失败不静默跳过。
 
-### Widget 测试
+### Widget / 集成测试
 
+- 剪贴板图片消费 paste 事件，TextField 不插入文本。
+- 普通文本 paste 插入文本。
+- 单一图片路径 paste 消费事件并添加附件。
+- 非图片路径 paste 作为文本。
+- 不支持图片模型下，图片 bytes、图片文件、图片路径粘贴被消费并拒绝，普通文本仍插入。
+- 普通文本 paste 覆盖选区、清空 composing 并把光标放到插入文本末尾。
+- 剪贴板图片读取失败显示错误且不破坏现有文本。
 - 待发送缩略图显示编号、删除、错误态。
-- 图片路径粘贴转换为附件，普通文本粘贴保留文本。
 - 已发送消息 local-only、text+local、多图、缺失图片占位。
 - 窄宽布局不溢出，按钮有语义 label。
 
 ## 迁移
 
 - 现有 `ChatMessage.attachments` JSON 保持兼容。
-- 现有 `ModelProfile` 缺少 `supportsImages` 时按 `true` 读取。
+- 现有 `ModelProfile` 缺少 `supportsImages` 时迁移为 `true`。
+- 新建自定义模型默认 `supportsImages=false`。
 - 现有已保存图片目录继续可读。
-- 新队列附件字段缺失时按空列表读取。
+- `QueuedTask` 不新增图片字段；旧队列数据继续通过 `messageIds` 关联消息。
 
 ## 验收标准
 
 - 在 macOS 桌面可直接复制截图或图片文件后粘贴为待发送图片。
 - 粘贴本地图片路径或 `file://` 图片路径会添加附件；粘贴普通文本不受影响。
 - 图片模型能收到 OpenAI/Anthropic 请求中的图片 content part。
-- 非图片模型阻止提交并保留输入。
+- 非图片模型在添加图片时即时反馈，并在提交时保留输入。
 - 保存或读取图片失败时用户能看到错误，且图片不会被静默丢弃。
-- 排队、暂停恢复和删除会话的图片行为都有测试覆盖。
+- 排队、暂停恢复、取消队列任务和删除会话的图片行为都有测试覆盖。
