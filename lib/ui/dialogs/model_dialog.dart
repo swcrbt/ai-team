@@ -30,6 +30,7 @@ Future<void> showModelDialog(
   var streaming = model?.streaming ?? true;
   var reasoningEffort = model?.reasoningEffort ?? reasoningEffortOffValue;
   var protocol = model?.protocol ?? ModelProtocol.chatCompletions;
+  var supportsImages = model?.supportsImages ?? false;
   String? validationError;
   await showDialog<void>(
     context: context,
@@ -91,6 +92,14 @@ Future<void> showModelDialog(
                     onChanged: (value) =>
                         setDialogState(() => streaming = value),
                     title: const Text('流式输出'),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  SwitchListTile(
+                    value: supportsImages,
+                    onChanged: (value) =>
+                        setDialogState(() => supportsImages = value),
+                    title: const Text('支持图片输入'),
+                    subtitle: const Text('仅视觉模型开启；未知自定义模型默认关闭'),
                     contentPadding: EdgeInsets.zero,
                   ),
                   DropdownButtonFormField<String>(
@@ -159,6 +168,7 @@ Future<void> showModelDialog(
                       ? null
                       : reasoningEffort,
                   protocol: protocol,
+                  supportsImages: supportsImages,
                 );
                 if (model == null) {
                   controller.addModel(next);
