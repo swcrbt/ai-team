@@ -399,11 +399,17 @@ class AppController extends ChangeNotifier {
     String conversationId,
     String text, {
     List<File>? images,
+    String? userMessageId,
+    List<MessageAttachment>? preparedAttachments,
+    VoidCallback? onUserMessageCommitted,
   }) async {
     await _dispatch.dispatchConversation(
       conversationId,
       text,
       images: images,
+      userMessageId: userMessageId,
+      preparedAttachments: preparedAttachments,
+      onUserMessageCommitted: onUserMessageCommitted,
     );
   }
 

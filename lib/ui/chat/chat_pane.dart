@@ -1,17 +1,25 @@
 import 'dart:async';
+import 'dart:io';
 
+import 'package:cross_file/cross_file.dart';
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:mime/mime.dart';
 
 import '../../application/app_controller.dart';
 import '../../application/chat_streaming.dart';
 import '../../core/domain.dart';
+import '../../core/workspace/image_paste_service.dart';
+import '../../core/workspace/pending_image_attachment.dart';
 import '../app_helpers.dart';
 import '../management/management_pages.dart';
 import 'chat_controls.dart';
 import 'message_bubble.dart';
+import 'image_picker_button.dart';
+import 'image_preview_list.dart';
 
 class ChatPane extends StatefulWidget {
   const ChatPane({
@@ -19,11 +27,13 @@ class ChatPane extends StatefulWidget {
     required this.controller,
     required this.conversationId,
     this.diagnostics,
+    this.imagePasteService,
   });
 
   final AppController controller;
   final String conversationId;
   final ChatScrollDiagnostics? diagnostics;
+  final ImagePasteService? imagePasteService;
 
   @override
   State<ChatPane> createState() => ChatPaneState();
@@ -53,9 +63,21 @@ class ChatPaneState extends State<ChatPane> {
   ValueListenable<ChatStreamingDraft?>? activeStreamingDraftListenable;
   VoidCallback? activeStreamingDraftListener;
 
+  // 图片功能状态
+  late final ImagePasteService imagePasteService;
+  final List<PendingImageAttachment> _pendingImages = [];
+  bool _isDraggingImages = false;
+
+  @override
+  void initState() {
+    super.initState();
+    imagePasteService = widget.imagePasteService ?? ImagePasteService();
+  }
+
   @override
   void dispose() {
     _clearActiveStreamingDraftSubscription();
+    _deleteOwnedPendingImages(_pendingImages);
     textController.dispose();
     messageScrollController.dispose();
     super.dispose();
@@ -281,6 +303,7 @@ class ChatPaneState extends State<ChatPane> {
                                     widget.controller.streamingDraftListenable(
                                   conversation.messages[index].id,
                                 ),
+                                imageService: widget.controller.imageService,
                                 diagnostics: widget.diagnostics,
                               );
                             }
@@ -339,36 +362,102 @@ class ChatPaneState extends State<ChatPane> {
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 10, 24, 18),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: const Color(0xFFE5E7EB)),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
+        DropTarget(
+          enable: !widget.controller.isDispatching,
+          onDragEntered: (_) => setState(() => _isDraggingImages = true),
+          onDragExited: (_) => setState(() => _isDraggingImages = false),
+          onDragDone: (details) {
+            setState(() => _isDraggingImages = false);
+            unawaited(_addDroppedImages(details.files));
+          },
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 10, 24, 18),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border.all(
+                  color: _isDraggingImages
+                      ? const Color(0xFF2563EB)
+                      : const Color(0xFFE5E7EB),
+                  width: _isDraggingImages ? 1.5 : 1,
+                ),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
+                // 图片选择按钮
+                ImagePickerButton(
+                  onImagesPicked: (files) async {
+                    if (!_canAddImages()) return;
+                    for (final file in files) {
+                      try {
+                        final attachment = await imagePasteService.attachmentFromFile(
+                          file,
+                          PendingImageSource.pickedFile,
+                        );
+                        setState(() => _pendingImages.add(attachment));
+                      } catch (e) {
+                        // 忽略无效图片
+                      }
+                    }
+                  },
+                  enabled: !widget.controller.isDispatching,
+                ),
+                const SizedBox(width: 4),
                 Expanded(
-                  child: Focus(
-                    onKeyEvent: _handleInputKeyEvent,
-                    child: TextField(
-                      key: ValueKey('chat-input-${conversation.id}'),
-                      controller: textController,
-                      minLines: 3,
-                      maxLines: 4,
-                      decoration: InputDecoration(
-                        hintText: inputHint(widget.controller, conversation),
-                        border: InputBorder.none,
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 16,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // 图片预览
+                      if (_pendingImages.isNotEmpty)
+                        ImagePreviewList(
+                          images: _pendingImages,
+                          onRemove: (index) {
+                            final removed = _pendingImages.removeAt(index);
+                            _deleteOwnedPendingImages([removed]);
+                            setState(() {});
+                          },
+                        ),
+                      // 输入框
+                      Shortcuts(
+                        shortcuts: const <ShortcutActivator, Intent>{
+                          SingleActivator(LogicalKeyboardKey.keyV, meta: true):
+                              PasteTextIntent(SelectionChangedCause.keyboard),
+                          SingleActivator(LogicalKeyboardKey.keyV, control: true):
+                              PasteTextIntent(SelectionChangedCause.keyboard),
+                        },
+                        child: Actions(
+                          actions: <Type, Action<Intent>>{
+                            PasteTextIntent: CallbackAction<PasteTextIntent>(
+                              onInvoke: (_) {
+                                unawaited(_handleControlledPaste());
+                                return null;
+                              },
+                            ),
+                          },
+                          child: Focus(
+                            onKeyEvent: _handleInputKeyEvent,
+                            child: TextField(
+                              key: ValueKey('chat-input-${conversation.id}'),
+                              controller: textController,
+                              minLines: 3,
+                              maxLines: 4,
+                              decoration: InputDecoration(
+                                hintText: inputHint(widget.controller, conversation),
+                                border: InputBorder.none,
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 16,
+                                ),
+                              ),
+                              onSubmitted: (_) => _submit(),
+                            ),
+                          ),
                         ),
                       ),
-                      onSubmitted: (_) => _submit(),
-                    ),
+                    ],
                   ),
                 ),
                 Padding(
@@ -392,6 +481,7 @@ class ChatPaneState extends State<ChatPane> {
                   ),
                 ),
               ],
+              ),
             ),
           ),
         ),
@@ -473,8 +563,196 @@ class ChatPaneState extends State<ChatPane> {
 
   Future<void> _submit() async {
     final text = textController.text;
-    textController.clear();
-    await widget.controller.dispatchConversation(widget.conversationId, text);
+    
+    // 如果文本和图片都为空，不发送
+    if (text.trim().isEmpty && _pendingImages.isEmpty) return;
+    
+    // 检查是否有不可提交的图片
+    final invalidImages = _pendingImages.where((p) => !p.canSubmit).toList();
+    if (invalidImages.isNotEmpty) {
+      _showInputError('部分图片不可用，请移除后重试');
+      return;
+    }
+    
+    // 保存待提交的图片
+    final pendingToSubmit = List<PendingImageAttachment>.from(_pendingImages);
+    
+    // 生成消息 ID
+    final messageId = 'msg-${DateTime.now().microsecondsSinceEpoch}';
+    
+    // 保存图片到工作区
+    List<MessageAttachment> attachments = [];
+    if (pendingToSubmit.isNotEmpty) {
+      try {
+        attachments = await widget.controller.imageService.savePendingImages(
+          conversationId: widget.conversationId,
+          messageId: messageId,
+          images: pendingToSubmit,
+        );
+      } catch (e) {
+        _showInputError('图片保存失败：$e');
+        return;
+      }
+    }
+    
+    // 提交事务：dispatch 带回调
+    var committed = false;
+    try {
+      await widget.controller.dispatchConversation(
+        widget.conversationId,
+        text,
+        userMessageId: messageId,
+        preparedAttachments: attachments,
+        onUserMessageCommitted: () {
+          committed = true;
+          if (!mounted) return;
+          setState(() {
+            textController.clear();
+            _pendingImages.clear();
+          });
+        },
+      );
+    } catch (e) {
+      // 如果提交失败且未 committed，回滚图片
+      if (!committed && attachments.isNotEmpty) {
+        await widget.controller.imageService.deleteMessageImages(attachments);
+      }
+      _showInputError('消息发送失败：$e');
+      return;
+    }
+    
+    // 清理临时文件
+    if (committed) {
+      _deleteOwnedPendingImages(pendingToSubmit);
+    }
+  }
+
+  Future<void> _addDroppedImages(List<XFile> files) async {
+    if (widget.controller.isDispatching) {
+      return;
+    }
+    if (!_canAddImages()) {
+      return;
+    }
+    final imageFiles = <File>[];
+    for (final droppedFile in files) {
+      final path = droppedFile.path;
+      if (path.isEmpty) {
+        continue;
+      }
+      final mimeType = lookupMimeType(path);
+      if (mimeType?.startsWith('image/') ?? false) {
+        imageFiles.add(File(path));
+      }
+    }
+    if (imageFiles.isEmpty || !mounted) {
+      return;
+    }
+    
+    // 转换为 PendingImageAttachment
+    for (final file in imageFiles) {
+      try {
+        final attachment = await imagePasteService.attachmentFromFile(
+          file,
+          PendingImageSource.droppedFile,
+        );
+        setState(() => _pendingImages.add(attachment));
+      } catch (e) {
+        // 忽略无效图片
+      }
+    }
+  }
+
+  bool _canAddImages() {
+    final allowed = widget.controller
+        .modelSupportsImagesForConversation(widget.conversationId);
+    if (!allowed) {
+      _showInputError('当前模型不支持图片输入');
+    }
+    return allowed;
+  }
+
+  Future<void> _handleControlledPaste() async {
+    final textBefore = textController.value;
+    final supportsImages = widget.controller
+        .modelSupportsImagesForConversation(widget.conversationId);
+
+    // 尝试读取剪贴板中的图片
+    final imageCandidates = supportsImages
+        ? await imagePasteService.readClipboardImageCandidates()
+        : const <PendingImageAttachment>[];
+    if (imageCandidates.isNotEmpty) {
+      setState(() => _pendingImages.addAll(imageCandidates));
+      return;
+    }
+
+    // 读取剪贴板文本
+    final clipboardText = await Clipboard.getData(Clipboard.kTextPlain);
+    final text = clipboardText?.text ?? '';
+    if (text.isEmpty) {
+      return;
+    }
+
+    // 如果支持图片，尝试解析图片路径
+    if (supportsImages) {
+      final pathResult = await imagePasteService.parsePastedImagePath(text);
+      if (pathResult.isImagePath && pathResult.path != null) {
+        await _addPendingImageFile(
+          File(pathResult.path!),
+          PendingImageSource.pastedPath,
+        );
+        return;
+      }
+      if (pathResult.errorMessage != null) {
+        _showInputError(pathResult.errorMessage!);
+        return;
+      }
+    } else if (await imagePasteService
+        .parsePastedImagePath(text)
+        .then((r) => r.isImagePath)) {
+      _showInputError('当前模型不支持图片输入');
+      return;
+    }
+
+    // 插入普通文本
+    textController.value = ImagePasteService.insertText(textBefore, text);
+  }
+
+  Future<void> _addPendingImageFile(
+    File file,
+    PendingImageSource source,
+  ) async {
+    try {
+      final attachment = await imagePasteService.attachmentFromFile(
+        file,
+        source,
+      );
+      if (mounted) {
+        setState(() => _pendingImages.add(attachment));
+      }
+    } catch (e) {
+      _showInputError('图片加载失败');
+    }
+  }
+
+  void _showInputError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _deleteOwnedPendingImages(List<PendingImageAttachment> attachments) {
+    for (final attachment in attachments) {
+      if (!attachment.ownedTemporaryFile) {
+        continue;
+      }
+      unawaited(attachment.file.delete().catchError((_) => attachment.file));
+    }
   }
 
   void _handleConversationMenuAction(String value) {
@@ -559,6 +837,14 @@ class ChatPaneState extends State<ChatPane> {
       return KeyEventResult.ignored;
     }
     final key = event.logicalKey;
+    // 粘贴快捷键由 Shortcuts/Actions 处理
+    final isPasteShortcut = key == LogicalKeyboardKey.keyV &&
+        (HardwareKeyboard.instance.isMetaPressed ||
+            HardwareKeyboard.instance.isControlPressed);
+    if (isPasteShortcut) {
+      // 让 Shortcuts/Actions 处理
+      return KeyEventResult.ignored;
+    }
     if (key == LogicalKeyboardKey.escape) {
       if (widget.controller.isConversationDispatching(widget.conversationId)) {
         widget.controller.stopConversationById(widget.conversationId);
