@@ -441,17 +441,22 @@ class TeamOrchestrator {
         state.models.firstWhere((item) => item.id == secretary.modelId);
     ensureModelReady(member: secretary, model: secretaryModel);
     final now = DateTime.now();
-    final messages = [
-      ...conversation.messages,
-      ChatMessage(
-        id: userMessageId ?? orchestrationId('msg'),
-        authorName: '我',
-        content: userText,
-        createdAt: now,
-        isUser: true,
-        attachments: attachments ?? const [],
-      ),
-    ];
+    
+    // 检查消息是否已存在（用于队列任务复用）
+    final userMessage = ChatMessage(
+      id: userMessageId ?? orchestrationId('msg'),
+      authorName: '我',
+      content: userText,
+      createdAt: now,
+      isUser: true,
+      attachments: attachments ?? const [],
+    );
+    final messageExists = userMessageId != null &&
+        conversation.messages.any((msg) => msg.id == userMessageId);
+    final messages = messageExists
+        ? conversation.messages
+        : [...conversation.messages, userMessage];
+    
     final round = conversation.currentRound + 1;
     var workingState = replaceConversation(
       state,
@@ -461,7 +466,9 @@ class TeamOrchestrator {
       ),
     );
     onProgress?.call(workingState);
-    onUserMessageCommitted?.call();
+    if (!messageExists) {
+      onUserMessageCommitted?.call();
+    }
 
     cancellation?.throwIfCancelled();
     var planResult = await _messageRunner.runVisibleMessage(
