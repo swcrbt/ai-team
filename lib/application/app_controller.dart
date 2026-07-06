@@ -335,6 +335,7 @@ class AppController extends ChangeNotifier {
 
   void deleteConversationSession(String conversationId) {
     _conversations.deleteConversationSession(conversationId);
+    unawaited(imageService.cleanupConversationImages(conversationId));
   }
 
   bool isConversationPinned(String conversationId) {
