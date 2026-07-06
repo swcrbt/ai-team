@@ -1,9 +1,12 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+
 import '../core/commands/command_service.dart';
 import '../core/domain.dart';
 import '../core/model_gateway.dart';
 import '../core/orchestrator.dart';
+import '../core/workspace/image_service.dart';
 import 'app_controller_helpers.dart';
 import 'conversation_title_generator.dart';
 import 'state_lookup.dart';
@@ -25,6 +28,7 @@ class DispatchController {
     required this.titleGenerator,
     required this.orchestrator,
     required this.commandService,
+    required this.imageService,
     required this.selectedConversationId,
     required this.notify,
     required this.onStreamingDraft,
@@ -38,6 +42,7 @@ class DispatchController {
   final ConversationTitleGenerator titleGenerator;
   final TeamOrchestrator orchestrator;
   final CommandService commandService;
+  final ImageService imageService;
   final DispatchConversationIdReader selectedConversationId;
   final DispatchNotifier notify;
   final StreamingMessageDraftHandler onStreamingDraft;
@@ -137,15 +142,25 @@ class DispatchController {
 
   Future<void> dispatchConversation(
     String conversationId,
-    String text,
-  ) async {
+    String text, {
+    List<File>? images,
+    String? userMessageId,
+    List<MessageAttachment>? preparedAttachments,
+    VoidCallback? onUserMessageCommitted,
+  }) async {
     final trimmed = text.trim();
-    if (trimmed.isEmpty || isDispatching) {
+    if (trimmed.isEmpty && (images == null || images.isEmpty)) {
+      return;
+    }
+    if (isDispatching) {
       return;
     }
     if (!_canDispatchConversation(conversationId)) {
       notify();
       return;
+    }
+    if ((images != null && images.isNotEmpty) && !_conversationModelSupportsImages(conversationId)) {
+      throw StateError('当前模型不支持图片输入');
     }
     isDispatching = true;
     error = null;
@@ -154,6 +169,27 @@ class DispatchController {
     _activeDispatchConversationId = conversationId;
     _requestedCancellationStatus = null;
     notify();
+    
+    // 处理图片附件
+    List<MessageAttachment> attachments = preparedAttachments ?? [];
+    if (images != null && images.isNotEmpty) {
+      final messageId = userMessageId ?? 'msg-${DateTime.now().microsecondsSinceEpoch}';
+      for (var i = 0; i < images.length; i++) {
+        try {
+          final attachment = await imageService.saveImage(
+            conversationId: conversationId,
+            messageId: messageId,
+            sourceFile: images[i],
+            index: i,
+          );
+          attachments.add(attachment);
+        } catch (e) {
+          // 图片保存失败，跳过
+          continue;
+        }
+      }
+    }
+    
     try {
       final conversation = conversationByIdOrThrow(state, conversationId);
       final shouldGenerateTitle =
@@ -165,9 +201,12 @@ class DispatchController {
             teamId: conversation.teamId,
             conversationId: conversation.id,
             userText: trimmed,
+            userMessageId: userMessageId,
+            attachments: attachments,
             cancellation: cancellation,
             onProgress: commit,
             onStreamingDraft: onStreamingDraft,
+            onUserMessageCommitted: onUserMessageCommitted,
           ),
         );
       } else if (orchestrator
@@ -182,9 +221,12 @@ class DispatchController {
             state,
             conversationId: conversation.id,
             userText: trimmed,
+            userMessageId: userMessageId,
+            attachments: attachments,
             cancellation: cancellation,
             onProgress: commit,
             onStreamingDraft: onStreamingDraft,
+            onUserMessageCommitted: onUserMessageCommitted,
           ),
         );
       } else {
@@ -193,9 +235,12 @@ class DispatchController {
             state,
             conversationId: conversation.id,
             userText: trimmed,
+            userMessageId: userMessageId,
+            attachments: attachments,
             cancellation: cancellation,
             onProgress: commit,
             onStreamingDraft: onStreamingDraft,
+            onUserMessageCommitted: onUserMessageCommitted,
           ),
         );
       }
@@ -501,5 +546,18 @@ class DispatchController {
         completedAt: DateTime.now(),
       ),
     ];
+  }
+
+  bool _conversationModelSupportsImages(String conversationId) {
+    final conversation = conversationByIdOrThrow(state, conversationId);
+    if (conversation.memberId != null) {
+      final member = state.members.firstWhere((item) => item.id == conversation.memberId);
+      final model = state.models.firstWhere((item) => item.id == member.modelId);
+      return model.supportsImages;
+    }
+    final team = state.teams.firstWhere((item) => item.id == conversation.teamId);
+    final secretary = state.members.firstWhere((item) => item.id == team.secretaryMemberId);
+    final model = state.models.firstWhere((item) => item.id == secretary.modelId);
+    return model.supportsImages;
   }
 }

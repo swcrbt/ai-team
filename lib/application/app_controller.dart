@@ -11,6 +11,7 @@ import '../core/local_store.dart';
 import '../core/orchestrator.dart';
 import '../core/storage_directories.dart';
 import '../core/workspace/workspace_service.dart';
+import '../core/workspace/image_service.dart';
 import 'app_controller_helpers.dart';
 import 'chat_streaming.dart';
 import 'configuration_controller.dart';
@@ -101,6 +102,12 @@ class AppController extends ChangeNotifier {
       commit: _commit,
       gateway: orchestrator.gateway,
     );
+    
+    // 初始化图片服务
+    imageService = ImageService(
+      Directory(this.storageDirectories.stateDirectory),
+    );
+    
     _dispatch = DispatchController(
       readState: () => state,
       commit: _commit,
@@ -109,6 +116,7 @@ class AppController extends ChangeNotifier {
       titleGenerator: _conversationTitleGenerator,
       orchestrator: orchestrator,
       commandService: this.commandService,
+      imageService: imageService,
       selectedConversationId: () => selectedConversationId,
       notify: _notifyListeners,
       onStreamingDraft: _handleStreamingDraft,
@@ -145,6 +153,7 @@ class AppController extends ChangeNotifier {
   late final ConversationController _conversations;
   late final ConversationTitleGenerator _conversationTitleGenerator;
   late final DispatchController _dispatch;
+  late final ImageService imageService;
 
   Set<String> get hiddenConversationIds =>
       _conversationSessions.hiddenConversationIds;
@@ -262,6 +271,19 @@ class AppController extends ChangeNotifier {
     return requireTeam(state, conversation.teamId);
   }
 
+  bool modelSupportsImagesForConversation(String conversationId) {
+    final conversation = conversationByIdOrThrow(state, conversationId);
+    if (conversation.memberId != null) {
+      final member = state.members.firstWhere((item) => item.id == conversation.memberId);
+      final model = state.models.firstWhere((item) => item.id == member.modelId);
+      return model.supportsImages;
+    }
+    final team = state.teams.firstWhere((item) => item.id == conversation.teamId);
+    final secretary = state.members.firstWhere((item) => item.id == team.secretaryMemberId);
+    final model = state.models.firstWhere((item) => item.id == secretary.modelId);
+    return model.supportsImages;
+  }
+
   bool isConversationDispatching(String conversationId) {
     return _dispatch.isConversationDispatching(conversationId);
   }
@@ -370,9 +392,14 @@ class AppController extends ChangeNotifier {
 
   Future<void> dispatchConversation(
     String conversationId,
-    String text,
-  ) async {
-    await _dispatch.dispatchConversation(conversationId, text);
+    String text, {
+    List<File>? images,
+  }) async {
+    await _dispatch.dispatchConversation(
+      conversationId,
+      text,
+      images: images,
+    );
   }
 
   void pauseConversation() {

@@ -15,9 +15,12 @@ class MemberChatDispatcher {
     AppState state, {
     required String conversationId,
     required String userText,
+    String? userMessageId,
+    List<MessageAttachment>? attachments,
     ModelRequestCancellation? cancellation,
     void Function(AppState state)? onProgress,
     StreamingMessageDraftHandler? onStreamingDraft,
+    void Function()? onUserMessageCommitted,
   }) async {
     final conversation =
         state.conversations.firstWhere((item) => item.id == conversationId);
@@ -35,11 +38,12 @@ class MemberChatDispatcher {
     final messages = [
       ...conversation.messages,
       ChatMessage(
-        id: orchestrationId('msg'),
+        id: userMessageId ?? orchestrationId('msg'),
         authorName: '我',
         content: userText,
         createdAt: now,
         isUser: true,
+        attachments: attachments ?? const [],
       ),
     ];
     var workingState = replaceConversation(
@@ -50,6 +54,7 @@ class MemberChatDispatcher {
       ),
     );
     onProgress?.call(workingState);
+    onUserMessageCommitted?.call();
 
     cancellation?.throwIfCancelled();
     final result = await _messageRunner.runVisibleMessage(

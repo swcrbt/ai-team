@@ -134,9 +134,12 @@ class TeamOrchestrator {
     required String teamId,
     String? conversationId,
     required String userText,
+    String? userMessageId,
+    List<MessageAttachment>? attachments,
     ModelRequestCancellation? cancellation,
     void Function(AppState state)? onProgress,
     StreamingMessageDraftHandler? onStreamingDraft,
+    void Function()? onUserMessageCommitted,
   }) async {
     final team = state.teams.firstWhere((item) => item.id == teamId);
     final conversation = state.conversations.firstWhere(
@@ -162,11 +165,12 @@ class TeamOrchestrator {
     final messages = [
       ...conversation.messages,
       ChatMessage(
-        id: orchestrationId('msg'),
+        id: userMessageId ?? orchestrationId('msg'),
         authorName: '我',
         content: userText,
         createdAt: now,
         isUser: true,
+        attachments: attachments ?? const [],
       ),
     ];
     final round = conversation.currentRound + 1;
@@ -175,9 +179,11 @@ class TeamOrchestrator {
       conversation.copyWith(
         messages: messages,
         status: ConversationStatus.running,
+        currentRound: round,
       ),
     );
     onProgress?.call(workingState);
+    onUserMessageCommitted?.call();
 
     cancellation?.throwIfCancelled();
     var planResult = await _messageRunner.runVisibleMessage(
@@ -404,17 +410,23 @@ class TeamOrchestrator {
     AppState state, {
     required String conversationId,
     required String userText,
+    String? userMessageId,
+    List<MessageAttachment>? attachments,
     ModelRequestCancellation? cancellation,
     void Function(AppState state)? onProgress,
     StreamingMessageDraftHandler? onStreamingDraft,
+    void Function()? onUserMessageCommitted,
   }) {
     return _memberChatDispatcher.dispatchMemberChat(
       state,
       conversationId: conversationId,
       userText: userText,
+      userMessageId: userMessageId,
+      attachments: attachments,
       cancellation: cancellation,
       onProgress: onProgress,
       onStreamingDraft: onStreamingDraft,
+      onUserMessageCommitted: onUserMessageCommitted,
     );
   }
 
@@ -452,17 +464,23 @@ class TeamOrchestrator {
     AppState state, {
     required String conversationId,
     required String userText,
+    String? userMessageId,
+    List<MessageAttachment>? attachments,
     ModelRequestCancellation? cancellation,
     void Function(AppState state)? onProgress,
     StreamingMessageDraftHandler? onStreamingDraft,
+    void Function()? onUserMessageCommitted,
   }) {
     return _secretaryPrivateDispatcher.dispatch(
       state,
       conversationId: conversationId,
       userText: userText,
+      userMessageId: userMessageId,
+      attachments: attachments,
       cancellation: cancellation,
       onProgress: onProgress,
       onStreamingDraft: onStreamingDraft,
+      onUserMessageCommitted: onUserMessageCommitted,
     );
   }
 }
