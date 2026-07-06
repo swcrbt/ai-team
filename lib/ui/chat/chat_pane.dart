@@ -574,6 +574,12 @@ class ChatPaneState extends State<ChatPane> {
       return;
     }
     
+    // 提交层门禁：验证当前模型是否支持图片
+    if (_pendingImages.isNotEmpty && !widget.controller.modelSupportsImagesForConversation(widget.conversationId)) {
+      _showInputError('当前模型不支持图片输入');
+      return;
+    }
+    
     // 保存待提交的图片
     final pendingToSubmit = List<PendingImageAttachment>.from(_pendingImages);
     
@@ -605,13 +611,16 @@ class ChatPaneState extends State<ChatPane> {
         preparedAttachments: attachments,
         onUserMessageCommitted: () {
           committed = true;
-          if (!mounted) return;
-          setState(() {
-            textController.clear();
-            _pendingImages.clear();
-          });
         },
       );
+      // dispatch 完全成功，清空草稿
+      if (committed && mounted) {
+        setState(() {
+          textController.clear();
+          _pendingImages.clear();
+        });
+        _deleteOwnedPendingImages(pendingToSubmit);
+      }
     } catch (e) {
       // 如果提交失败且未 committed，回滚图片
       if (!committed && attachments.isNotEmpty) {
@@ -619,11 +628,6 @@ class ChatPaneState extends State<ChatPane> {
       }
       _showInputError('消息发送失败：$e');
       return;
-    }
-    
-    // 清理临时文件
-    if (committed) {
-      _deleteOwnedPendingImages(pendingToSubmit);
     }
   }
 
