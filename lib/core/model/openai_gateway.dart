@@ -10,15 +10,21 @@ import 'model_gateway_exception.dart';
 import 'openai_request.dart';
 import 'openai_stream_parsing.dart';
 
+typedef ImageDataUrlResolver = Future<String> Function(
+  MessageAttachment attachment,
+);
+
 class OpenAiCompatibleGateway implements MetadataModelGateway {
   OpenAiCompatibleGateway({
     HttpClient? httpClient,
+    this.imageDataUrlResolver,
     this.requestTimeout = const Duration(seconds: 60),
     this.maxRetries = 2,
     this.retryDelay = const Duration(milliseconds: 300),
   }) : _httpClient = httpClient ?? HttpClient();
 
   final HttpClient _httpClient;
+  final ImageDataUrlResolver? imageDataUrlResolver;
   final Duration requestTimeout;
   final int maxRetries;
   final Duration retryDelay;
@@ -110,12 +116,15 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
       request.headers.set(HttpHeaders.authorizationHeader, 'Bearer ${model.apiKey}');
     }
     
+    final imageDataUrls = await _resolveImageDataUrls(messages);
+
     // 根据协议构建不同的请求体
     final requestBody = model.protocol == ModelProtocol.anthropic
         ? buildAnthropicRequestBody(
             model: model,
             systemPrompt: systemPrompt,
             messages: messages,
+            imageDataUrls: imageDataUrls,
             tools: tools,
             toolChoice: toolChoice,
             toolRounds: toolRounds,
@@ -124,6 +133,7 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
             model: model,
             systemPrompt: systemPrompt,
             messages: messages,
+            imageDataUrls: imageDataUrls,
             tools: tools,
             toolChoice: toolChoice,
             toolRounds: toolRounds,
@@ -316,6 +326,29 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
         requestUrl: requestUrl,
       ),
     );
+  }
+
+  Future<Map<String, String>> _resolveImageDataUrls(
+    List<ChatMessage> messages,
+  ) async {
+    final resolver = imageDataUrlResolver;
+    if (resolver == null) {
+      return const {};
+    }
+    final dataUrls = <String, String>{};
+    for (final message in messages) {
+      for (final attachment in message.attachments) {
+        if (attachment.type != MessageAttachmentType.image) {
+          continue;
+        }
+        try {
+          dataUrls[attachment.id] = await resolver(attachment);
+        } catch (error) {
+          throw ModelGatewayException('图片读取失败：$error', isRetryable: false);
+        }
+      }
+    }
+    return dataUrls;
   }
 
   Future<HttpClientResponse> _awaitResponse(

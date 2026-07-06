@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ai_team/core/domain.dart';
 import 'package:ai_team/core/model_gateway.dart';
+import 'package:ai_team/core/workspace/image_service.dart';
 
 void main() {
   late HttpServer server;
@@ -86,6 +87,131 @@ void main() {
 
     expect(content, 'hello from model');
     expect(requests, hasLength(1));
+  });
+
+  test('sends OpenAI compatible image attachments as content parts', () async {
+    late Map<String, Object?> sentBody;
+    unawaited(serve(server, (request) async {
+      requests.add(request);
+      sentBody =
+          jsonDecode(await utf8.decodeStream(request)) as Map<String, Object?>;
+      request.response
+        ..headers.contentType = ContentType.json
+        ..write(jsonEncode({
+          'choices': [
+            {
+              'message': {'content': 'saw image'}
+            }
+          ],
+        }));
+      await request.response.close();
+    }));
+    final temp = await Directory.systemTemp.createTemp('ai_team_image_');
+    addTearDown(() async => temp.delete(recursive: true));
+    final image = File('${temp.path}/fixture.png');
+    await image.writeAsBytes([1, 2, 3]);
+    final imageService = ImageService(temp);
+    final gateway = OpenAiCompatibleGateway(
+      imageDataUrlResolver: imageService.readImageAsDataUrl,
+    );
+
+    await gateway.complete(
+      model: model().copyWith(streaming: false),
+      systemPrompt: 'system',
+      messages: [
+        ChatMessage(
+          id: 'm1',
+          authorName: '我',
+          content: '看图',
+          createdAt: DateTime(2026),
+          isUser: true,
+          attachments: const [
+            MessageAttachment(
+              id: 'attachment-1',
+              type: MessageAttachmentType.image,
+              filePath: 'fixture.png',
+              mimeType: 'image/png',
+            ),
+          ],
+        ),
+      ],
+    );
+
+    final messages = sentBody['messages'] as List<Object?>;
+    final userMessage = messages[1] as Map<String, Object?>;
+    final content = userMessage['content'] as List<Object?>;
+    expect(content.first, containsPair('type', 'text'));
+    expect(content.first, containsPair('text', '我: 看图'));
+    expect(content.last, {
+      'type': 'image_url',
+      'image_url': {
+        'url': 'data:image/png;base64,AQID',
+        'detail': 'auto',
+      },
+    });
+  });
+
+  test('sends Anthropic image attachments as image blocks', () async {
+    late Map<String, Object?> sentBody;
+    unawaited(serve(server, (request) async {
+      requests.add(request);
+      sentBody =
+          jsonDecode(await utf8.decodeStream(request)) as Map<String, Object?>;
+      request.response
+        ..headers.contentType = ContentType.json
+        ..write(jsonEncode({
+          'content': [
+            {'type': 'text', 'text': 'saw image'},
+          ],
+        }));
+      await request.response.close();
+    }));
+    final temp = await Directory.systemTemp.createTemp('ai_team_image_');
+    addTearDown(() async => temp.delete(recursive: true));
+    final image = File('${temp.path}/fixture.png');
+    await image.writeAsBytes([1, 2, 3]);
+    final imageService = ImageService(temp);
+    final gateway = OpenAiCompatibleGateway(
+      imageDataUrlResolver: imageService.readImageAsDataUrl,
+    );
+
+    await gateway.complete(
+      model: model().copyWith(
+        streaming: false,
+        protocol: ModelProtocol.anthropic,
+      ),
+      systemPrompt: 'system',
+      messages: [
+        ChatMessage(
+          id: 'm1',
+          authorName: '我',
+          content: '看图',
+          createdAt: DateTime(2026),
+          isUser: true,
+          attachments: const [
+            MessageAttachment(
+              id: 'attachment-1',
+              type: MessageAttachmentType.image,
+              filePath: 'fixture.png',
+              mimeType: 'image/png',
+            ),
+          ],
+        ),
+      ],
+    );
+
+    final messages = sentBody['messages'] as List<Object?>;
+    final userMessage = messages.first as Map<String, Object?>;
+    final content = userMessage['content'] as List<Object?>;
+    expect(content.first, {'type': 'text', 'text': '看图'});
+    expect(content.last, {
+      'type': 'image',
+      'source': {
+        'type': 'base64',
+        'media_type': 'image/png',
+        'data': 'AQID',
+      },
+    });
   });
 
   test('sends tool definitions and parses non-streaming tool calls', () async {
@@ -676,6 +802,39 @@ void main() {
       future.timeout(const Duration(milliseconds: 250)),
       throwsA(isA<ModelGatewayException>()
           .having((error) => error.message, 'message', contains('已取消'))),
+    );
+  });
+
+  test('fails instead of silently dropping unreadable image attachments',
+      () async {
+    final gateway = OpenAiCompatibleGateway(
+      imageDataUrlResolver: (_) async =>
+          throw const ImageServiceException('图片文件不存在'),
+    );
+
+    await expectLater(
+      gateway.complete(
+        model: model().copyWith(streaming: false),
+        systemPrompt: 'system',
+        messages: [
+          ChatMessage(
+            id: 'm1',
+            authorName: '我',
+            content: '看图',
+            createdAt: DateTime(2026),
+            isUser: true,
+            attachments: const [
+              MessageAttachment(
+                id: 'attachment-1',
+                type: MessageAttachmentType.image,
+                filePath: 'missing.png',
+                mimeType: 'image/png',
+              ),
+            ],
+          ),
+        ],
+      ),
+      throwsA(isA<ModelGatewayException>()),
     );
   });
 }
