@@ -35,17 +35,22 @@ class MemberChatDispatcher {
     final model = state.models.firstWhere((item) => item.id == member.modelId);
     ensureModelReady(member: member, model: model);
     final now = DateTime.now();
-    final messages = [
-      ...conversation.messages,
-      ChatMessage(
-        id: userMessageId ?? orchestrationId('msg'),
-        authorName: '我',
-        content: userText,
-        createdAt: now,
-        isUser: true,
-        attachments: attachments ?? const [],
-      ),
-    ];
+    
+    // 检查消息是否已存在（用于队列任务复用）
+    final userMessage = ChatMessage(
+      id: userMessageId ?? orchestrationId('msg'),
+      authorName: '我',
+      content: userText,
+      createdAt: now,
+      isUser: true,
+      attachments: attachments ?? const [],
+    );
+    final messageExists = userMessageId != null &&
+        conversation.messages.any((msg) => msg.id == userMessageId);
+    final messages = messageExists
+        ? conversation.messages
+        : [...conversation.messages, userMessage];
+    
     var workingState = replaceConversation(
       state,
       conversation.copyWith(
@@ -54,7 +59,9 @@ class MemberChatDispatcher {
       ),
     );
     onProgress?.call(workingState);
-    onUserMessageCommitted?.call();
+    if (!messageExists) {
+      onUserMessageCommitted?.call();
+    }
 
     cancellation?.throwIfCancelled();
     final result = await _messageRunner.runVisibleMessage(

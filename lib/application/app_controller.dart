@@ -76,10 +76,17 @@ class AppController extends ChangeNotifier {
       },
       notify: notifyListeners,
     );
+    
+    // 初始化图片服务
+    imageService = ImageService(
+      Directory(this.storageDirectories.stateDirectory),
+    );
+    
     _taskQueue = TaskQueueController(
       readState: () => state,
       commit: _commit,
       gateway: orchestrator.gateway,
+      imageService: imageService,
     );
     _conversations = ConversationController(
       readState: () => state,
@@ -101,11 +108,6 @@ class AppController extends ChangeNotifier {
       readState: () => state,
       commit: _commit,
       gateway: orchestrator.gateway,
-    );
-    
-    // 初始化图片服务
-    imageService = ImageService(
-      Directory(this.storageDirectories.stateDirectory),
     );
     
     _dispatch = DispatchController(
@@ -354,11 +356,14 @@ class AppController extends ChangeNotifier {
   Future<void> enqueueCurrentConversationTask(
     String text, {
     int priority = 0,
+    List<File>? images,
   }) async {
     await _taskQueue.enqueueConversationTask(
       currentConversation.id,
       text,
       priority: priority,
+      images: images,
+      imageService: imageService,
     );
   }
 

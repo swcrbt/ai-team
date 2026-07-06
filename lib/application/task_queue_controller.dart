@@ -1,5 +1,10 @@
+import 'dart:async';
+import 'dart:io';
+
 import '../core/domain.dart';
 import '../core/model_gateway.dart';
+import '../core/workspace/image_service.dart';
+import '../core/workspace/pending_image_attachment.dart';
 import 'app_controller_helpers.dart';
 import 'state_lookup.dart';
 
@@ -11,11 +16,13 @@ class TaskQueueController {
     required this.readState,
     required this.commit,
     required this.gateway,
+    this.imageService,
   });
 
   final TaskQueueStateReader readState;
   final TaskQueueStateCommitter commit;
   final ModelGateway gateway;
+  final ImageService? imageService;
 
   AppState get state => readState();
 
@@ -41,6 +48,8 @@ class TaskQueueController {
     String conversationId,
     String text, {
     int priority = 0,
+    List<File>? images,
+    ImageService? imageService,
   }) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) {
@@ -81,13 +90,37 @@ class TaskQueueController {
       );
       final createdAt = DateTime.now();
       final taskId = 'task-${createdAt.microsecondsSinceEpoch}';
+      final userMessageId = 'msg-${createdAt.microsecondsSinceEpoch}';
+      
+      // 保存图片附件
+      List<MessageAttachment> attachments = [];
+      if (images != null && images.isNotEmpty && imageService != null) {
+        final pendingImages = images
+            .asMap()
+            .entries
+            .map(
+              (entry) => PendingImageAttachment(
+                id: 'pending-${createdAt.microsecondsSinceEpoch}-${entry.key}',
+                source: PendingImageSource.pickedFile,
+                file: entry.value,
+              ),
+            )
+            .toList();
+        attachments = await imageService.savePendingImages(
+          conversationId: conversationId,
+          messageId: userMessageId,
+          images: pendingImages,
+        );
+      }
+      
       final userMessage = ChatMessage(
-        id: 'msg-${createdAt.microsecondsSinceEpoch}',
+        id: userMessageId,
         authorName: '我',
         content: trimmed,
         createdAt: createdAt,
         isUser: true,
         taskIds: [taskId],
+        attachments: attachments,
       );
       final latestConversation = conversationByIdOrThrow(
         state,
@@ -190,6 +223,23 @@ class TaskQueueController {
 
   void deleteTask(String taskId) {
     final task = state.queuedTasks.firstWhere((item) => item.id == taskId);
+    final conversation = conversationByIdOrThrow(state, task.conversationId);
+    
+    // 收集需要删除的图片附件
+    final removedAttachments = conversation.messages
+        .where(
+          (message) =>
+              message.taskIds.contains(taskId) ||
+              task.messageIds.contains(message.id),
+        )
+        .expand((message) => message.attachments)
+        .toList();
+    
+    // 异步删除图片
+    if (removedAttachments.isNotEmpty && imageService != null) {
+      unawaited(imageService!.deleteMessageImages(removedAttachments));
+    }
+    
     commit(
       state.copyWith(
         queuedTasks:
