@@ -120,7 +120,12 @@ void main() {
       expect(dir.existsSync(), isTrue);
 
       controller.deleteConversationSession(conversationId);
-      await Future<void>.delayed(Duration.zero);
+      
+      // 等待异步清理完成（轮询直到目录被删除或超时）
+      await Future.doWhile(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        return dir.existsSync();
+      }).timeout(const Duration(seconds: 2));
 
       expect(dir.existsSync(), isFalse);
     });
