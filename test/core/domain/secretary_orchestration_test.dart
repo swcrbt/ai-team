@@ -8,6 +8,15 @@ import 'package:ai_team/core/orchestrator.dart';
 
 import 'domain_test_support.dart';
 
+const _imageAttachment = MessageAttachment(
+  id: 'attachment-1',
+  type: MessageAttachmentType.image,
+  filePath: 'images/conv/attachment-1.png',
+  mimeType: 'image/png',
+  fileName: 'attachment-1.png',
+  fileSize: 42,
+);
+
 void main() {
   group('secretary orchestration', () {
     test('creates visible secretary and member messages for a team task',
@@ -38,6 +47,61 @@ void main() {
         updated.taskAssignments.map((assignment) => assignment.round),
         everyElement(1),
       );
+    });
+
+    test('team task persists attachments on the user message', () async {
+      final updated = await TeamOrchestrator(FakeModelGateway()).dispatchTeamTask(
+        AppState.seed(),
+        teamId: 'team-default',
+        userText: '参考这张图实现界面',
+        attachments: const [_imageAttachment],
+      );
+
+      final messages = updated.conversations
+          .firstWhere((conversation) => conversation.id == 'conv-team-default')
+          .messages;
+      final userMessage = messages.firstWhere((message) => message.isUser);
+
+      expect(userMessage.attachments, const [_imageAttachment]);
+    });
+
+    test('member chat persists attachments on the user message', () async {
+      final updated = await TeamOrchestrator(FakeModelGateway()).dispatchMemberChat(
+        AppState.seed(),
+        conversationId: 'conv-member-secretary',
+        userText: '参考这张图回答',
+        attachments: const [_imageAttachment],
+      );
+
+      final messages = updated.conversations
+          .firstWhere(
+            (conversation) => conversation.id == 'conv-member-secretary',
+          )
+          .messages;
+      final userMessage = messages.firstWhere((message) => message.isUser);
+
+      expect(userMessage.attachments, const [_imageAttachment]);
+    });
+
+    test('secretary private dispatch persists attachments on source message',
+        () async {
+      final updated = await TeamOrchestrator(ScriptedRecordingGateway([
+        '前端已处理',
+      ])).dispatchSecretaryPrivateMemberTask(
+        AppState.seed(),
+        conversationId: 'conv-member-secretary',
+        userText: '@前端工程师 参考这张图实现',
+        attachments: const [_imageAttachment],
+      );
+
+      final messages = updated.conversations
+          .firstWhere(
+            (conversation) => conversation.id == 'conv-member-secretary',
+          )
+          .messages;
+      final userMessage = messages.firstWhere((message) => message.isUser);
+
+      expect(userMessage.attachments, const [_imageAttachment]);
     });
 
     test('does not exceed the team max round limit', () async {

@@ -17,6 +17,7 @@ class ChatMessage {
     this.cachedTokens,
     this.totalTokens,
     List<ChatMessageContentBlock>? contentBlocks = const [],
+    this.attachments = const [],
   }) : _contentBlocks = contentBlocks;
 
   final String id;
@@ -34,6 +35,7 @@ class ChatMessage {
   final int? cachedTokens;
   final int? totalTokens;
   final List<ChatMessageContentBlock>? _contentBlocks;
+  final List<MessageAttachment> attachments;
 
   List<ChatMessageContentBlock> get contentBlocks => _contentBlocks ?? const [];
 
@@ -47,6 +49,7 @@ class ChatMessage {
     int? cachedTokens,
     int? totalTokens,
     List<ChatMessageContentBlock>? contentBlocks,
+    List<MessageAttachment>? attachments,
   }) {
     return ChatMessage(
       id: id,
@@ -64,6 +67,7 @@ class ChatMessage {
       cachedTokens: cachedTokens ?? this.cachedTokens,
       totalTokens: totalTokens ?? this.totalTokens,
       contentBlocks: contentBlocks ?? this.contentBlocks,
+      attachments: attachments ?? this.attachments,
     );
   }
 
@@ -83,6 +87,8 @@ class ChatMessage {
         if (cachedTokens != null) 'cachedTokens': cachedTokens,
         if (totalTokens != null) 'totalTokens': totalTokens,
         'contentBlocks': contentBlocks.map((block) => block.toJson()).toList(),
+        if (attachments.isNotEmpty)
+          'attachments': attachments.map((a) => a.toJson()).toList(),
       };
 
   factory ChatMessage.fromJson(Map<String, Object?> json) => ChatMessage(
@@ -107,6 +113,12 @@ class ChatMessage {
             .map(
               (item) => ChatMessageContentBlock.fromJson(
                   item as Map<String, Object?>),
+            )
+            .toList(),
+        attachments: (json['attachments'] as List? ?? const [])
+            .map(
+              (item) =>
+                  MessageAttachment.fromJson(item as Map<String, Object?>),
             )
             .toList(),
       );
@@ -305,3 +317,72 @@ class AuditEntry {
     );
   }
 }
+
+/// 消息附件类型
+enum MessageAttachmentType {
+  image,
+  file,
+}
+
+/// 图片详细级别（OpenAI detail 参数）
+enum ImageDetail {
+  auto,
+  high,
+  low,
+}
+
+/// 消息附件
+class MessageAttachment {
+  const MessageAttachment({
+    required this.id,
+    required this.type,
+    required this.filePath,
+    this.mimeType,
+    this.fileName,
+    this.fileSize,
+    this.width,
+    this.height,
+    this.detail = ImageDetail.auto,
+  });
+
+  final String id;
+  final MessageAttachmentType type;
+  final String filePath;
+  final String? mimeType;
+  final String? fileName;
+  final int? fileSize;
+  final int? width;
+  final int? height;
+  final ImageDetail detail;
+
+  Map<String, Object?> toJson() => {
+        'id': id,
+        'type': type.name,
+        'filePath': filePath,
+        if (mimeType != null) 'mimeType': mimeType,
+        if (fileName != null) 'fileName': fileName,
+        if (fileSize != null) 'fileSize': fileSize,
+        if (width != null) 'width': width,
+        if (height != null) 'height': height,
+        'detail': detail.name,
+      };
+
+  factory MessageAttachment.fromJson(Map<String, Object?> json) {
+    return MessageAttachment(
+      id: json['id'] as String,
+      type: MessageAttachmentType.values.byName(
+        json['type'] as String? ?? MessageAttachmentType.image.name,
+      ),
+      filePath: json['filePath'] as String,
+      mimeType: json['mimeType'] as String?,
+      fileName: json['fileName'] as String?,
+      fileSize: json['fileSize'] as int?,
+      width: json['width'] as int?,
+      height: json['height'] as int?,
+      detail: ImageDetail.values.byName(
+        json['detail'] as String? ?? ImageDetail.auto.name,
+      ),
+    );
+  }
+}
+

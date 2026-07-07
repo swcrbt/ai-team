@@ -7,7 +7,9 @@ import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import '../../application/chat_streaming.dart';
 import '../../core/domain.dart';
+import '../../core/workspace/image_service.dart';
 import '../app_helpers.dart';
+import 'message_image_grid.dart';
 
 class MessageBubble extends StatefulWidget {
   const MessageBubble({
@@ -16,6 +18,7 @@ class MessageBubble extends StatefulWidget {
     required this.conversationId,
     required this.showAuthorName,
     required this.draftListenable,
+    required this.imageService,
     this.diagnostics,
   });
 
@@ -23,6 +26,7 @@ class MessageBubble extends StatefulWidget {
   final String conversationId;
   final bool showAuthorName;
   final ValueListenable<ChatStreamingDraft?> draftListenable;
+  final ImageService imageService;
   final ChatScrollDiagnostics? diagnostics;
 
   @override
@@ -163,6 +167,7 @@ class _MessageBubbleState extends State<MessageBubble> {
             _MessageBody(
               key: ValueKey('message-body-${message.id}'),
               message: message,
+              imageService: widget.imageService,
               diagnostics: widget.diagnostics,
             ),
         ],
@@ -314,10 +319,12 @@ class _MessageBody extends StatelessWidget {
   const _MessageBody({
     super.key,
     required this.message,
+    required this.imageService,
     this.diagnostics,
   });
 
   final ChatMessage message;
+  final ImageService imageService;
   final ChatScrollDiagnostics? diagnostics;
 
   @override
@@ -343,13 +350,31 @@ class _MessageBody extends StatelessWidget {
                 _CommandResultDisclosure(result: indexed.$2.commandResult!),
             },
           ],
+          // 显示图片附件
+          if (message.attachments.isNotEmpty)
+            MessageImageGrid(
+              attachments: message.attachments,
+              imageService: imageService,
+            ),
         ],
       );
     }
-    return _MessageTextBlock(
-      message: message,
-      content: message.content,
-      diagnostics: diagnostics,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _MessageTextBlock(
+          message: message,
+          content: message.content,
+          diagnostics: diagnostics,
+        ),
+        // 显示图片附件
+        if (message.attachments.isNotEmpty)
+          MessageImageGrid(
+            attachments: message.attachments,
+            imageService: imageService,
+          ),
+      ],
     );
   }
 }

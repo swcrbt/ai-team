@@ -8,6 +8,7 @@ Map<String, Object?> buildAnthropicRequestBody({
   required ModelProfile model,
   required String systemPrompt,
   required List<ChatMessage> messages,
+  Map<String, String> imageDataUrls = const {},
   List<ModelToolDefinition> tools = const [],
   ModelToolChoice toolChoice = ModelToolChoice.auto,
   List<ModelToolRound> toolRounds = const [],
@@ -27,10 +28,10 @@ Map<String, Object?> buildAnthropicRequestBody({
 
   // 构建 messages 数组（不包含 system 消息）
   requestBody['messages'] = [
-    ...messages.map((message) => {
-          'role': message.isUser ? 'user' : 'assistant',
-          'content': message.content,
-        }),
+    ...messages.map((message) => _messageToAnthropicJson(
+          message,
+          imageDataUrls: imageDataUrls,
+        )),
     ..._buildToolRoundMessages(toolRounds),
   ];
 
@@ -48,6 +49,45 @@ Map<String, Object?> buildAnthropicRequestBody({
   }
 
   return requestBody;
+}
+
+Map<String, Object?> _messageToAnthropicJson(
+  ChatMessage message, {
+  required Map<String, String> imageDataUrls,
+}) {
+  final imageBlocks = [
+    for (final attachment in message.attachments)
+      if (attachment.type == MessageAttachmentType.image &&
+          imageDataUrls.containsKey(attachment.id))
+        _imageBlockFromDataUrl(
+          imageDataUrls[attachment.id]!,
+          fallbackMimeType: attachment.mimeType ?? 'image/png',
+        ),
+  ];
+  return {
+    'role': message.isUser ? 'user' : 'assistant',
+    'content': imageBlocks.isEmpty
+        ? message.content
+        : [
+            {'type': 'text', 'text': message.content},
+            ...imageBlocks,
+          ],
+  };
+}
+
+Map<String, Object?> _imageBlockFromDataUrl(
+  String dataUrl, {
+  required String fallbackMimeType,
+}) {
+  final match = RegExp(r'^data:([^;]+);base64,(.*)$').firstMatch(dataUrl);
+  return {
+    'type': 'image',
+    'source': {
+      'type': 'base64',
+      'media_type': match?.group(1) ?? fallbackMimeType,
+      'data': match?.group(2) ?? dataUrl,
+    },
+  };
 }
 
 /// 将通用工具定义转换为 Anthropic 格式

@@ -170,25 +170,8 @@ class DispatchController {
     _requestedCancellationStatus = null;
     notify();
     
-    // 处理图片附件
-    List<MessageAttachment> attachments = preparedAttachments ?? [];
-    if (images != null && images.isNotEmpty) {
-      final messageId = userMessageId ?? 'msg-${DateTime.now().microsecondsSinceEpoch}';
-      for (var i = 0; i < images.length; i++) {
-        try {
-          final attachment = await imageService.saveImage(
-            conversationId: conversationId,
-            messageId: messageId,
-            sourceFile: images[i],
-            index: i,
-          );
-          attachments.add(attachment);
-        } catch (e) {
-          // 图片保存失败，跳过
-          continue;
-        }
-      }
-    }
+    // 使用预处理的附件
+    final attachments = preparedAttachments ?? [];
     
     try {
       final conversation = conversationByIdOrThrow(state, conversationId);

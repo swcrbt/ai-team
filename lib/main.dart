@@ -7,6 +7,7 @@ import 'app.dart';
 import 'core/local_store.dart';
 import 'core/model_gateway.dart';
 import 'core/storage_directories.dart';
+import 'core/workspace/image_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,9 +25,12 @@ Future<void> main() async {
     targetStore: store,
     legacyStore: legacyStore,
   );
+  final imageService = ImageService(Directory(storageDirectories.stateDirectory));
   runApp(AiTeamApp(
     initialState: state,
-    modelGateway: OpenAiCompatibleGateway(),
+    modelGateway: OpenAiCompatibleGateway(
+      imageDataUrlResolver: imageService.readImageAsDataUrl,
+    ),
     onStateChanged: store.save,
     storageDirectories: storageDirectories,
     storageDirectoryConfigStore: storageConfigStore,

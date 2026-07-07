@@ -5,6 +5,7 @@ Map<String, Object?> buildOpenAiCompatibleRequestBody({
   required ModelProfile model,
   required String systemPrompt,
   required List<ChatMessage> messages,
+  Map<String, String> imageDataUrls = const {},
   List<ModelToolDefinition> tools = const [],
   ModelToolChoice toolChoice = ModelToolChoice.auto,
   List<ModelToolRound> toolRounds = const [],
@@ -18,10 +19,10 @@ Map<String, Object?> buildOpenAiCompatibleRequestBody({
     'temperature': model.temperature,
     'messages': [
       {'role': 'system', 'content': systemPrompt},
-      ...messages.map((message) => {
-            'role': message.isUser ? 'user' : 'assistant',
-            'content': '${message.authorName}: ${message.content}',
-          }),
+      ...messages.map((message) => _messageToOpenAiJson(
+            message,
+            imageDataUrls: imageDataUrls,
+          )),
       ..._toolRoundMessages(toolRounds),
     ],
   };
@@ -36,6 +37,34 @@ Map<String, Object?> buildOpenAiCompatibleRequestBody({
     requestBody['max_completion_tokens'] = model.maxTokens;
   }
   return requestBody;
+}
+
+Map<String, Object?> _messageToOpenAiJson(
+  ChatMessage message, {
+  required Map<String, String> imageDataUrls,
+}) {
+  final text = '${message.authorName}: ${message.content}';
+  final imageParts = [
+    for (final attachment in message.attachments)
+      if (attachment.type == MessageAttachmentType.image &&
+          imageDataUrls.containsKey(attachment.id))
+        {
+          'type': 'image_url',
+          'image_url': {
+            'url': imageDataUrls[attachment.id],
+            'detail': attachment.detail.name,
+          },
+        },
+  ];
+  return {
+    'role': message.isUser ? 'user' : 'assistant',
+    'content': imageParts.isEmpty
+        ? text
+        : [
+            {'type': 'text', 'text': text},
+            ...imageParts,
+          ],
+  };
 }
 
 List<Map<String, Object?>> _toolRoundMessages(List<ModelToolRound> rounds) {

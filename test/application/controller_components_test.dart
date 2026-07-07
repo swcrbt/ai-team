@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:ai_team/application/conversation_sessions.dart';
 import 'package:ai_team/application/conversation_controller.dart';
 import 'package:ai_team/application/configuration_controller.dart';
@@ -9,6 +11,7 @@ import 'package:ai_team/application/workspace_command_controller.dart';
 import 'package:ai_team/core/commands.dart';
 import 'package:ai_team/core/domain.dart';
 import 'package:ai_team/core/orchestrator.dart';
+import 'package:ai_team/core/workspace/image_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/model_gateway_fakes.dart';
@@ -175,6 +178,7 @@ void main() {
         titleGenerator: titleGenerator,
         orchestrator: TeamOrchestrator(FakeModelGateway()),
         commandService: const CommandService(),
+        imageService: ImageService(Directory.systemTemp),
         selectedConversationId: () => 'conv-team-default',
         notify: () => notifyCount++,
         onStreamingDraft: ({required conversationId, required message}) {},
