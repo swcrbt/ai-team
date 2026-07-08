@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-06-29T15:49:46.541Z",
-  "updatedAt": "2026-07-01T15:38:55.973Z",
+  "updatedAt": "2026-07-08T13:22:41.053Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -11,10 +11,10 @@
       "id": "G001-ai-team-goal-mode-full-architecture",
       "title": "AI Team goal-mode full architecture refactor for /Users/swcrbt/develo...",
       "objective": "AI Team goal-mode full architecture refactor for /Users/swcrbt/develop/github/swcrbt/ai-team. Do not downgrade scope. Preserve business behavior and compatibility while replacing fake part-based boundaries with real Dart libraries, splitting core domain/model/orchestration/application/ui/test modules. Subgoals: G1 real Dart library boundaries; G2 core domain/model gateway; G3 orchestration service boundaries; G4 AppController facade with delegated components; G5 focused UI widgets/presenters; G6 tests/docs/final quality gate. Verification after each story, phase commits, final flutter analyze/test/build, git diff --check, clarity cleanup, code review, final commit, then mark aggregate Codex goal complete.",
-      "status": "in_progress",
+      "status": "complete",
       "attempt": 1,
       "createdAt": "2026-06-29T15:49:46.541Z",
-      "updatedAt": "2026-07-01T14:50:59.280Z",
+      "updatedAt": "2026-07-08T13:22:41.053Z",
       "startedAt": "2026-06-29T16:10:57.012Z",
       "steeringStatus": "superseded",
       "blockedReason": "The old G001 cannot be truthfully checkpointed under its mismatched objective. Superseding it with explicit ledger-repair work is narrower than manual state editing and keeps all original no-downgrade constraints intact.",
@@ -22,7 +22,9 @@
       "steeringRationale": "Use the supported steering path to preserve G001 audit history and make the aligned recovery ledger schedulable without manual JSON editing.",
       "supersededBy": [
         "G009-reconcile-legacy-g001-ledger-state"
-      ]
+      ],
+      "completedAt": "2026-07-08T13:22:41.053Z",
+      "evidence": "Status reconciliation: this legacy story was superseded by G009; raw status is closed so OMX/HUD no longer reports an active in-progress goal while preserving steeringStatus=superseded audit fields."
     },
     {
       "id": "G009-reconcile-legacy-g001-ledger-state",
@@ -117,10 +119,16 @@
       "status": "review_blocked",
       "attempt": 1,
       "createdAt": "2026-07-01T13:06:55.209Z",
-      "updatedAt": "2026-07-01T14:51:44.085Z",
+      "updatedAt": "2026-07-08T13:22:41.053Z",
       "evidence": "Final independent review was non-clean. Architect lane returned WATCH because AppController and TeamOrchestrator still concentrate process coupling; code-reviewer lane returned COMMENT rather than APPROVE. Required ultragoal gate forbids completing on COMMENT/WATCH.",
       "startedAt": "2026-07-01T14:31:52.660Z",
-      "reviewBlockedAt": "2026-07-01T14:51:44.085Z"
+      "reviewBlockedAt": "2026-07-01T14:51:44.085Z",
+      "reviewBlockerResolution": {
+        "resolverGoalId": "G010-resolve-final-architecture-review-bl",
+        "status": "complete",
+        "resolvedAt": "2026-07-08T13:22:41.053Z",
+        "evidence": "G010 completed the blocker-resolution story with verification and independent APPROVE/CLEAR evidence; G008 remains historical review-blocked evidence rather than an active blocker."
+      }
     },
     {
       "id": "G010-resolve-final-architecture-review-bl",
@@ -139,5 +147,14 @@
   "codexObjectiveAliases": [
     "Complete the durable ultragoal plan in .omx/ultragoal/goals.json, including later accepted/appended stories, under the original brief constraints; use .omx/ultragoal/ledger.jsonl as the audit trail.",
     "用 goal 模式拆分并完整实现 /Users/swcrbt/develop/github/swcrbt/ai-team 的全量架构化重构，不降级范围，最终完成验证并提交。"
-  ]
+  ],
+  "aggregateCompletion": {
+    "status": "complete",
+    "completedAt": "2026-07-08T13:22:41.053Z",
+    "evidence": "Status reconciliation: all active ultragoal stories are resolved; G001 is superseded by G009 and G008 is resolved by G010, so durable OMX state should not display residual active goals.",
+    "codexGoal": {
+      "available": false,
+      "raw": null
+    }
+  }
 }
