@@ -402,6 +402,9 @@ class ChatPaneState extends State<ChatPane> {
                       }
                     }
                   },
+                  onPickError: (_, __) {
+                    _showInputError('图片选择失败：请检查 macOS 文件访问权限后重试');
+                  },
                   enabled: !widget.controller.isDispatching,
                 ),
                 const SizedBox(width: 4),

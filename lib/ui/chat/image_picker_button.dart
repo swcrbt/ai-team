@@ -2,23 +2,43 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 
+typedef PickImages = Future<FilePickerResult?> Function();
+typedef PickImagesErrorHandler = void Function(
+  Object error,
+  StackTrace stackTrace,
+);
+
 /// 图片选择按钮
 class ImagePickerButton extends StatelessWidget {
   const ImagePickerButton({
     super.key,
     required this.onImagesPicked,
     this.enabled = true,
+    this.pickImages = _defaultPickImages,
+    this.onPickError,
   });
 
   final void Function(List<File> files) onImagesPicked;
   final bool enabled;
+  final PickImages pickImages;
+  final PickImagesErrorHandler? onPickError;
 
-  Future<void> _pickImages() async {
-    final result = await FilePicker.pickFiles(
+  static Future<FilePickerResult?> _defaultPickImages() {
+    return FilePicker.pickFiles(
       type: FileType.image,
       allowMultiple: true,
       dialogTitle: '选择图片',
     );
+  }
+
+  Future<void> _pickImages() async {
+    FilePickerResult? result;
+    try {
+      result = await pickImages();
+    } catch (error, stackTrace) {
+      onPickError?.call(error, stackTrace);
+      return;
+    }
 
     if (result != null && result.files.isNotEmpty) {
       final files = result.files
