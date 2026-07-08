@@ -9,6 +9,7 @@ import '../core/file_dialogs.dart';
 import '../core/model_gateway.dart';
 import '../core/orchestrator.dart';
 import '../core/storage_directories.dart';
+import '../core/workspace/image_paste_service.dart';
 import 'chat/chat_pane.dart';
 import 'conversation_sidebar.dart';
 import 'main_view.dart';
@@ -25,6 +26,7 @@ class AiTeamApp extends StatelessWidget {
     this.chatScrollDiagnostics,
     this.storageDirectories,
     this.storageDirectoryConfigStore,
+    this.imagePasteServiceFactory,
   });
 
   final AppState initialState;
@@ -34,6 +36,8 @@ class AiTeamApp extends StatelessWidget {
   final ChatScrollDiagnostics? chatScrollDiagnostics;
   final StorageDirectories? storageDirectories;
   final StorageDirectoryConfigStore? storageDirectoryConfigStore;
+  final ImagePasteService Function(String conversationId)?
+      imagePasteServiceFactory;
 
   @override
   Widget build(BuildContext context) {
@@ -56,6 +60,7 @@ class AiTeamApp extends StatelessWidget {
         chatScrollDiagnostics: chatScrollDiagnostics,
         storageDirectories: storageDirectories,
         storageDirectoryConfigStore: storageDirectoryConfigStore,
+        imagePasteServiceFactory: imagePasteServiceFactory,
       ),
     );
   }
@@ -71,6 +76,7 @@ class AiTeamHome extends StatefulWidget {
     this.chatScrollDiagnostics,
     this.storageDirectories,
     this.storageDirectoryConfigStore,
+    this.imagePasteServiceFactory,
   });
 
   final AppState initialState;
@@ -80,6 +86,8 @@ class AiTeamHome extends StatefulWidget {
   final ChatScrollDiagnostics? chatScrollDiagnostics;
   final StorageDirectories? storageDirectories;
   final StorageDirectoryConfigStore? storageDirectoryConfigStore;
+  final ImagePasteService Function(String conversationId)?
+      imagePasteServiceFactory;
 
   @override
   State<AiTeamHome> createState() => _AiTeamHomeState();
@@ -204,6 +212,8 @@ class _AiTeamHomeState extends State<AiTeamHome> {
                     controller: controller,
                     conversationId: conversation.id,
                     diagnostics: widget.chatScrollDiagnostics,
+                    imagePasteService:
+                        widget.imagePasteServiceFactory?.call(conversation.id),
                   ),
                 )
                 .toList(),

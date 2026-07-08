@@ -49,41 +49,80 @@ class MessageImageGrid extends StatelessWidget {
         runSpacing: 4,
         children: [
           for (var i = 0; i < images.length; i++)
-            Semantics(
-              label: '消息图片 ${i + 1}',
-              button: true,
-              child: GestureDetector(
-                onTap: () => _showFullImage(
-                  context,
-                  images: images,
-                  index: i,
-                ),
-                child: SizedBox(
-                  width: images.length == 1 ? 300 : 100,
-                  height: images.length == 1 ? 200 : 100,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      border: Border.all(color: const Color(0xFFE5E7EB)),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: Image.file(
-                        imageService.getImageFile(images[i]),
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return const Center(
-                            child: Icon(Icons.broken_image, color: Colors.grey),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                ),
+            _MessageImageTile(
+              attachment: images[i],
+              imageService: imageService,
+              index: i,
+              imageCount: images.length,
+              onTap: () => _showFullImage(
+                context,
+                images: images,
+                index: i,
               ),
             ),
         ],
       ),
+    );
+  }
+}
+
+class _MessageImageTile extends StatelessWidget {
+  const _MessageImageTile({
+    required this.attachment,
+    required this.imageService,
+    required this.index,
+    required this.imageCount,
+    required this.onTap,
+  });
+
+  final MessageAttachment attachment;
+  final ImageService imageService;
+  final int index;
+  final int imageCount;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final file = imageService.getImageFile(attachment);
+
+    return Semantics(
+      label: '消息图片 ${index + 1}',
+      button: true,
+      child: GestureDetector(
+        onTap: onTap,
+        child: SizedBox(
+          width: imageCount == 1 ? 300 : 100,
+          height: imageCount == 1 ? 200 : 100,
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: const Color(0xFFE5E7EB)),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: file.existsSync()
+                  ? Image.file(
+                      file,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) =>
+                          const _BrokenImagePlaceholder(),
+                    )
+                  : const _BrokenImagePlaceholder(),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BrokenImagePlaceholder extends StatelessWidget {
+  const _BrokenImagePlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Icon(Icons.broken_image, color: Colors.grey),
     );
   }
 }
@@ -102,6 +141,8 @@ class _ImageDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final file = imageService.getImageFile(attachments[initialIndex]);
+
     return Dialog(
       backgroundColor: Colors.black,
       insetPadding: const EdgeInsets.all(20),
@@ -109,9 +150,9 @@ class _ImageDialog extends StatelessWidget {
         children: [
           Center(
             child: InteractiveViewer(
-              child: Image.file(
-                imageService.getImageFile(attachments[initialIndex]),
-              ),
+              child: file.existsSync()
+                  ? Image.file(file)
+                  : const _BrokenImagePlaceholder(),
             ),
           ),
           Positioned(

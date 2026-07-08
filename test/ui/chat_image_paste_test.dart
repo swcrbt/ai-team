@@ -8,7 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   group('ImagePasteService 文本插入', () {
     test('insertText inserts at cursor position', () {
-      final value = const TextEditingValue(
+      const value = TextEditingValue(
         text: 'hello ',
         selection: TextSelection.collapsed(offset: 6),
       );
@@ -20,7 +20,7 @@ void main() {
     });
 
     test('insertText replaces selection', () {
-      final value = const TextEditingValue(
+      const value = TextEditingValue(
         text: 'hello world',
         selection: TextSelection(baseOffset: 6, extentOffset: 11),
       );
@@ -79,6 +79,7 @@ void main() {
       expect(result[0].id, 'test-1');
     });
   });
+
 }
 
 /// 假的图片粘贴服务

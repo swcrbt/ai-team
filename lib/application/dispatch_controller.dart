@@ -140,7 +140,7 @@ class DispatchController {
     await dispatchConversation(selectedConversationId(), text);
   }
 
-  Future<void> dispatchConversation(
+  Future<bool> dispatchConversation(
     String conversationId,
     String text, {
     List<File>? images,
@@ -149,17 +149,24 @@ class DispatchController {
     VoidCallback? onUserMessageCommitted,
   }) async {
     final trimmed = text.trim();
-    if (trimmed.isEmpty && (images == null || images.isEmpty)) {
-      return;
+    final attachments = preparedAttachments ?? const <MessageAttachment>[];
+    if (trimmed.isEmpty &&
+        (images == null || images.isEmpty) &&
+        attachments.isEmpty) {
+      return false;
     }
     if (isDispatching) {
-      return;
+      return false;
     }
     if (!_canDispatchConversation(conversationId)) {
       notify();
-      return;
+      return false;
     }
-    if ((images != null && images.isNotEmpty) && !_conversationModelSupportsImages(conversationId)) {
+    final hasImageAttachments = attachments.any(
+      (attachment) => attachment.type == MessageAttachmentType.image,
+    );
+    if (((images != null && images.isNotEmpty) || hasImageAttachments) &&
+        !_conversationModelSupportsImages(conversationId)) {
       throw StateError('当前模型不支持图片输入');
     }
     isDispatching = true;
@@ -169,10 +176,12 @@ class DispatchController {
     _activeDispatchConversationId = conversationId;
     _requestedCancellationStatus = null;
     notify();
-    
-    // 使用预处理的附件
-    final attachments = preparedAttachments ?? [];
-    
+    var userMessageCommitted = false;
+    void markUserMessageCommitted() {
+      userMessageCommitted = true;
+      onUserMessageCommitted?.call();
+    }
+
     try {
       final conversation = conversationByIdOrThrow(state, conversationId);
       final shouldGenerateTitle =
@@ -189,7 +198,7 @@ class DispatchController {
             cancellation: cancellation,
             onProgress: commit,
             onStreamingDraft: onStreamingDraft,
-            onUserMessageCommitted: onUserMessageCommitted,
+            onUserMessageCommitted: markUserMessageCommitted,
           ),
         );
       } else if (orchestrator
@@ -209,7 +218,7 @@ class DispatchController {
             cancellation: cancellation,
             onProgress: commit,
             onStreamingDraft: onStreamingDraft,
-            onUserMessageCommitted: onUserMessageCommitted,
+            onUserMessageCommitted: markUserMessageCommitted,
           ),
         );
       } else {
@@ -223,7 +232,7 @@ class DispatchController {
             cancellation: cancellation,
             onProgress: commit,
             onStreamingDraft: onStreamingDraft,
-            onUserMessageCommitted: onUserMessageCommitted,
+            onUserMessageCommitted: markUserMessageCommitted,
           ),
         );
       }
@@ -233,13 +242,14 @@ class DispatchController {
           firstUserMessage: trimmed,
         );
       }
+      return userMessageCommitted;
     } catch (exception) {
       if (cancellation.isCancelled) {
         _commitCancelledDispatch(
           conversationId,
           _requestedCancellationStatus ?? ConversationStatus.stopped,
         );
-        return;
+        return userMessageCommitted;
       }
       error = exception.toString();
       final conversation = conversationByIdOrThrow(state, conversationId);
@@ -262,6 +272,7 @@ class DispatchController {
               .toList(),
         ),
       );
+      return userMessageCommitted;
     } finally {
       isDispatching = false;
       if (identical(_activeCancellation, cancellation)) {

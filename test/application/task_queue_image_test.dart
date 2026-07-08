@@ -48,6 +48,51 @@ void main() {
       expect(userMessages, hasLength(1));
       expect(userMessages.single.attachments, hasLength(1));
     });
+
+    test('enqueue rejects images when queue target model does not support images', () async {
+      final tempDir = await Directory.systemTemp.createTemp('ai_team_queue_disabled_');
+      addTearDown(() async => tempDir.delete(recursive: true));
+
+      final image = File('${tempDir.path}/test.png')
+        ..writeAsBytesSync(_onePixelPng);
+      final seed = AppState.seed();
+      final team = seed.teams.first;
+      final secretary = seed.members.firstWhere(
+        (member) => member.id == team.secretaryMemberId,
+      );
+      final disabledModel = seed.models
+          .firstWhere((model) => model.id == secretary.modelId)
+          .copyWith(supportsImages: false);
+      final state = seed.copyWith(
+        models: seed.models
+            .map((model) => model.id == disabledModel.id ? disabledModel : model)
+            .toList(),
+      );
+      final controller = AppController(
+        state,
+        TeamOrchestrator(ScriptedTitleGateway(title: '分析图片任务')),
+        storageDirectories: StorageDirectories(
+          stateDirectory: tempDir.path,
+          auditDirectory: '${tempDir.path}/audit',
+          conversationDirectory: '${tempDir.path}/conversations',
+          cacheDirectory: '${tempDir.path}/cache',
+        ),
+      );
+      final conversation = controller.currentConversation;
+
+      await expectLater(
+        controller.enqueueCurrentConversationTask('分析这张图', images: [image]),
+        throwsA(isA<StateError>()),
+      );
+
+      final userMessages = controller
+          .conversationById(conversation.id)
+          .messages
+          .where((message) => message.isUser)
+          .toList();
+      expect(userMessages, isEmpty);
+      expect(controller.tasksForConversation(conversation.id), isEmpty);
+    });
   });
 }
 

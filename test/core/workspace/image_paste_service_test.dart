@@ -31,8 +31,23 @@ void main() {
       expect(result.path, isNull);
     });
 
+    test('parses shell escaped image paths with spaces', () async {
+      final dir = await Directory.systemTemp.createTemp('ai_team_paste_space_');
+      addTearDown(() async => dir.delete(recursive: true));
+      final image = File('${dir.path}/a b.png');
+      await image.writeAsBytes(_onePixelPng);
+      final service = ImagePasteService();
+
+      final result = await service.parsePastedImagePath(
+        image.path.replaceAll(' ', r'\ '),
+      );
+
+      expect(result.isImagePath, isTrue);
+      expect(result.path, image.path);
+    });
+
     test('insertText replaces selection and clears composing', () {
-      final value = const TextEditingValue(
+      const value = TextEditingValue(
         text: 'hello world',
         selection: TextSelection(baseOffset: 6, extentOffset: 11),
         composing: TextRange(start: 0, end: 5),

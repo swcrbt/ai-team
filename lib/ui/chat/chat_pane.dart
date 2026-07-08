@@ -604,22 +604,33 @@ class ChatPaneState extends State<ChatPane> {
     // 提交事务：dispatch 带回调
     var committed = false;
     try {
-      await widget.controller.dispatchConversation(
+      final submittedPendingIds = pendingToSubmit.map((item) => item.id).toSet();
+      final dispatchCommitted = await widget.controller.dispatchConversation(
         widget.conversationId,
         text,
         userMessageId: messageId,
         preparedAttachments: attachments,
         onUserMessageCommitted: () {
           committed = true;
+          if (!mounted) {
+            return;
+          }
+          setState(() {
+            if (textController.text == text) {
+              textController.clear();
+            }
+            _pendingImages.removeWhere(
+              (item) => submittedPendingIds.contains(item.id),
+            );
+          });
+          _deleteOwnedPendingImages(pendingToSubmit);
         },
       );
-      // dispatch 完全成功，清空草稿
-      if (committed && mounted) {
-        setState(() {
-          textController.clear();
-          _pendingImages.clear();
-        });
-        _deleteOwnedPendingImages(pendingToSubmit);
+      if (!dispatchCommitted) {
+        if (attachments.isNotEmpty) {
+          await widget.controller.imageService.deleteMessageImages(attachments);
+        }
+        _showInputError(widget.controller.error ?? '消息未发送');
       }
     } catch (e) {
       // 如果提交失败且未 committed，回滚图片
@@ -681,11 +692,23 @@ class ChatPaneState extends State<ChatPane> {
     final supportsImages = widget.controller
         .modelSupportsImagesForConversation(widget.conversationId);
 
-    // 尝试读取剪贴板中的图片
-    final imageCandidates = supportsImages
-        ? await imagePasteService.readClipboardImageCandidates()
-        : const <PendingImageAttachment>[];
+    // 尝试读取剪贴板中的图片。即使当前模型不支持图片，也需要读取候选，
+    // 才能区分“用户粘贴了图片”和“普通文本粘贴”。
+    List<PendingImageAttachment> imageCandidates;
+    try {
+      imageCandidates = await imagePasteService.readClipboardImageCandidates();
+    } catch (error) {
+      imageCandidates = const <PendingImageAttachment>[];
+      if (supportsImages) {
+        _showInputError('图片粘贴失败：$error');
+      }
+    }
     if (imageCandidates.isNotEmpty) {
+      if (!supportsImages) {
+        _deleteOwnedPendingImages(imageCandidates);
+        _showInputError('当前模型不支持图片输入');
+        return;
+      }
       setState(() => _pendingImages.addAll(imageCandidates));
       return;
     }

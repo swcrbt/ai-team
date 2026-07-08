@@ -33,9 +33,12 @@ void main() {
     ]);
   });
 
-  testWidgets('message image grid shows placeholder for missing file', (tester) async {
-    final root = await Directory.systemTemp.createTemp('ai_team_missing_image_');
-    addTearDown(() async => root.delete(recursive: true));
+  testWidgets('message image grid shows placeholder for missing file',
+      (tester) async {
+    final root = Directory.systemTemp.createTempSync('ai_team_missing_image_');
+    addTearDown(() {
+      if (root.existsSync()) root.deleteSync(recursive: true);
+    });
     final service = ImageService(root);
 
     await tester.pumpWidget(MaterialApp(
@@ -55,9 +58,13 @@ void main() {
     expect(find.byIcon(Icons.broken_image), findsOneWidget);
   });
 
-  testWidgets('message image grid uses fixed size and semantic labels', (tester) async {
-    final root = await Directory.systemTemp.createTemp('ai_team_image_semantics_');
-    addTearDown(() async => root.delete(recursive: true));
+  testWidgets('message image grid uses fixed size and semantic labels',
+      (tester) async {
+    final root =
+        Directory.systemTemp.createTempSync('ai_team_image_semantics_');
+    addTearDown(() {
+      if (root.existsSync()) root.deleteSync(recursive: true);
+    });
     final service = ImageService(root);
 
     await tester.pumpWidget(MaterialApp(
@@ -76,7 +83,7 @@ void main() {
 
     // 验证有 Semantics 标签
     expect(find.bySemanticsLabel('消息图片 1'), findsOneWidget);
-    
+
     // 验证使用 SizedBox 固定尺寸
     final sizedBox = tester.widget<SizedBox>(find.byType(SizedBox).first);
     expect(sizedBox.width, 300); // 单张图片宽度

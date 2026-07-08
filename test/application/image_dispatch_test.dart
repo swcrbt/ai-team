@@ -23,62 +23,12 @@ final _onePixelPng = <int>[
 void main() {
   group('图片附件提交门禁', () {
     test('dispatch rejects image attachments when current model does not support images', () async {
-      var state = AppState.seed();
-      final conversation = state.conversations.first;
-      
-      // 创建不支持图片的模型
-      final disabledModel = state.models.first.copyWith(supportsImages: false);
-      state = state.copyWith(
-        models: [disabledModel, ...state.models.skip(1)],
-      );
-      
-      // 确保会话使用不支持图片的模型
-      final member = state.members.firstWhere(
-        (m) => m.id == conversation.memberId,
-        orElse: () => state.members.first,
-      );
-      final updatedMember = member.copyWith(modelId: disabledModel.id);
-      state = state.copyWith(
-        members: state.members
-            .map((m) => m.id == updatedMember.id ? updatedMember : m)
-            .toList(),
-      );
-      
-      var notifyCount = 0;
-      final taskQueue = TaskQueueController(
-        readState: () => state,
-        commit: (nextState) => state = nextState,
-        gateway: FakeModelGateway(),
-      );
-      final workspaceCommands = WorkspaceCommandController(
-        readState: () => state,
-        commit: (nextState) => state = nextState,
-      );
-      final titleGenerator = ConversationTitleGenerator(
-        readState: () => state,
-        commit: (nextState) => state = nextState,
-        gateway: FakeModelGateway(),
-      );
-      final controller = DispatchController(
-        readState: () => state,
-        commit: (nextState) => state = nextState,
-        taskQueue: taskQueue,
-        workspaceCommands: workspaceCommands,
-        titleGenerator: titleGenerator,
-        orchestrator: TeamOrchestrator(FakeModelGateway()),
-        commandService: const CommandService(),
-        imageService: ImageService(Directory.systemTemp),
-        selectedConversationId: () => conversation.id,
-        notify: () => notifyCount++,
-        onStreamingDraft: ({required conversationId, required message}) {},
-        clearStreamingDraftsForConversation: (_) {},
-      );
-
-      final originalMessagesLength = conversation.messages.length;
+      final harness = _buildDispatchHarnessWithTeamImagesDisabled();
+      final originalMessagesLength = harness.conversation.messages.length;
 
       await expectLater(
-        controller.dispatchConversation(
-          conversation.id,
+        harness.controller.dispatchConversation(
+          harness.conversation.id,
           '看图',
           images: [File('/tmp/missing.png')],
         ),
@@ -86,13 +36,55 @@ void main() {
       );
 
       // 验证消息没有被写入
-      expect(
-        state.conversations
-            .firstWhere((c) => c.id == conversation.id)
-            .messages
-            .length,
-        originalMessagesLength,
+      expect(harness.conversation.messages.length, originalMessagesLength);
+    });
+
+    test('dispatch rejects prepared image attachments when current model does not support images', () async {
+      final harness = _buildDispatchHarnessWithTeamImagesDisabled();
+      final originalMessagesLength = harness.conversation.messages.length;
+
+      await expectLater(
+        harness.controller.dispatchConversation(
+          harness.conversation.id,
+          '看图',
+          preparedAttachments: const [
+            MessageAttachment(
+              id: 'attachment-1',
+              type: MessageAttachmentType.image,
+              filePath: '/tmp/test.png',
+              mimeType: 'image/png',
+              fileSize: 10,
+            ),
+          ],
+        ),
+        throwsA(isA<StateError>()),
       );
+
+      expect(harness.conversation.messages.length, originalMessagesLength);
+    });
+
+    test('dispatch returns false when conversation is paused before user message commit', () async {
+      final harness = _buildDispatchHarness(
+        conversationStatus: ConversationStatus.paused,
+      );
+      final originalMessagesLength = harness.conversation.messages.length;
+
+      final committed = await harness.controller.dispatchConversation(
+        harness.conversation.id,
+        '看图',
+        preparedAttachments: const [
+          MessageAttachment(
+            id: 'attachment-1',
+            type: MessageAttachmentType.image,
+            filePath: '/tmp/test.png',
+            mimeType: 'image/png',
+            fileSize: 10,
+          ),
+        ],
+      );
+
+      expect(committed, isFalse);
+      expect(harness.conversation.messages.length, originalMessagesLength);
     });
   });
 
@@ -130,4 +122,86 @@ void main() {
       expect(dir.existsSync(), isFalse);
     });
   });
+}
+
+_DispatchHarness _buildDispatchHarnessWithTeamImagesDisabled() {
+  return _buildDispatchHarness(teamSupportsImages: false);
+}
+
+_DispatchHarness _buildDispatchHarness({
+  bool teamSupportsImages = true,
+  ConversationStatus conversationStatus = ConversationStatus.idle,
+}) {
+  var state = AppState.seed();
+  final conversationId = state.conversations.first.id;
+  final team = state.teams.firstWhere((item) => item.id == 'team-default');
+  final secretary = state.members.firstWhere(
+    (item) => item.id == team.secretaryMemberId,
+  );
+  final secretaryModel = state.models
+      .firstWhere((item) => item.id == secretary.modelId)
+      .copyWith(supportsImages: teamSupportsImages);
+  state = state.copyWith(
+    models: state.models
+        .map((item) => item.id == secretaryModel.id ? secretaryModel : item)
+        .toList(),
+    conversations: state.conversations
+        .map(
+          (item) => item.id == conversationId
+              ? item.copyWith(status: conversationStatus)
+              : item,
+        )
+        .toList(),
+  );
+
+  final taskQueue = TaskQueueController(
+    readState: () => state,
+    commit: (nextState) => state = nextState,
+    gateway: FakeModelGateway(),
+  );
+  final workspaceCommands = WorkspaceCommandController(
+    readState: () => state,
+    commit: (nextState) => state = nextState,
+  );
+  final titleGenerator = ConversationTitleGenerator(
+    readState: () => state,
+    commit: (nextState) => state = nextState,
+    gateway: FakeModelGateway(),
+  );
+  final controller = DispatchController(
+    readState: () => state,
+    commit: (nextState) => state = nextState,
+    taskQueue: taskQueue,
+    workspaceCommands: workspaceCommands,
+    titleGenerator: titleGenerator,
+    orchestrator: TeamOrchestrator(FakeModelGateway()),
+    commandService: const CommandService(),
+    imageService: ImageService(Directory.systemTemp),
+    selectedConversationId: () => conversationId,
+    notify: () {},
+    onStreamingDraft: ({required conversationId, required message}) {},
+    clearStreamingDraftsForConversation: (_) {},
+  );
+
+  return _DispatchHarness(
+    controller: controller,
+    readState: () => state,
+    conversationId: conversationId,
+  );
+}
+
+class _DispatchHarness {
+  const _DispatchHarness({
+    required this.controller,
+    required this.readState,
+    required this.conversationId,
+  });
+
+  final DispatchController controller;
+  final AppState Function() readState;
+  final String conversationId;
+
+  Conversation get conversation => readState().conversations.firstWhere(
+        (item) => item.id == conversationId,
+      );
 }

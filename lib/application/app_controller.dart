@@ -359,6 +359,10 @@ class AppController extends ChangeNotifier {
     int priority = 0,
     List<File>? images,
   }) async {
+    if ((images?.isNotEmpty ?? false) &&
+        !modelSupportsImagesForConversation(currentConversation.id)) {
+      throw StateError('当前模型不支持图片输入');
+    }
     await _taskQueue.enqueueConversationTask(
       currentConversation.id,
       text,
@@ -396,7 +400,7 @@ class AppController extends ChangeNotifier {
     await _dispatch.dispatch(text);
   }
 
-  Future<void> dispatchConversation(
+  Future<bool> dispatchConversation(
     String conversationId,
     String text, {
     List<File>? images,
@@ -404,7 +408,7 @@ class AppController extends ChangeNotifier {
     List<MessageAttachment>? preparedAttachments,
     VoidCallback? onUserMessageCommitted,
   }) async {
-    await _dispatch.dispatchConversation(
+    return _dispatch.dispatchConversation(
       conversationId,
       text,
       images: images,

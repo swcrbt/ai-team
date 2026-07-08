@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:ai_team/core/workspace/pending_image_attachment.dart';
 import 'package:flutter/services.dart';
@@ -205,9 +204,10 @@ class ImagePasteService {
     if (uri != null && uri.scheme == 'file') {
       return uri.toFilePath();
     }
+    candidate = candidate.replaceAll('\\ ', ' ');
     if (candidate.contains(' ') && !File(candidate).existsSync()) {
       return null;
     }
-    return candidate.replaceAll('\\ ', ' ');
+    return candidate;
   }
 }

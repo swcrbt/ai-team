@@ -1,6 +1,6 @@
 # Codex 级图片附件 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 让 Flutter 桌面聊天输入的图片粘贴、预览、提交、队列和失败恢复达到 Codex 级可靠性。
 
@@ -80,7 +80,7 @@
 - Produces: `ModelProfile.fromJson` 旧配置缺字段时 `supportsImages == true`
 - Produces: 新建模型 UI 默认 `supportsImages == false`
 
-- [ ] **Step 1: 写失败测试：旧配置默认支持图片，新模型可显式关闭**
+- [x] **Step 1: 写失败测试：旧配置默认支持图片，新模型可显式关闭**
 
 Add to `test/core/domain/configuration_export_test.dart`:
 
@@ -102,13 +102,13 @@ test('model image support defaults preserve legacy configs', () {
 });
 ```
 
-- [ ] **Step 2: 运行失败测试**
+- [x] **Step 2: 运行失败测试**
 
 Run: `flutter test test/core/domain/configuration_export_test.dart`
 
 Expected: FAIL with a compile error similar to `The getter 'supportsImages' isn't defined for the type 'ModelProfile'`.
 
-- [ ] **Step 3: 实现 `ModelProfile.supportsImages`**
+- [x] **Step 3: 实现 `ModelProfile.supportsImages`**
 
 Modify `lib/core/domain/configuration.dart`:
 
@@ -199,7 +199,7 @@ class ModelProfile {
 }
 ```
 
-- [ ] **Step 4: 设置 seed 模型能力**
+- [x] **Step 4: 设置 seed 模型能力**
 
 Modify `lib/core/domain/app_state.dart`:
 
@@ -222,7 +222,7 @@ const ModelProfile(
 ),
 ```
 
-- [ ] **Step 5: 给模型对话框加开关**
+- [x] **Step 5: 给模型对话框加开关**
 
 In `lib/ui/dialogs/model_dialog.dart`, add a local `bool supportsImages` initialized as:
 
@@ -247,13 +247,13 @@ When constructing `ModelProfile`, pass:
 supportsImages: supportsImages,
 ```
 
-- [ ] **Step 6: 运行验证**
+- [x] **Step 6: 运行验证**
 
 Run: `flutter test test/core/domain/configuration_export_test.dart`
 
 Expected: PASS. Existing export tests continue to pass, and new test passes.
 
-- [ ] **Step 7: 提交或记录差异**
+- [x] **Step 7: 提交或记录差异**
 
 If the user has explicitly authorized commits, run:
 
@@ -283,7 +283,7 @@ If commits are not authorized, do not commit; record the modified files in the t
 - Produces: `ImagePasteService.parsePastedImagePath(String text): ImagePathParseResult`
 - Produces: `ImagePasteService.insertText(TextEditingValue value, String text): TextEditingValue`
 
-- [ ] **Step 1: 写失败测试：路径解析和普通文本插入**
+- [x] **Step 1: 写失败测试：路径解析和普通文本插入**
 
 Create `test/core/workspace/image_paste_service_test.dart`:
 
@@ -350,13 +350,13 @@ const _onePixelPng = <int>[
 ];
 ```
 
-- [ ] **Step 2: 运行失败测试**
+- [x] **Step 2: 运行失败测试**
 
 Run: `flutter test test/core/workspace/image_paste_service_test.dart`
 
 Expected: FAIL because `ImagePasteService` does not exist.
 
-- [ ] **Step 3: 创建草稿附件模型**
+- [x] **Step 3: 创建草稿附件模型**
 
 Create `lib/core/workspace/pending_image_attachment.dart`:
 
@@ -424,7 +424,7 @@ class PendingImageAttachment {
 }
 ```
 
-- [ ] **Step 4: 创建路径解析和文本插入服务**
+- [x] **Step 4: 创建路径解析和文本插入服务**
 
 Create `lib/core/workspace/image_paste_service.dart`:
 
@@ -580,13 +580,13 @@ class ImagePasteService {
 }
 ```
 
-- [ ] **Step 5: 运行验证**
+- [x] **Step 5: 运行验证**
 
 Run: `flutter test test/core/workspace/image_paste_service_test.dart`
 
 Expected: PASS.
 
-- [ ] **Step 6: 实现剪贴板 item 遍历**
+- [x] **Step 6: 实现剪贴板 item 遍历**
 
 Extend `ImagePasteService` with `Future<List<PendingImageAttachment>> readClipboardImageCandidates()` using `SystemClipboard.instance.read()` and `ClipboardReader.items` from `super_clipboard 0.8.24`:
 
@@ -659,7 +659,7 @@ Run: `flutter test test/core/workspace/image_paste_service_test.dart`
 
 Expected: PASS. If a platform returns `Formats.fileUri` and image bytes for the same item, only the file URI branch is used so copied Finder files keep their source file names.
 
-- [ ] **Step 7: 提交或记录差异**
+- [x] **Step 7: 提交或记录差异**
 
 If commits are authorized:
 
@@ -684,7 +684,7 @@ git commit -m "feat: 增加图片粘贴解析服务"
 - Produces: `Future<void> deleteAttachments(List<MessageAttachment> attachments)`
 - Changes: `readImageAsDataUrl` throws `ImageServiceException` on missing/unreadable file
 
-- [ ] **Step 1: 写失败测试：部分保存失败回滚**
+- [x] **Step 1: 写失败测试：部分保存失败回滚**
 
 Create `test/core/workspace/image_service_test.dart`:
 
@@ -731,13 +731,13 @@ void main() {
 const _onePixelPng = <int>[/* reuse bytes from Task 2 */];
 ```
 
-- [ ] **Step 2: 运行失败测试**
+- [x] **Step 2: 运行失败测试**
 
 Run: `flutter test test/core/workspace/image_service_test.dart`
 
 Expected: FAIL because `savePendingImages` and `ImageServiceException` are undefined.
 
-- [ ] **Step 3: 实现异常和事务保存**
+- [x] **Step 3: 实现异常和事务保存**
 
 Modify `lib/core/workspace/image_service.dart`:
 
@@ -793,7 +793,7 @@ extension ImageServicePendingImages on ImageService {
 
 If Dart extension cannot access private helpers, make `_getImageDirectory` public as `imageDirectoryForConversation` and keep changes in the same file.
 
-- [ ] **Step 4: 让 `readImageAsDataUrl` 显式失败**
+- [x] **Step 4: 让 `readImageAsDataUrl` 显式失败**
 
 Modify `readImageAsDataUrl`:
 
@@ -814,7 +814,7 @@ Future<String> readImageAsDataUrl(MessageAttachment attachment) async {
 }
 ```
 
-- [ ] **Step 5: 更新 gateway 测试，禁止静默丢图**
+- [x] **Step 5: 更新 gateway 测试，禁止静默丢图**
 
 Add to `test/core/model/model_gateway_test.dart`:
 
@@ -851,7 +851,7 @@ test('fails instead of silently dropping unreadable image attachments', () async
 });
 ```
 
-- [ ] **Step 6: 修改 `OpenAiCompatibleGateway._resolveImageDataUrls`**
+- [x] **Step 6: 修改 `OpenAiCompatibleGateway._resolveImageDataUrls`**
 
 In `lib/core/model/openai_gateway.dart`, replace the silent catch with:
 
@@ -863,13 +863,13 @@ try {
 }
 ```
 
-- [ ] **Step 7: 运行验证**
+- [x] **Step 7: 运行验证**
 
 Run: `flutter test test/core/workspace/image_service_test.dart test/core/model/model_gateway_test.dart`
 
 Expected: PASS.
 
-- [ ] **Step 8: 提交或记录差异**
+- [x] **Step 8: 提交或记录差异**
 
 If commits are authorized:
 
@@ -896,7 +896,7 @@ git commit -m "feat: 增强图片保存事务"
 - Produces: `DispatchController.dispatchConversation(..., String? userMessageId, List<MessageAttachment> attachments, VoidCallback? onUserMessageCommitted)`
 - Consumes: `ImageService.savePendingImages`
 
-- [ ] **Step 1: 写失败测试：不支持图片模型阻止提交并不写消息**
+- [x] **Step 1: 写失败测试：不支持图片模型阻止提交并不写消息**
 
 Create `test/application/image_dispatch_test.dart` with a controller fixture based on existing application tests. Test shape:
 
@@ -922,13 +922,13 @@ test('dispatch rejects image attachments when current model does not support ima
 
 Use the existing test helper patterns from `test/application/controller_components_test.dart`. If no helper exists, create a local fake gateway that returns deterministic text.
 
-- [ ] **Step 2: 运行失败测试**
+- [x] **Step 2: 运行失败测试**
 
 Run: `flutter test test/application/image_dispatch_test.dart`
 
 Expected: FAIL because model image capability check is missing.
 
-- [ ] **Step 3: 增加会话模型能力判断**
+- [x] **Step 3: 增加会话模型能力判断**
 
 In `lib/application/app_controller.dart`:
 
@@ -942,7 +942,7 @@ bool modelSupportsImagesForConversation(String conversationId) {
 
 If `_modelForConversation` is private to `ChatPane`, implement equivalent lookup in `AppController` using current team/member state.
 
-- [ ] **Step 4: 提交层二次校验**
+- [x] **Step 4: 提交层二次校验**
 
 In `lib/application/dispatch_controller.dart`, before setting `isDispatching = true`:
 
@@ -969,7 +969,7 @@ bool _conversationModelSupportsImages(String conversationId) {
 }
 ```
 
-- [ ] **Step 5: 支持外部用户消息 ID 和提交回调**
+- [x] **Step 5: 支持外部用户消息 ID 和提交回调**
 
 Change dispatcher signatures:
 
@@ -999,13 +999,13 @@ ChatMessage(
 
 Call `onUserMessageCommitted?.call()` immediately after `onProgress?.call(workingState)` that includes the user message.
 
-- [ ] **Step 6: Run tests**
+- [x] **Step 6: Run tests**
 
 Run: `flutter test test/application/image_dispatch_test.dart test/core/domain/secretary_orchestration_test.dart`
 
 Expected: PASS. Existing secretary attachment persistence tests remain passing.
 
-- [ ] **Step 7: 提交或记录差异**
+- [x] **Step 7: 提交或记录差异**
 
 If commits are authorized:
 
@@ -1031,7 +1031,7 @@ git commit -m "feat: 增加图片提交事务门禁"
 - Produces: Queue enqueue path creates user `ChatMessage(attachments: ...)`
 - Produces: `dispatchQueuedTask` reuses the queued user message in request history
 
-- [ ] **Step 1: 写失败测试：运行队列不创建重复用户消息**
+- [x] **Step 1: 写失败测试：运行队列不创建重复用户消息**
 
 Create `test/application/task_queue_image_test.dart`:
 
@@ -1055,13 +1055,13 @@ test('queued task reuses queued user message with attachments', () async {
 });
 ```
 
-- [ ] **Step 2: 运行失败测试**
+- [x] **Step 2: 运行失败测试**
 
 Run: `flutter test test/application/task_queue_image_test.dart`
 
 Expected: FAIL because enqueue does not accept images and/or run creates duplicate user messages.
 
-- [ ] **Step 3: 扩展 enqueue 接口**
+- [x] **Step 3: 扩展 enqueue 接口**
 
 In `AppController.enqueueCurrentConversationTask`:
 
@@ -1090,7 +1090,7 @@ ImageService? imageService,
 
 Generate `userMessageId` before saving images, save attachments, and only then create `userMessage` and `QueuedTask`.
 
-- [ ] **Step 4: 复用排队用户消息**
+- [x] **Step 4: 复用排队用户消息**
 
 In `TeamOrchestrator.dispatchQueuedTask`, find queued user message:
 
@@ -1127,7 +1127,7 @@ final requestMessages = [
 
 If no queued user message exists, keep current fallback behavior for legacy queued tasks.
 
-- [ ] **Step 5: 删除任务清理图片**
+- [x] **Step 5: 删除任务清理图片**
 
 In `TaskQueueController`, inject `ImageService` through the constructor:
 
@@ -1159,13 +1159,13 @@ final removedAttachments = conversation.messages
 unawaited(imageService.deleteMessageImages(removedAttachments));
 ```
 
-- [ ] **Step 6: 运行验证**
+- [x] **Step 6: 运行验证**
 
 Run: `flutter test test/application/task_queue_image_test.dart test/application/controller_components_test.dart`
 
 Expected: PASS.
 
-- [ ] **Step 7: 提交或记录差异**
+- [x] **Step 7: 提交或记录差异**
 
 If commits are authorized:
 
@@ -1192,7 +1192,7 @@ git commit -m "feat: 队列任务复用图片用户消息"
 - Consumes: `AppController.modelSupportsImagesForConversation`
 - Produces: paste action matrix behavior from spec
 
-- [ ] **Step 1: 写失败 widget 测试：普通文本粘贴和图片路径粘贴**
+- [x] **Step 1: 写失败 widget 测试：普通文本粘贴和图片路径粘贴**
 
 Create `test/ui/chat_image_paste_test.dart` with a testable `ChatPane` harness. Include tests:
 
@@ -1221,13 +1221,13 @@ testWidgets('paste image path adds attachment instead of text', (tester) async {
 
 Use a small fake `ImagePasteService` injected into `ChatPane` if direct system clipboard testing is brittle.
 
-- [ ] **Step 2: 运行失败测试**
+- [x] **Step 2: 运行失败测试**
 
 Run: `flutter test test/ui/chat_image_paste_test.dart`
 
 Expected: FAIL because `ChatPane` does not expose injectable paste service or controlled paste action.
 
-- [ ] **Step 3: 注入服务并替换 `_pendingImages`**
+- [x] **Step 3: 注入服务并替换 `_pendingImages`**
 
 In `ChatPane`, add optional constructor parameter:
 
@@ -1243,7 +1243,7 @@ late final ImagePasteService imagePasteService =
 final List<PendingImageAttachment> _pendingImages = [];
 ```
 
-- [ ] **Step 4: 用 Shortcuts/Actions 接管 paste**
+- [x] **Step 4: 用 Shortcuts/Actions 接管 paste**
 
 Wrap the `TextField` with:
 
@@ -1303,7 +1303,7 @@ Future<void> _handleControlledPaste() async {
 }
 ```
 
-- [ ] **Step 5: 更新预览列表**
+- [x] **Step 5: 更新预览列表**
 
 `ImagePreviewList` takes `List<PendingImageAttachment>` and renders:
 
@@ -1321,7 +1321,7 @@ if (attachment.status != PendingImageStatus.ready)
   Tooltip(message: attachment.errorMessage ?? '图片不可用', child: const Icon(Icons.error_outline))
 ```
 
-- [ ] **Step 6: 添加入口门禁**
+- [x] **Step 6: 添加入口门禁**
 
 Before file picker/drop/paste image attachment:
 
@@ -1337,7 +1337,7 @@ bool _canAddImages() {
 
 Use it in picker, drop, and paste image branches.
 
-- [ ] **Step 7: 提交事务 UI 回调**
+- [x] **Step 7: 提交事务 UI 回调**
 
 In `_submit`, do not clear text/images immediately. Generate `messageId`, call `imageService.savePendingImages`, then call dispatch with `onUserMessageCommitted`:
 
@@ -1362,13 +1362,13 @@ if (!committed) {
 }
 ```
 
-- [ ] **Step 8: 运行验证**
+- [x] **Step 8: 运行验证**
 
 Run: `flutter test test/ui/chat_image_paste_test.dart test/ui/message_image_grid_test.dart`
 
 Expected: PASS.
 
-- [ ] **Step 9: 提交或记录差异**
+- [x] **Step 9: 提交或记录差异**
 
 If commits are authorized:
 
@@ -1396,7 +1396,7 @@ git commit -m "feat: 接管聊天图片粘贴体验"
 - Consumes: `ImageService.cleanupConversationImages`
 - Produces: missing image placeholder and semantic labels
 
-- [ ] **Step 1: 写失败测试：缺失图片稳定占位**
+- [x] **Step 1: 写失败测试：缺失图片稳定占位**
 
 Extend `test/ui/message_image_grid_test.dart`:
 
@@ -1424,13 +1424,13 @@ testWidgets('message image grid shows placeholder for missing file', (tester) as
 });
 ```
 
-- [ ] **Step 2: 运行失败测试**
+- [x] **Step 2: 运行失败测试**
 
 Run: `flutter test test/ui/message_image_grid_test.dart`
 
 Expected: FAIL if widget does not provide stable placeholder or missing imports.
 
-- [ ] **Step 3: 改进 `MessageImageGrid`**
+- [x] **Step 3: 改进 `MessageImageGrid`**
 
 Use fixed constraints and semantics:
 
@@ -1458,7 +1458,7 @@ Semantics(
 )
 ```
 
-- [ ] **Step 4: 会话删除清理图片**
+- [x] **Step 4: 会话删除清理图片**
 
 Inject `ImageService` into `ConversationController` or let `AppController.deleteConversationSession` call cleanup after state deletion:
 
@@ -1471,7 +1471,7 @@ void deleteConversationSession(String conversationId) {
 
 If `AppController` lacks `dart:async`, import it.
 
-- [ ] **Step 5: 测试会话删除清理**
+- [x] **Step 5: 测试会话删除清理**
 
 Add to `test/application/image_dispatch_test.dart`:
 
@@ -1490,7 +1490,7 @@ test('delete conversation cleans conversation image directory', () async {
 });
 ```
 
-- [ ] **Step 6: 运行完整相关验证**
+- [x] **Step 6: 运行完整相关验证**
 
 Run: `flutter test test/core/domain/configuration_export_test.dart test/core/workspace/image_paste_service_test.dart test/core/workspace/image_service_test.dart test/core/model/model_gateway_test.dart test/application/image_dispatch_test.dart test/application/task_queue_image_test.dart test/ui/chat_image_paste_test.dart test/ui/message_image_grid_test.dart`
 
@@ -1500,7 +1500,7 @@ Run: `flutter analyze`
 
 Expected: `No issues found!` or only pre-existing unrelated warnings documented in the handoff.
 
-- [ ] **Step 7: 提交或记录差异**
+- [x] **Step 7: 提交或记录差异**
 
 If commits are authorized:
 
