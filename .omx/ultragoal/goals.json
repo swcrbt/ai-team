@@ -1,7 +1,7 @@
 {
   "version": 1,
   "createdAt": "2026-06-29T15:49:46.541Z",
-  "updatedAt": "2026-07-08T13:22:41.053Z",
+  "updatedAt": "2026-07-08T13:25:15.888Z",
   "briefPath": ".omx/ultragoal/brief.md",
   "goalsPath": ".omx/ultragoal/goals.json",
   "ledgerPath": ".omx/ultragoal/ledger.jsonl",
@@ -116,18 +116,23 @@
       "id": "G008-final-gates-and-durable-closeout",
       "title": "Final gates and durable closeout",
       "objective": "Run changed-file cleanup review, full flutter analyze, full flutter test, flutter build macos --debug, git diff --check, independent code review and architecture review; commit the final recovery work; only then complete the active Codex aggregate goal and checkpoint ultragoal with quality-gate evidence.",
-      "status": "review_blocked",
+      "status": "complete",
       "attempt": 1,
       "createdAt": "2026-07-01T13:06:55.209Z",
-      "updatedAt": "2026-07-08T13:22:41.053Z",
-      "evidence": "Final independent review was non-clean. Architect lane returned WATCH because AppController and TeamOrchestrator still concentrate process coupling; code-reviewer lane returned COMMENT rather than APPROVE. Required ultragoal gate forbids completing on COMMENT/WATCH.",
+      "updatedAt": "2026-07-08T13:24:40.252Z",
+      "evidence": "Final gate blocker was resolved by G010; raw status normalized to complete so status readers display no residual blocker state.",
       "startedAt": "2026-07-01T14:31:52.660Z",
       "reviewBlockedAt": "2026-07-01T14:51:44.085Z",
       "reviewBlockerResolution": {
         "resolverGoalId": "G010-resolve-final-architecture-review-bl",
         "status": "complete",
         "resolvedAt": "2026-07-08T13:22:41.053Z",
-        "evidence": "G010 completed the blocker-resolution story with verification and independent APPROVE/CLEAR evidence; G008 remains historical review-blocked evidence rather than an active blocker."
+        "evidence": "G010 completed the blocker-resolution story with verification and independent APPROVE/CLEAR evidence; G008 is now complete."
+      },
+      "completedAt": "2026-07-08T13:24:40.252Z",
+      "historicalReviewBlocker": {
+        "blockedAt": "2026-07-01T14:51:44.085Z",
+        "evidence": "Final independent review was non-clean before G010 resolved the blockers."
       }
     },
     {
@@ -151,10 +156,11 @@
   "aggregateCompletion": {
     "status": "complete",
     "completedAt": "2026-07-08T13:22:41.053Z",
-    "evidence": "Status reconciliation: all active ultragoal stories are resolved; G001 is superseded by G009 and G008 is resolved by G010, so durable OMX state should not display residual active goals.",
+    "evidence": "All ultragoal raw statuses are terminal complete; former G001 and G008 bookkeeping artifacts are closed in goals.json.",
     "codexGoal": {
       "available": false,
       "raw": null
-    }
+    },
+    "reconciledAt": "2026-07-08T13:25:15.888Z"
   }
 }
