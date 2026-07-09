@@ -77,7 +77,7 @@ class _ModelManagementPageState extends State<ModelManagementPage> {
     final selected = _selectedModel(models);
     return ManagementPageFrame(
       title: '模型管理',
-      subtitle: '按模型列表维护 provider、模型名和上下文窗口',
+      subtitle: '按模型列表维护模型名、协议和上下文窗口',
       child: _EntityLayout(
         list: _ObjectList(
           title: '模型列表',
@@ -89,8 +89,7 @@ class _ModelManagementPageState extends State<ModelManagementPage> {
                 key: ValueKey('model-row-${model.id}'),
                 icon: Icons.memory_rounded,
                 title: model.name,
-                subtitle:
-                    '${_providerLabel(model)} · ${model.modelName} · ${model.baseUrl}',
+                subtitle: '${model.modelName} · ${model.baseUrl}',
                 chips: [
                   _TeamMetaChip(
                     label:
@@ -705,14 +704,6 @@ _TeamCardSpec _teamCardSpec(Team team) {
   return const _TeamCardSpec(objectName: '协作团队', purpose: '按成员组合执行当前协作流程。');
 }
 
-String _providerLabel(ModelProfile model) {
-  final baseUrl = model.baseUrl.toLowerCase();
-  if (baseUrl.contains('localhost') || baseUrl.contains('127.0.0.1')) {
-    return '兼容端点';
-  }
-  return 'OpenAI-compatible';
-}
-
 String _formatTokenLimit(int tokens) {
   if (tokens >= 1000 && tokens % 1000 == 0) {
     return '${tokens ~/ 1000}k';
@@ -939,7 +930,6 @@ class _ModelDetail extends StatelessWidget {
       child: Column(
         children: [
           _DetailRow(label: '名称', value: model.name),
-          _DetailRow(label: 'Provider', value: _providerLabel(model)),
           _DetailRow(
             label: '协议',
             value: switch (model.protocol) {

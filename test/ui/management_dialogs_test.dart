@@ -630,7 +630,7 @@ void main() {
   ) async {
     tester.view.physicalSize = const Size(1400, 900);
     tester.view.devicePixelRatio = 1.0;
-    
+
     final state = AppState.seed().copyWith(
       auditLog: [
         AuditEntry(
@@ -719,7 +719,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.textContaining('model-main'), findsNothing);
-    
+
     tester.view.resetPhysicalSize();
   });
 
@@ -773,7 +773,8 @@ void main() {
     expect(find.byTooltip('新增模型'), findsOneWidget);
     expect(find.text('上下文 32k'), findsWidgets);
     expect(find.text('流式 开启'), findsWidgets);
-    expect(find.text('Provider'), findsOneWidget);
+    expect(find.text('Provider'), findsNothing);
+    expect(find.text('OpenAI-compatible'), findsNothing);
     expect(find.text('协议'), findsOneWidget);
     expect(find.text('chat/completions（OpenAI）'), findsOneWidget);
   });
@@ -929,7 +930,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('本地端点'), findsNothing);
-    expect(find.text('兼容端点'), findsWidgets);
+    expect(find.text('兼容端点'), findsNothing);
 
     await tester.tap(find.byTooltip('角色'));
     await tester.pumpAndSettle();
