@@ -126,13 +126,17 @@ class JsonLocalStore {
   }
 
   Future<void> save(AppState state) async {
+    final fallbackApiKeys = <String, String>{};
     for (final model in state.models) {
       if (model.apiKey.isNotEmpty) {
         try {
           await secretStore.write(model.id, model.apiKey);
+          final storedApiKey = await secretStore.read(model.id);
+          if (storedApiKey != model.apiKey) {
+            fallbackApiKeys[model.id] = model.apiKey;
+          }
         } catch (_) {
-          // Keep non-secret configuration durable even if the platform secret
-          // store is unavailable. API keys still stay out of the JSON file.
+          fallbackApiKeys[model.id] = model.apiKey;
         }
       }
     }
@@ -140,7 +144,10 @@ class JsonLocalStore {
     const encoder = JsonEncoder.withIndent('  ');
     final tempFile = File('${file.path}.tmp');
     await tempFile.writeAsString(
-      encoder.convert(state.toJson(includeSecrets: false)),
+      encoder.convert(_stateJsonWithSecretFallbacks(
+        state,
+        fallbackApiKeys: fallbackApiKeys,
+      )),
     );
     if (await file.exists()) {
       await file.delete();
@@ -163,6 +170,25 @@ class JsonLocalStore {
       )),
     );
   }
+}
+
+Map<String, Object?> _stateJsonWithSecretFallbacks(
+  AppState state, {
+  required Map<String, String> fallbackApiKeys,
+}) {
+  final json = ConfigExporter.exportState(state, includeSecrets: false);
+  if (fallbackApiKeys.isEmpty) {
+    return json;
+  }
+  final models = json['models'] as List<Object?>;
+  for (final item in models) {
+    final modelJson = item as Map<String, Object?>;
+    final apiKey = fallbackApiKeys[modelJson['id']];
+    if (apiKey != null) {
+      modelJson['apiKey'] = apiKey;
+    }
+  }
+  return json;
 }
 
 AppState _mergeRecoveredState({

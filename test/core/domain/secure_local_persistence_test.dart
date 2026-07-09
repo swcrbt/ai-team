@@ -47,7 +47,7 @@ void main() {
       expect(await stateFile.readAsString(), contains('"models"'));
     });
 
-    test('keeps local state redacted when secret storage fails', () async {
+    test('keeps api keys durable when secret storage throws', () async {
       final temp =
           await Directory.systemTemp.createTemp('ai_team_secret_fail_');
       addTearDown(() async => temp.delete(recursive: true));
@@ -61,18 +61,47 @@ void main() {
           AppState.seed().models.first.copyWith(
                 name: 'Persisted model',
                 baseUrl: 'https://persist.example/v1',
-                apiKey: 'secret-that-stays-out-of-json',
+                apiKey: 'secret-that-survives-restart',
               ),
         ],
       );
 
       await store.save(state);
       final raw = await stateFile.readAsString();
+      final loaded = await store.load();
 
       expect(raw, contains('Persisted model'));
       expect(raw, contains('https://persist.example/v1'));
-      expect(raw, isNot(contains('secret-that-stays-out-of-json')));
-      expect(raw, isNot(contains('"apiKey"')));
+      expect(raw, contains('secret-that-survives-restart'));
+      expect(loaded.models.single.apiKey, 'secret-that-survives-restart');
+    });
+
+    test('keeps api keys durable when secret storage write is not readable',
+        () async {
+      final temp =
+          await Directory.systemTemp.createTemp('ai_team_secret_noop_');
+      addTearDown(() async => temp.delete(recursive: true));
+      final stateFile = File('${temp.path}/state.json');
+      final store = JsonLocalStore(
+        stateFile,
+        secretStore: UnreadableWriteSecretStore(),
+      );
+      final state = AppState.seed().copyWith(
+        models: [
+          AppState.seed().models.first.copyWith(
+                name: 'No-op secure model',
+                baseUrl: 'https://noop.example/v1',
+                apiKey: 'secret-from-noop-store',
+              ),
+        ],
+      );
+
+      await store.save(state);
+      final raw = await stateFile.readAsString();
+      final loaded = await store.load();
+
+      expect(raw, contains('"apiKey": "secret-from-noop-store"'));
+      expect(loaded.models.single.apiKey, 'secret-from-noop-store');
     });
 
     test('loads legacy api keys from local state when secret storage fails',
@@ -211,4 +240,15 @@ class ThrowingSecretStore implements SecretStore {
   Future<void> delete(String key) async {
     throw StateError('secret storage unavailable');
   }
+}
+
+class UnreadableWriteSecretStore implements SecretStore {
+  @override
+  Future<void> write(String key, String value) async {}
+
+  @override
+  Future<String?> read(String key) async => null;
+
+  @override
+  Future<void> delete(String key) async {}
 }
