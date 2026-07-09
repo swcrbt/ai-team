@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -6,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ai_team/application/app_controller.dart';
 import 'package:ai_team/core/domain.dart';
 import 'package:ai_team/core/file_dialogs.dart';
+import 'package:ai_team/core/local_store.dart';
 import 'package:ai_team/core/orchestrator.dart';
 
 import '../support/model_gateway_fakes.dart';
@@ -1089,6 +1091,62 @@ void main() {
 
     expect(exported, isTrue);
     expect(await target.readAsString(), isNot(contains('"apiKey"')));
+  });
+
+  test('controller preserves local api keys when importing redacted config',
+      () async {
+    final temp = await Directory.systemTemp.createTemp('ai_team_import_');
+    addTearDown(() async => temp.delete(recursive: true));
+    final source = File('${temp.path}/config.json');
+    final imported = AppState.seed().copyWith(
+      models: [
+        AppState.seed().models.first.copyWith(
+              name: 'Imported model',
+              apiKey: '',
+            ),
+      ],
+    );
+    await source.writeAsString(jsonEncode(
+      ConfigExporter.exportState(imported, includeSecrets: false),
+    ));
+    final controller = AppController(
+      AppState.seed().copyWith(
+        models: [
+          AppState.seed().models.first.copyWith(apiKey: 'kept-secret'),
+        ],
+      ),
+      TeamOrchestrator(FakeModelGateway()),
+      fileDialogs: FakeFileDialogService(openPath: source.path),
+    );
+    addTearDown(controller.dispose);
+
+    final result = await controller.importConfiguration();
+
+    expect(result, isTrue);
+    expect(controller.state.models.single.name, 'Imported model');
+    expect(controller.state.models.single.apiKey, 'kept-secret');
+  });
+
+  test('controller preserves an existing model api key on empty update', () {
+    final controller = AppController(
+      AppState.seed().copyWith(
+        models: [
+          AppState.seed().models.first.copyWith(apiKey: 'kept-secret'),
+        ],
+      ),
+      TeamOrchestrator(FakeModelGateway()),
+    );
+    addTearDown(controller.dispose);
+
+    controller.updateModel(
+      controller.state.models.first.copyWith(
+        name: 'Renamed model',
+        apiKey: '',
+      ),
+    );
+
+    expect(controller.state.models.first.name, 'Renamed model');
+    expect(controller.state.models.first.apiKey, 'kept-secret');
   });
 
   test('controller keeps current state when configuration import fails',

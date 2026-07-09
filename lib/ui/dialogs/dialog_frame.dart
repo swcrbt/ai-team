@@ -200,6 +200,7 @@ class DialogField extends StatelessWidget {
     this.obscure = false,
     this.minLines = 1,
     this.maxLines = 1,
+    this.suffixIcon,
   });
 
   final TextEditingController controller;
@@ -207,6 +208,7 @@ class DialogField extends StatelessWidget {
   final bool obscure;
   final int minLines;
   final int maxLines;
+  final Widget? suffixIcon;
 
   @override
   Widget build(BuildContext context) {
@@ -217,7 +219,9 @@ class DialogField extends StatelessWidget {
         obscureText: obscure,
         minLines: obscure ? 1 : minLines,
         maxLines: obscure ? 1 : maxLines,
-        decoration: dialogInputDecoration(label),
+        decoration: dialogInputDecoration(label).copyWith(
+          suffixIcon: suffixIcon,
+        ),
       ),
     );
   }

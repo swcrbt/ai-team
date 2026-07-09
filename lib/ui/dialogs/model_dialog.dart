@@ -31,6 +31,7 @@ Future<void> showModelDialog(
   var reasoningEffort = model?.reasoningEffort ?? reasoningEffortOffValue;
   var protocol = model?.protocol ?? ModelProtocol.chatCompletions;
   var supportsImages = model?.supportsImages ?? false;
+  var apiKeyVisible = false;
   String? validationError;
   await showDialog<void>(
     context: context,
@@ -78,7 +79,19 @@ Future<void> showModelDialog(
                   DialogField(
                     controller: apiKey,
                     label: 'API Key',
-                    obscure: true,
+                    obscure: !apiKeyVisible,
+                    suffixIcon: IconButton(
+                      key: const ValueKey('model-api-key-visibility-toggle'),
+                      tooltip: apiKeyVisible ? '隐藏 API Key' : '显示 API Key',
+                      icon: Icon(
+                        apiKeyVisible
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                      ),
+                      onPressed: () => setDialogState(
+                        () => apiKeyVisible = !apiKeyVisible,
+                      ),
+                    ),
                   ),
                 ],
               ),

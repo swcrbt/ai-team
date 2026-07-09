@@ -543,7 +543,7 @@ class AppController extends ChangeNotifier {
     try {
       final decoded =
           jsonDecode(await File(path).readAsString()) as Map<String, Object?>;
-      _commit(ConfigExporter.importState(decoded));
+      _commit(_withLocalModelApiKeys(ConfigExporter.importState(decoded)));
       error = null;
       return true;
     } catch (exception) {
@@ -696,5 +696,22 @@ class AppController extends ChangeNotifier {
 
   void _syncConversationOrder() {
     _conversations.syncConversationOrder();
+  }
+
+  AppState _withLocalModelApiKeys(AppState imported) {
+    final currentModels = {
+      for (final model in state.models) model.id: model,
+    };
+    return imported.copyWith(
+      models: imported.models.map((model) {
+        final current = currentModels[model.id];
+        if (model.apiKey.trim().isNotEmpty ||
+            current == null ||
+            current.apiKey.isEmpty) {
+          return model;
+        }
+        return model.copyWith(apiKey: current.apiKey);
+      }).toList(),
+    );
   }
 }

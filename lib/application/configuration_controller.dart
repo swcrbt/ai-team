@@ -189,19 +189,22 @@ class ConfigurationController {
   }
 
   void updateModel(ModelProfile model) {
-    validateModel(model);
-    requireModel(state, model.id);
+    final existing = requireModel(state, model.id);
+    final next = model.apiKey.trim().isEmpty && existing.apiKey.isNotEmpty
+        ? model.copyWith(apiKey: existing.apiKey)
+        : model;
+    validateModel(next);
     commit(
       state.copyWith(
         models: state.models
-            .map((item) => item.id == model.id ? model : item)
+            .map((item) => item.id == next.id ? next : item)
             .toList(),
         auditLog: [
           ...state.auditLog,
           AuditEntry(
             id: 'audit-${DateTime.now().microsecondsSinceEpoch}',
             action: 'model_updated',
-            detail: model.name,
+            detail: next.name,
             createdAt: DateTime.now(),
           ),
         ],

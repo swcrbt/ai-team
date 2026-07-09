@@ -530,6 +530,38 @@ void main() {
     expect(find.text('编辑模型配置'), findsOneWidget);
   });
 
+  testWidgets('model dialog can reveal and hide the API key', (tester) async {
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    await tester.tap(find.byTooltip('模型'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('编辑模型').first);
+    await tester.pumpAndSettle();
+
+    TextField apiKeyField() => tester.widget<TextField>(
+          find.widgetWithText(TextField, 'API Key'),
+        );
+
+    expect(apiKeyField().obscureText, isTrue);
+    expect(find.byTooltip('显示 API Key'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('显示 API Key'));
+    await tester.pumpAndSettle();
+
+    expect(apiKeyField().obscureText, isFalse);
+    expect(find.byTooltip('隐藏 API Key'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('隐藏 API Key'));
+    await tester.pumpAndSettle();
+
+    expect(apiKeyField().obscureText, isTrue);
+  });
+
   testWidgets('member dialog edits role and model binding', (tester) async {
     await tester.pumpWidget(
       AiTeamApp(
