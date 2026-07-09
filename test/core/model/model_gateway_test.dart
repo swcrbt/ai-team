@@ -42,6 +42,15 @@ void main() {
       ).toString(),
       'https://api.openai.com/v1/chat/completions',
     );
+    expect(
+      openAiCompatibleChatCompletionsEndpoint(
+        model().copyWith(
+          baseUrl: 'https://api.openai.com/v1/',
+          protocol: ModelProtocol.responses,
+        ),
+      ).toString(),
+      'https://api.openai.com/v1/responses',
+    );
   });
 
   test('sends OpenAI compatible payload and parses assistant content',
@@ -337,6 +346,189 @@ void main() {
     expect(messages.last, containsPair('tool_call_id', 'call-read'));
     expect(messages.last,
         containsPair('content', '{"ok":true,"content":"hello"}'));
+  });
+
+  test('sends Responses API payload without chat messages', () async {
+    late Map<String, Object?> sentBody;
+    unawaited(serve(server, (request) async {
+      requests.add(request);
+      sentBody =
+          jsonDecode(await utf8.decodeStream(request)) as Map<String, Object?>;
+      request.response
+        ..headers.contentType = ContentType.json
+        ..write(jsonEncode({
+          'output': [
+            {
+              'type': 'message',
+              'role': 'assistant',
+              'content': [
+                {'type': 'output_text', 'text': 'responses answer'}
+              ],
+            }
+          ],
+        }));
+      await request.response.close();
+    }));
+    final gateway = OpenAiCompatibleGateway();
+
+    final completion = await gateway.completeWithMetadata(
+      model: model().copyWith(
+        streaming: false,
+        protocol: ModelProtocol.responses,
+        maxTokens: 456,
+        reasoningEffort: 'high',
+      ),
+      systemPrompt: 'system prompt',
+      messages: [
+        ChatMessage(
+          id: 'm1',
+          authorName: '我',
+          content: 'hi',
+          createdAt: DateTime(2026),
+          isUser: true,
+        ),
+      ],
+      tools: const [
+        ModelToolDefinition(
+          name: 'read_workspace_file',
+          description: 'Read a workspace file.',
+          parameters: {
+            'type': 'object',
+            'properties': {
+              'workspaceId': {'type': 'string'},
+            },
+            'required': ['workspaceId'],
+          },
+        ),
+      ],
+    );
+
+    expect(sentBody, isNot(contains('messages')));
+    expect(sentBody['max_output_tokens'], 456);
+    expect(sentBody['reasoning'], {'effort': 'high'});
+    final input = sentBody['input'] as List<Object?>;
+    expect(input.first, containsPair('role', 'system'));
+    expect(jsonEncode(input), contains('我: hi'));
+    final tools = sentBody['tools'] as List<Object?>;
+    expect(tools.single, containsPair('name', 'read_workspace_file'));
+    expect(tools.single, isNot(contains('function')));
+    expect(sentBody['tool_choice'], 'auto');
+    expect(completion.content, 'responses answer');
+    expect(
+      completion.diagnostics!.requestUrl,
+      'http://${server.address.host}:${server.port}/v1/responses',
+    );
+  });
+
+  test('sends Responses API function call outputs for tool rounds', () async {
+    late Map<String, Object?> sentBody;
+    unawaited(serve(server, (request) async {
+      requests.add(request);
+      sentBody =
+          jsonDecode(await utf8.decodeStream(request)) as Map<String, Object?>;
+      request.response
+        ..headers.contentType = ContentType.json
+        ..write(jsonEncode({
+          'output_text': 'final',
+          'output': const [],
+        }));
+      await request.response.close();
+    }));
+    final gateway = OpenAiCompatibleGateway();
+
+    await gateway.completeWithMetadata(
+      model: model().copyWith(
+        streaming: false,
+        protocol: ModelProtocol.responses,
+      ),
+      systemPrompt: 'system',
+      messages: const [],
+      toolRounds: const [
+        ModelToolRound(
+          calls: [
+            ModelToolCall(
+              id: 'call-read',
+              name: 'read_workspace_file',
+              arguments: '{"workspaceId":"workspace-1"}',
+            ),
+          ],
+          results: [
+            ModelToolResult(
+              toolCallId: 'call-read',
+              name: 'read_workspace_file',
+              content: '{"ok":true,"content":"hello"}',
+            ),
+          ],
+        ),
+      ],
+    );
+
+    final input = sentBody['input'] as List<Object?>;
+    expect(
+      input[input.length - 2],
+      containsPair('type', 'function_call'),
+    );
+    expect(input[input.length - 2], containsPair('call_id', 'call-read'));
+    expect(input.last, containsPair('type', 'function_call_output'));
+    expect(input.last, containsPair('call_id', 'call-read'));
+    expect(
+      input.last,
+      containsPair('output', '{"ok":true,"content":"hello"}'),
+    );
+  });
+
+  test('parses Responses API tool calls and token usage', () async {
+    unawaited(serve(server, (request) async {
+      requests.add(request);
+      await utf8.decodeStream(request);
+      request.response
+        ..headers.contentType = ContentType.json
+        ..write(jsonEncode({
+          'output': [
+            {
+              'type': 'reasoning',
+              'summary': [
+                {'type': 'summary_text', 'text': 'visible reasoning'}
+              ],
+            },
+            {
+              'type': 'function_call',
+              'call_id': 'call-list',
+              'name': 'list_workspace_files',
+              'arguments': '{"workspaceId":"workspace-1"}',
+            },
+          ],
+          'usage': {
+            'input_tokens': 11,
+            'output_tokens': 7,
+            'total_tokens': 18,
+            'input_tokens_details': {'cached_tokens': 3},
+          },
+        }));
+      await request.response.close();
+    }));
+    final gateway = OpenAiCompatibleGateway();
+
+    final completion = await gateway.completeWithMetadata(
+      model: model().copyWith(
+        streaming: false,
+        protocol: ModelProtocol.responses,
+      ),
+      systemPrompt: 'system',
+      messages: const [],
+    );
+
+    expect(completion.thinkingContent, 'visible reasoning');
+    expect(completion.toolCalls, hasLength(1));
+    expect(completion.toolCalls.single.id, 'call-list');
+    expect(completion.toolCalls.single.name, 'list_workspace_files');
+    expect(
+        completion.toolCalls.single.arguments, '{"workspaceId":"workspace-1"}');
+    expect(completion.inputTokens, 11);
+    expect(completion.outputTokens, 7);
+    expect(completion.cachedTokens, 3);
+    expect(completion.totalTokens, 18);
+    expect(completion.diagnostics!.toolCallCount, 1);
   });
 
   test('parses real reasoning content from non-streaming responses', () async {
@@ -671,6 +863,63 @@ void main() {
       completion.toolCalls.single.arguments,
       '{"workspaceId":"workspace-1"}',
     );
+    expect(completion.diagnostics!.toolCallCount, 1);
+  });
+
+  test('parses Responses API streaming content and tool calls', () async {
+    late Map<String, Object?> sentBody;
+    unawaited(serve(server, (request) async {
+      requests.add(request);
+      sentBody =
+          jsonDecode(await utf8.decodeStream(request)) as Map<String, Object?>;
+      request.response.headers.contentType =
+          ContentType('text', 'event-stream', charset: 'utf-8');
+      request.response
+        ..write(
+          'data: {"type":"response.reasoning_summary_text.delta","delta":"think"}\n\n',
+        )
+        ..write(
+          'data: {"type":"response.output_text.delta","delta":"answer"}\n\n',
+        )
+        ..write(
+          'data: {"type":"response.output_item.done","item":{"type":"function_call","call_id":"call-list","name":"list_workspace_files","arguments":"{\\"workspaceId\\":\\"workspace-1\\"}"}}\n\n',
+        )
+        ..write(
+          'data: {"type":"response.completed","response":{"usage":{"input_tokens":5,"output_tokens":6,"total_tokens":11}}}\n\n',
+        )
+        ..write('data: [DONE]\n\n');
+      await request.response.close();
+    }));
+    final gateway = OpenAiCompatibleGateway();
+    final deltas = <ModelStreamDelta>[];
+
+    final completion = await gateway.completeWithMetadata(
+      model: model().copyWith(
+        streaming: true,
+        protocol: ModelProtocol.responses,
+      ),
+      systemPrompt: 'system',
+      messages: const [],
+      onDelta: deltas.add,
+    );
+
+    expect(sentBody, isNot(contains('messages')));
+    expect(completion.content, 'answer');
+    expect(completion.thinkingContent, 'think');
+    expect(completion.toolCalls, hasLength(1));
+    expect(completion.toolCalls.single.id, 'call-list');
+    expect(completion.toolCalls.single.name, 'list_workspace_files');
+    expect(
+      completion.toolCalls.single.arguments,
+      '{"workspaceId":"workspace-1"}',
+    );
+    expect(completion.inputTokens, 5);
+    expect(completion.outputTokens, 6);
+    expect(completion.totalTokens, 11);
+    expect(deltas.map((delta) => delta.thinkingDelta), contains('think'));
+    expect(deltas.map((delta) => delta.contentDelta), contains('answer'));
+    expect(completion.diagnostics!.contentDeltaCount, 1);
+    expect(completion.diagnostics!.thinkingDeltaCount, 1);
     expect(completion.diagnostics!.toolCallCount, 1);
   });
 
