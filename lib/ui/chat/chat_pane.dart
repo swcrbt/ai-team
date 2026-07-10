@@ -633,7 +633,11 @@ class ChatPaneState extends State<ChatPane> {
         if (attachments.isNotEmpty) {
           await widget.controller.imageService.deleteMessageImages(attachments);
         }
-        _showInputError(widget.controller.error ?? '消息未发送');
+        final conversation =
+            widget.controller.conversationById(widget.conversationId);
+        if (conversation.status != ConversationStatus.failed) {
+          _showInputError(widget.controller.error ?? '消息未发送');
+        }
       }
     } catch (e) {
       // 如果提交失败且未 committed，回滚图片

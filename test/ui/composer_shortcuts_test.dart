@@ -164,6 +164,34 @@ void main() {
     );
   });
 
+  testWidgets('model setup failure does not show a bottom snackbar',
+      (tester) async {
+    final seed = AppState.seed();
+    final state = seed.copyWith(
+      models: seed.models
+          .map(
+            (model) =>
+                model.id == 'model-main' ? model.copyWith(apiKey: '') : model,
+          )
+          .toList(),
+    );
+    final gateway = RecordingModelGateway();
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: state,
+        modelGateway: gateway,
+      ),
+    );
+
+    await tester.enterText(find.byType(TextField).last, '触发模型失败');
+    await tester.tap(find.byTooltip('发送'));
+    await tester.pump();
+
+    expect(find.byType(SnackBar), findsNothing);
+    expect(find.textContaining('模型调用失败'), findsWidgets);
+    expect(gateway.modelNames, isEmpty);
+  });
+
   testWidgets('shift enter inserts a newline without sending', (tester) async {
     final gateway = RecordingModelGateway();
     await tester.pumpWidget(
