@@ -190,31 +190,33 @@ class ChatPaneState extends State<ChatPane> {
                   ],
                 ),
               ),
-              if (!compactHeader) ...[
-                const SizedBox(width: 12),
-                _HeaderMembersPill(
-                  count: widget.controller
-                      .membersForConversation(conversation.id)
-                      .length,
+              if (conversation.memberId == null) ...[
+                if (!compactHeader) ...[
+                  const SizedBox(width: 12),
+                  _HeaderMembersPill(
+                    count: widget.controller
+                        .membersForConversation(conversation.id)
+                        .length,
+                  ),
+                ],
+                const SizedBox(width: 8),
+                _SafetyStatusButton(
+                  compact: compactHeader,
+                  pendingCount: commandRequests
+                          .where(
+                            (request) =>
+                                request.status == CommandRequestStatus.pending,
+                          )
+                          .length +
+                      pendingPatches.length,
+                  onPressed: () => _showSafetyDrawer(
+                    context,
+                    conversation,
+                    commandRequests,
+                    pendingPatches,
+                  ),
                 ),
               ],
-              const SizedBox(width: 8),
-              _SafetyStatusButton(
-                compact: compactHeader,
-                pendingCount: commandRequests
-                        .where(
-                          (request) =>
-                              request.status == CommandRequestStatus.pending,
-                        )
-                        .length +
-                    pendingPatches.length,
-                onPressed: () => _showSafetyDrawer(
-                  context,
-                  conversation,
-                  commandRequests,
-                  pendingPatches,
-                ),
-              ),
               const SizedBox(width: 4),
               PopupMenuButton<String>(
                 tooltip: '会话操作',

@@ -135,7 +135,7 @@ void main() {
           command: 'df -h /',
           workingDirectory: '/',
           decision: CommandDecision.requiresConfirmation,
-          conversationId: 'conv-member-secretary',
+          conversationId: 'conv-team-default',
           memberId: 'member-secretary',
           toolCallId: 'call-df',
         ),
@@ -156,6 +156,11 @@ void main() {
       AiTeamApp(initialState: state, modelGateway: FakeModelGateway()),
     );
 
+    await tester.tap(
+      find.byKey(const ValueKey('conversation-row-conv-team-default')),
+    );
+    await tester.pumpAndSettle();
+
     expect(find.text('会话安全状态'), findsNothing);
 
     await tester.tap(find.byTooltip('安全状态'));
@@ -171,6 +176,34 @@ void main() {
     expect(find.text('newest'), findsNothing);
     expect(find.textContaining('1 条等待确认'), findsOneWidget);
     expect(find.textContaining('1 个补丁等待确认'), findsOneWidget);
+  });
+
+  testWidgets('private chat header hides group-only status controls', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    expect(find.textContaining('私聊 · 秘书'), findsOneWidget);
+    expect(find.text('3 名成员'), findsNothing);
+    expect(find.byTooltip('安全状态'), findsNothing);
+
+    await tester.tap(
+      find.byKey(const ValueKey('conversation-row-conv-team-default')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('3 名成员'), findsOneWidget);
+    expect(find.byTooltip('安全状态'), findsOneWidget);
   });
 
   testWidgets(
