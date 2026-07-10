@@ -16,6 +16,7 @@ class ChatMessage {
     this.outputTokens,
     this.cachedTokens,
     this.totalTokens,
+    this.attachments = const [],
     List<ChatMessageContentBlock>? contentBlocks = const [],
   }) : _contentBlocks = contentBlocks;
 
@@ -33,6 +34,7 @@ class ChatMessage {
   final int? outputTokens;
   final int? cachedTokens;
   final int? totalTokens;
+  final List<MessageAttachment> attachments;
   final List<ChatMessageContentBlock>? _contentBlocks;
 
   List<ChatMessageContentBlock> get contentBlocks => _contentBlocks ?? const [];
@@ -46,6 +48,7 @@ class ChatMessage {
     int? outputTokens,
     int? cachedTokens,
     int? totalTokens,
+    List<MessageAttachment>? attachments,
     List<ChatMessageContentBlock>? contentBlocks,
   }) {
     return ChatMessage(
@@ -63,6 +66,7 @@ class ChatMessage {
       outputTokens: outputTokens ?? this.outputTokens,
       cachedTokens: cachedTokens ?? this.cachedTokens,
       totalTokens: totalTokens ?? this.totalTokens,
+      attachments: attachments ?? this.attachments,
       contentBlocks: contentBlocks ?? this.contentBlocks,
     );
   }
@@ -82,6 +86,8 @@ class ChatMessage {
         if (outputTokens != null) 'outputTokens': outputTokens,
         if (cachedTokens != null) 'cachedTokens': cachedTokens,
         if (totalTokens != null) 'totalTokens': totalTokens,
+        if (attachments.isNotEmpty)
+          'attachments': attachments.map((item) => item.toJson()).toList(),
         'contentBlocks': contentBlocks.map((block) => block.toJson()).toList(),
       };
 
@@ -103,6 +109,12 @@ class ChatMessage {
         outputTokens: (json['outputTokens'] as num?)?.toInt(),
         cachedTokens: (json['cachedTokens'] as num?)?.toInt(),
         totalTokens: (json['totalTokens'] as num?)?.toInt(),
+        attachments: (json['attachments'] as List? ?? const [])
+            .map(
+              (item) =>
+                  MessageAttachment.fromJson(item as Map<String, Object?>),
+            )
+            .toList(),
         contentBlocks: (json['contentBlocks'] as List? ?? const [])
             .map(
               (item) => ChatMessageContentBlock.fromJson(

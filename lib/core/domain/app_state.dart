@@ -163,6 +163,7 @@ class AppState {
         baseUrl: 'https://api.openai.com/v1',
         modelName: 'gpt-4.1',
         apiKey: 'sk-local-placeholder',
+        supportsImages: true,
       ),
       const ModelProfile(
         id: 'model-local',
@@ -170,6 +171,7 @@ class AppState {
         baseUrl: 'http://localhost:11434/v1',
         modelName: 'qwen2.5-coder',
         apiKey: 'local',
+        supportsImages: false,
       ),
     ];
     final members = [

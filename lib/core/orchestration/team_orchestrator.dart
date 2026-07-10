@@ -48,7 +48,7 @@ class TeamOrchestrator {
     final conversation = state.conversations.firstWhere(
       (item) => item.id == task.conversationId,
     );
-    
+
     try {
       final userText = [
         task.originalText,
@@ -90,17 +90,17 @@ class TeamOrchestrator {
         ],
         generationStatus: ChatMessageGenerationStatus.complete,
       );
-      
+
       final updatedConversation = conversation.copyWith(
         messages: [...conversation.messages, errorMessage],
         status: ConversationStatus.idle,
       );
-      
+
       final updatedState = replaceConversation(state, updatedConversation);
-      
+
       // 通知进度更新，让 UI 立即显示错误消息
       onProgress?.call(updatedState);
-      
+
       // 重新抛出异常，让 dispatch_controller 标记任务为 failed
       rethrow;
     } catch (exception) {
@@ -116,15 +116,15 @@ class TeamOrchestrator {
         ],
         generationStatus: ChatMessageGenerationStatus.complete,
       );
-      
+
       final updatedConversation = conversation.copyWith(
         messages: [...conversation.messages, errorMessage],
         status: ConversationStatus.idle,
       );
-      
+
       final updatedState = replaceConversation(state, updatedConversation);
       onProgress?.call(updatedState);
-      
+
       rethrow;
     }
   }
@@ -134,9 +134,12 @@ class TeamOrchestrator {
     required String teamId,
     String? conversationId,
     required String userText,
+    String? userMessageId,
+    List<MessageAttachment>? preparedAttachments,
     ModelRequestCancellation? cancellation,
     void Function(AppState state)? onProgress,
     StreamingMessageDraftHandler? onStreamingDraft,
+    void Function()? onUserMessageCommitted,
   }) async {
     final team = state.teams.firstWhere((item) => item.id == teamId);
     final conversation = state.conversations.firstWhere(
@@ -162,11 +165,12 @@ class TeamOrchestrator {
     final messages = [
       ...conversation.messages,
       ChatMessage(
-        id: orchestrationId('msg'),
+        id: userMessageId ?? orchestrationId('msg'),
         authorName: '我',
         content: userText,
         createdAt: now,
         isUser: true,
+        attachments: preparedAttachments ?? const [],
       ),
     ];
     final round = conversation.currentRound + 1;
@@ -178,6 +182,7 @@ class TeamOrchestrator {
       ),
     );
     onProgress?.call(workingState);
+    onUserMessageCommitted?.call();
 
     cancellation?.throwIfCancelled();
     var planResult = await _messageRunner.runVisibleMessage(
@@ -404,17 +409,23 @@ class TeamOrchestrator {
     AppState state, {
     required String conversationId,
     required String userText,
+    String? userMessageId,
+    List<MessageAttachment>? preparedAttachments,
     ModelRequestCancellation? cancellation,
     void Function(AppState state)? onProgress,
     StreamingMessageDraftHandler? onStreamingDraft,
+    void Function()? onUserMessageCommitted,
   }) {
     return _memberChatDispatcher.dispatchMemberChat(
       state,
       conversationId: conversationId,
       userText: userText,
+      userMessageId: userMessageId,
+      preparedAttachments: preparedAttachments,
       cancellation: cancellation,
       onProgress: onProgress,
       onStreamingDraft: onStreamingDraft,
+      onUserMessageCommitted: onUserMessageCommitted,
     );
   }
 
@@ -452,17 +463,23 @@ class TeamOrchestrator {
     AppState state, {
     required String conversationId,
     required String userText,
+    String? userMessageId,
+    List<MessageAttachment>? preparedAttachments,
     ModelRequestCancellation? cancellation,
     void Function(AppState state)? onProgress,
     StreamingMessageDraftHandler? onStreamingDraft,
+    void Function()? onUserMessageCommitted,
   }) {
     return _secretaryPrivateDispatcher.dispatch(
       state,
       conversationId: conversationId,
       userText: userText,
+      userMessageId: userMessageId,
+      preparedAttachments: preparedAttachments,
       cancellation: cancellation,
       onProgress: onProgress,
       onStreamingDraft: onStreamingDraft,
+      onUserMessageCommitted: onUserMessageCommitted,
     );
   }
 }

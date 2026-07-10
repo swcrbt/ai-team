@@ -24,6 +24,22 @@ void main() {
       expect(exported['models'].first['apiKey'], isNotEmpty);
     });
 
+    test('model image support defaults preserve legacy configs', () {
+      final legacy = ModelProfile.fromJson({
+        'id': 'legacy-model',
+        'name': 'Legacy Vision Maybe',
+        'baseUrl': 'https://example.test/v1',
+        'modelName': 'legacy-model',
+      });
+
+      expect(legacy.supportsImages, isTrue);
+      expect(legacy.toJson(), containsPair('supportsImages', true));
+
+      final disabled = legacy.copyWith(supportsImages: false);
+      expect(disabled.supportsImages, isFalse);
+      expect(disabled.toJson(), containsPair('supportsImages', false));
+    });
+
     test('round trips workspaces, command requests, and patch proposals', () {
       final state = AppState.seed().copyWith(
         workspaces: const [

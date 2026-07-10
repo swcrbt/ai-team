@@ -10,15 +10,21 @@ import 'model_gateway_exception.dart';
 import 'openai_request.dart';
 import 'openai_stream_parsing.dart';
 
+typedef ImageDataUrlResolver = Future<String> Function(
+  MessageAttachment attachment,
+);
+
 class OpenAiCompatibleGateway implements MetadataModelGateway {
   OpenAiCompatibleGateway({
     HttpClient? httpClient,
+    this.imageDataUrlResolver,
     this.requestTimeout = const Duration(seconds: 60),
     this.maxRetries = 2,
     this.retryDelay = const Duration(milliseconds: 300),
   }) : _httpClient = httpClient ?? HttpClient();
 
   final HttpClient _httpClient;
+  final ImageDataUrlResolver? imageDataUrlResolver;
   final Duration requestTimeout;
   final int maxRetries;
   final Duration retryDelay;
@@ -97,25 +103,28 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
     ModelToolChoice toolChoice = ModelToolChoice.auto,
     List<ModelToolRound> toolRounds = const [],
   }) async {
+    final imageDataUrls = await _resolveImageDataUrls(messages);
     final endpoint = openAiCompatibleChatCompletionsEndpoint(model);
     final requestUrl = endpoint.toString();
     final request = await _openRequest(endpoint, cancellation);
     request.headers.contentType = ContentType.json;
-    
+
     // 根据协议设置不同的请求头
     if (model.protocol == ModelProtocol.anthropic) {
       request.headers.set('x-api-key', model.apiKey);
       request.headers.set('anthropic-version', '2023-06-01');
     } else {
-      request.headers.set(HttpHeaders.authorizationHeader, 'Bearer ${model.apiKey}');
+      request.headers
+          .set(HttpHeaders.authorizationHeader, 'Bearer ${model.apiKey}');
     }
-    
+
     // 根据协议构建不同的请求体
     final requestBody = model.protocol == ModelProtocol.anthropic
         ? buildAnthropicRequestBody(
             model: model,
             systemPrompt: systemPrompt,
             messages: messages,
+            imageDataUrls: imageDataUrls,
             tools: tools,
             toolChoice: toolChoice,
             toolRounds: toolRounds,
@@ -124,11 +133,12 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
             model: model,
             systemPrompt: systemPrompt,
             messages: messages,
+            imageDataUrls: imageDataUrls,
             tools: tools,
             toolChoice: toolChoice,
             toolRounds: toolRounds,
           );
-    
+
     request.write(jsonEncode(requestBody));
     cancellation?.throwIfCancelled();
     final response = await _awaitResponse(request, cancellation);
@@ -167,7 +177,7 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
     }
     final body = await utf8.decodeStream(response);
     final decoded = jsonDecode(body) as Map<String, Object?>;
-    
+
     if (model.protocol == ModelProtocol.anthropic) {
       return parseAnthropicResponse(
         response: decoded,
@@ -175,7 +185,7 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
         requestUrl: requestUrl,
       );
     }
-    
+
     final choices = decoded['choices'] as List;
     final first = choices.first as Map<String, Object?>;
     final message = first['message'] as Map<String, Object?>;
@@ -316,6 +326,36 @@ class OpenAiCompatibleGateway implements MetadataModelGateway {
         requestUrl: requestUrl,
       ),
     );
+  }
+
+  Future<Map<String, String>> _resolveImageDataUrls(
+    List<ChatMessage> messages,
+  ) async {
+    final attachments = [
+      for (final message in messages)
+        ...message.attachments.where(
+          (attachment) => attachment.type == MessageAttachmentType.image,
+        ),
+    ];
+    if (attachments.isEmpty) {
+      return const {};
+    }
+    final resolver = imageDataUrlResolver;
+    if (resolver == null) {
+      throw const ModelGatewayException(
+        '未配置图片读取器',
+        isRetryable: false,
+      );
+    }
+    final dataUrls = <String, String>{};
+    for (final attachment in attachments) {
+      try {
+        dataUrls[attachment.id] = await resolver(attachment);
+      } catch (error) {
+        throw ModelGatewayException('图片读取失败：$error', isRetryable: false);
+      }
+    }
+    return dataUrls;
   }
 
   Future<HttpClientResponse> _awaitResponse(

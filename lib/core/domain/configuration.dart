@@ -4,10 +4,10 @@ import 'commands_and_tasks.dart';
 enum ModelProtocol {
   /// chat/completions 协议（OpenAI 传统标准）
   chatCompletions,
-  
+
   /// responses 协议（OpenAI 新标准）
   responses,
-  
+
   /// messages 协议（Anthropic Claude API）
   anthropic,
 }
@@ -27,6 +27,7 @@ class ModelProfile {
     this.contextWindowTokens = defaultContextWindowTokens,
     this.reasoningEffort,
     this.protocol = ModelProtocol.chatCompletions,
+    this.supportsImages = true,
   });
 
   final String id;
@@ -40,6 +41,7 @@ class ModelProfile {
   final int contextWindowTokens;
   final String? reasoningEffort;
   final ModelProtocol protocol;
+  final bool supportsImages;
 
   ModelProfile copyWith({
     String? id,
@@ -53,6 +55,7 @@ class ModelProfile {
     int? contextWindowTokens,
     String? reasoningEffort,
     ModelProtocol? protocol,
+    bool? supportsImages,
   }) =>
       ModelProfile(
         id: id ?? this.id,
@@ -66,6 +69,7 @@ class ModelProfile {
         contextWindowTokens: contextWindowTokens ?? this.contextWindowTokens,
         reasoningEffort: reasoningEffort ?? this.reasoningEffort,
         protocol: protocol ?? this.protocol,
+        supportsImages: supportsImages ?? this.supportsImages,
       );
 
   Map<String, Object?> toJson({bool includeSecrets = false}) {
@@ -80,6 +84,7 @@ class ModelProfile {
       if (contextWindowTokens != defaultContextWindowTokens)
         'contextWindowTokens': contextWindowTokens,
       'protocol': protocol.name,
+      'supportsImages': supportsImages,
       if (reasoningEffort != null) 'reasoningEffort': reasoningEffort,
     };
     if (includeSecrets) {
@@ -101,6 +106,7 @@ class ModelProfile {
             ModelProfile.defaultContextWindowTokens,
         reasoningEffort: _optionalJsonString(json['reasoningEffort']),
         protocol: _parseProtocol(json['protocol']),
+        supportsImages: (json['supportsImages'] as bool?) ?? true,
       );
 }
 

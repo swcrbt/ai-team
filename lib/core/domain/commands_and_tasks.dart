@@ -364,6 +364,51 @@ class CommandRequest {
       );
 }
 
+enum MessageAttachmentType { image }
+
+class MessageAttachment {
+  const MessageAttachment({
+    required this.id,
+    required this.type,
+    required this.filePath,
+    this.mimeType,
+    this.fileSize,
+    this.width,
+    this.height,
+  });
+
+  final String id;
+  final MessageAttachmentType type;
+  final String filePath;
+  final String? mimeType;
+  final int? fileSize;
+  final int? width;
+  final int? height;
+
+  Map<String, Object?> toJson() => {
+        'id': id,
+        'type': type.name,
+        'filePath': filePath,
+        if (mimeType != null) 'mimeType': mimeType,
+        if (fileSize != null) 'fileSize': fileSize,
+        if (width != null) 'width': width,
+        if (height != null) 'height': height,
+      };
+
+  factory MessageAttachment.fromJson(Map<String, Object?> json) =>
+      MessageAttachment(
+        id: json['id'] as String,
+        type: MessageAttachmentType.values.byName(
+          json['type'] as String? ?? MessageAttachmentType.image.name,
+        ),
+        filePath: json['filePath'] as String,
+        mimeType: json['mimeType'] as String?,
+        fileSize: (json['fileSize'] as num?)?.toInt(),
+        width: (json['width'] as num?)?.toInt(),
+        height: (json['height'] as num?)?.toInt(),
+      );
+}
+
 enum ChatMessageContentBlockType { text, commandResult, toolError }
 
 class CommandResultAttachment {

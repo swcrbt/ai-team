@@ -52,9 +52,12 @@ class SecretaryPrivateDispatcher {
     AppState state, {
     required String conversationId,
     required String userText,
+    String? userMessageId,
+    List<MessageAttachment>? preparedAttachments,
     ModelRequestCancellation? cancellation,
     void Function(AppState state)? onProgress,
     StreamingMessageDraftHandler? onStreamingDraft,
+    void Function()? onUserMessageCommitted,
   }) async {
     final sourceConversation =
         state.conversations.firstWhere((item) => item.id == conversationId);
@@ -88,11 +91,12 @@ class SecretaryPrivateDispatcher {
     final sourceMessages = [
       ...sourceConversation.messages,
       ChatMessage(
-        id: orchestrationId('msg'),
+        id: userMessageId ?? orchestrationId('msg'),
         authorName: '我',
         content: userText,
         createdAt: now,
         isUser: true,
+        attachments: preparedAttachments ?? const [],
       ),
       waitingMessage,
     ];
@@ -104,6 +108,7 @@ class SecretaryPrivateDispatcher {
       ),
     );
     onProgress?.call(workingState);
+    onUserMessageCommitted?.call();
 
     final summaries = <String>[];
     for (final target in targets) {

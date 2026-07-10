@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:ai_team/core/domain.dart';
 import 'package:ai_team/core/model_gateway.dart';
+import 'package:ai_team/core/workspace/image_service.dart';
 
 void main() {
   late HttpServer server;
@@ -443,6 +444,101 @@ void main() {
 
     expect(content, 'recovered');
     expect(requests, hasLength(2));
+  });
+
+  test('fails instead of silently dropping unreadable image attachments',
+      () async {
+    final gateway = OpenAiCompatibleGateway(
+      imageDataUrlResolver: (_) async =>
+          throw const ImageServiceException('图片文件不存在'),
+    );
+
+    await expectLater(
+      gateway.complete(
+        model: model().copyWith(streaming: false),
+        systemPrompt: 'system',
+        messages: [
+          ChatMessage(
+            id: 'm1',
+            authorName: '我',
+            content: '看图',
+            createdAt: DateTime(2026),
+            isUser: true,
+            attachments: const [
+              MessageAttachment(
+                id: 'attachment-1',
+                type: MessageAttachmentType.image,
+                filePath: 'missing.png',
+                mimeType: 'image/png',
+              ),
+            ],
+          ),
+        ],
+      ),
+      throwsA(isA<ModelGatewayException>()),
+    );
+  });
+
+  test('sends image attachments as Anthropic image content blocks', () async {
+    late Map<String, Object?> sentBody;
+    unawaited(serve(server, (request) async {
+      requests.add(request);
+      sentBody =
+          jsonDecode(await utf8.decodeStream(request)) as Map<String, Object?>;
+      request.response
+        ..headers.contentType = ContentType.json
+        ..write(jsonEncode({
+          'content': [
+            {'type': 'text', 'text': '看到了'},
+          ],
+        }));
+      await request.response.close();
+    }));
+    final gateway = OpenAiCompatibleGateway(
+      imageDataUrlResolver: (_) async => 'data:image/png;base64,aW1hZ2U=',
+    );
+
+    final content = await gateway.complete(
+      model: model().copyWith(
+        streaming: false,
+        protocol: ModelProtocol.anthropic,
+      ),
+      systemPrompt: 'system',
+      messages: [
+        ChatMessage(
+          id: 'm1',
+          authorName: '我',
+          content: '看图',
+          createdAt: DateTime(2026),
+          isUser: true,
+          attachments: const [
+            MessageAttachment(
+              id: 'attachment-1',
+              type: MessageAttachmentType.image,
+              filePath: 'image.png',
+              mimeType: 'image/png',
+            ),
+          ],
+        ),
+      ],
+    );
+
+    expect(content, '看到了');
+    expect(requests, hasLength(1));
+    final messages = sentBody['messages'] as List<Object?>;
+    final message = messages.single as Map<String, Object?>;
+    expect(message['role'], 'user');
+    expect(message['content'], [
+      {'type': 'text', 'text': '看图'},
+      {
+        'type': 'image',
+        'source': {
+          'type': 'base64',
+          'media_type': 'image/png',
+          'data': 'aW1hZ2U=',
+        },
+      },
+    ]);
   });
 
   test('parses OpenAI compatible streaming deltas', () async {

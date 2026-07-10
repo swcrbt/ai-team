@@ -8,6 +8,7 @@ Map<String, Object?> buildAnthropicRequestBody({
   required ModelProfile model,
   required String systemPrompt,
   required List<ChatMessage> messages,
+  Map<String, String> imageDataUrls = const {},
   List<ModelToolDefinition> tools = const [],
   ModelToolChoice toolChoice = ModelToolChoice.auto,
   List<ModelToolRound> toolRounds = const [],
@@ -29,7 +30,7 @@ Map<String, Object?> buildAnthropicRequestBody({
   requestBody['messages'] = [
     ...messages.map((message) => {
           'role': message.isUser ? 'user' : 'assistant',
-          'content': message.content,
+          'content': _messageContent(message, imageDataUrls),
         }),
     ..._buildToolRoundMessages(toolRounds),
   ];
@@ -48,6 +49,64 @@ Map<String, Object?> buildAnthropicRequestBody({
   }
 
   return requestBody;
+}
+
+Object _messageContent(
+  ChatMessage message,
+  Map<String, String> imageDataUrls,
+) {
+  final imageAttachments = message.attachments
+      .where((attachment) => attachment.type == MessageAttachmentType.image)
+      .toList(growable: false);
+  if (imageAttachments.isEmpty) {
+    return message.content;
+  }
+  return <Map<String, Object?>>[
+    {'type': 'text', 'text': message.content},
+    for (final attachment in imageAttachments)
+      {
+        'type': 'image',
+        'source': _imageSource(attachment, imageDataUrls),
+      },
+  ];
+}
+
+Map<String, Object?> _imageSource(
+  MessageAttachment attachment,
+  Map<String, String> imageDataUrls,
+) {
+  final dataUrl = imageDataUrls[attachment.id];
+  if (dataUrl == null) {
+    throw StateError('缺少图片数据：${attachment.id}');
+  }
+  final parsed = _parseBase64DataUrl(dataUrl, attachment);
+  return {
+    'type': 'base64',
+    'media_type': parsed.mediaType,
+    'data': parsed.data,
+  };
+}
+
+({String mediaType, String data}) _parseBase64DataUrl(
+  String dataUrl,
+  MessageAttachment attachment,
+) {
+  const prefix = 'data:';
+  const suffix = ';base64';
+  final commaIndex = dataUrl.indexOf(',');
+  if (!dataUrl.startsWith(prefix) || commaIndex < 0) {
+    throw StateError('图片数据 URL 格式无效：${attachment.id}');
+  }
+  final header = dataUrl.substring(prefix.length, commaIndex);
+  if (!header.endsWith(suffix)) {
+    throw StateError('图片数据 URL 不是 base64：${attachment.id}');
+  }
+  final mediaType = header.substring(0, header.length - suffix.length);
+  return (
+    mediaType:
+        mediaType.isEmpty ? attachment.mimeType ?? 'image/png' : mediaType,
+    data: dataUrl.substring(commaIndex + 1),
+  );
 }
 
 /// 将通用工具定义转换为 Anthropic 格式

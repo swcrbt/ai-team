@@ -137,11 +137,19 @@ class DispatchController {
 
   Future<void> dispatchConversation(
     String conversationId,
-    String text,
-  ) async {
+    String text, {
+    List<File>? images,
+    String? userMessageId,
+    List<MessageAttachment>? preparedAttachments,
+    void Function()? onUserMessageCommitted,
+  }) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty || isDispatching) {
       return;
+    }
+    if (_hasImageInput(images, preparedAttachments) &&
+        !_conversationModelSupportsImages(conversationId)) {
+      throw StateError('当前模型不支持图片输入');
     }
     if (!_canDispatchConversation(conversationId)) {
       notify();
@@ -165,9 +173,12 @@ class DispatchController {
             teamId: conversation.teamId,
             conversationId: conversation.id,
             userText: trimmed,
+            userMessageId: userMessageId,
+            preparedAttachments: preparedAttachments,
             cancellation: cancellation,
             onProgress: commit,
             onStreamingDraft: onStreamingDraft,
+            onUserMessageCommitted: onUserMessageCommitted,
           ),
         );
       } else if (orchestrator
@@ -182,9 +193,12 @@ class DispatchController {
             state,
             conversationId: conversation.id,
             userText: trimmed,
+            userMessageId: userMessageId,
+            preparedAttachments: preparedAttachments,
             cancellation: cancellation,
             onProgress: commit,
             onStreamingDraft: onStreamingDraft,
+            onUserMessageCommitted: onUserMessageCommitted,
           ),
         );
       } else {
@@ -193,9 +207,12 @@ class DispatchController {
             state,
             conversationId: conversation.id,
             userText: trimmed,
+            userMessageId: userMessageId,
+            preparedAttachments: preparedAttachments,
             cancellation: cancellation,
             onProgress: commit,
             onStreamingDraft: onStreamingDraft,
+            onUserMessageCommitted: onUserMessageCommitted,
           ),
         );
       }
@@ -246,6 +263,26 @@ class DispatchController {
       clearStreamingDraftsForConversation(conversationId);
       notify();
     }
+  }
+
+  bool _conversationModelSupportsImages(String conversationId) {
+    final conversation = conversationByIdOrThrow(state, conversationId);
+    if (conversation.memberId != null) {
+      final member = requireMember(state, conversation.memberId!);
+      return requireModel(state, member.modelId).supportsImages;
+    }
+    final team = requireTeam(state, conversation.teamId);
+    final secretary = requireMember(state, team.secretaryMemberId);
+    return requireModel(state, secretary.modelId).supportsImages;
+  }
+
+  bool _hasImageInput(
+    List<File>? images,
+    List<MessageAttachment>? preparedAttachments,
+  ) {
+    return (images != null && images.isNotEmpty) ||
+        (preparedAttachments ?? const <MessageAttachment>[]).any(
+            (attachment) => attachment.type == MessageAttachmentType.image);
   }
 
   void pauseConversation() {

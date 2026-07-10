@@ -5,6 +5,7 @@ Map<String, Object?> buildOpenAiCompatibleRequestBody({
   required ModelProfile model,
   required String systemPrompt,
   required List<ChatMessage> messages,
+  Map<String, String> imageDataUrls = const {},
   List<ModelToolDefinition> tools = const [],
   ModelToolChoice toolChoice = ModelToolChoice.auto,
   List<ModelToolRound> toolRounds = const [],
@@ -20,7 +21,7 @@ Map<String, Object?> buildOpenAiCompatibleRequestBody({
       {'role': 'system', 'content': systemPrompt},
       ...messages.map((message) => {
             'role': message.isUser ? 'user' : 'assistant',
-            'content': '${message.authorName}: ${message.content}',
+            'content': _messageContent(message, imageDataUrls),
           }),
       ..._toolRoundMessages(toolRounds),
     ],
@@ -36,6 +37,38 @@ Map<String, Object?> buildOpenAiCompatibleRequestBody({
     requestBody['max_completion_tokens'] = model.maxTokens;
   }
   return requestBody;
+}
+
+Object _messageContent(
+  ChatMessage message,
+  Map<String, String> imageDataUrls,
+) {
+  final text = '${message.authorName}: ${message.content}';
+  final imageAttachments = message.attachments
+      .where((attachment) => attachment.type == MessageAttachmentType.image)
+      .toList(growable: false);
+  if (imageAttachments.isEmpty) {
+    return text;
+  }
+  return <Map<String, Object?>>[
+    {'type': 'text', 'text': text},
+    for (final attachment in imageAttachments)
+      {
+        'type': 'image_url',
+        'image_url': {'url': _requiredImageDataUrl(attachment, imageDataUrls)},
+      },
+  ];
+}
+
+String _requiredImageDataUrl(
+  MessageAttachment attachment,
+  Map<String, String> imageDataUrls,
+) {
+  final dataUrl = imageDataUrls[attachment.id];
+  if (dataUrl == null) {
+    throw StateError('缺少图片数据：${attachment.id}');
+  }
+  return dataUrl;
 }
 
 List<Map<String, Object?>> _toolRoundMessages(List<ModelToolRound> rounds) {

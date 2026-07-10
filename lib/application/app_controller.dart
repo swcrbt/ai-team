@@ -10,6 +10,8 @@ import '../core/file_dialogs.dart';
 import '../core/local_store.dart';
 import '../core/orchestrator.dart';
 import '../core/storage_directories.dart';
+import '../core/workspace/image_service.dart';
+import '../core/workspace/pending_image_attachment.dart';
 import '../core/workspace/workspace_service.dart';
 import 'app_controller_helpers.dart';
 import 'chat_streaming.dart';
@@ -262,6 +264,17 @@ class AppController extends ChangeNotifier {
     return requireTeam(state, conversation.teamId);
   }
 
+  bool modelSupportsImagesForConversation(String conversationId) {
+    final conversation = conversationByIdOrThrow(state, conversationId);
+    if (conversation.memberId != null) {
+      final member = requireMember(state, conversation.memberId!);
+      return requireModel(state, member.modelId).supportsImages;
+    }
+    final team = requireTeam(state, conversation.teamId);
+    final secretary = requireMember(state, team.secretaryMemberId);
+    return requireModel(state, secretary.modelId).supportsImages;
+  }
+
   bool isConversationDispatching(String conversationId) {
     return _dispatch.isConversationDispatching(conversationId);
   }
@@ -370,9 +383,59 @@ class AppController extends ChangeNotifier {
 
   Future<void> dispatchConversation(
     String conversationId,
-    String text,
-  ) async {
-    await _dispatch.dispatchConversation(conversationId, text);
+    String text, {
+    List<File>? images,
+  }) async {
+    final imageFiles = images ?? const <File>[];
+    if (imageFiles.isNotEmpty &&
+        !modelSupportsImagesForConversation(conversationId)) {
+      throw StateError('当前模型不支持图片输入');
+    }
+    if (text.trim().isEmpty || isDispatching) {
+      return;
+    }
+
+    final imageService = ImageService(
+      Directory(storageDirectories.conversationDirectory),
+    );
+    final userMessageId = imageFiles.isEmpty
+        ? null
+        : 'msg-${DateTime.now().microsecondsSinceEpoch}';
+    var attachments = const <MessageAttachment>[];
+    var userMessageCommitted = false;
+
+    if (imageFiles.isNotEmpty) {
+      attachments = await imageService.savePendingImages(
+        conversationId: conversationId,
+        messageId: userMessageId!,
+        images: [
+          for (var index = 0; index < imageFiles.length; index++)
+            PendingImageAttachment(
+              id: 'pending-$userMessageId-$index',
+              source: PendingImageSource.pickedFile,
+              file: imageFiles[index],
+            ),
+        ],
+      );
+    }
+
+    try {
+      await _dispatch.dispatchConversation(
+        conversationId,
+        text,
+        userMessageId: userMessageId,
+        preparedAttachments: attachments,
+        onUserMessageCommitted: () => userMessageCommitted = true,
+      );
+    } catch (_) {
+      if (attachments.isNotEmpty && !userMessageCommitted) {
+        await imageService.deleteAttachments(attachments);
+      }
+      rethrow;
+    }
+    if (attachments.isNotEmpty && !userMessageCommitted) {
+      await imageService.deleteAttachments(attachments);
+    }
   }
 
   void pauseConversation() {
