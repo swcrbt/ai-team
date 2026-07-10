@@ -47,30 +47,36 @@ class _ConversationListState extends State<ConversationList> {
   @override
   Widget build(BuildContext context) {
     final visibleConversations = widget.controller.visibleConversations;
-    
+
     // 应用搜索过滤
     final filteredConversations = searchQuery.isEmpty
         ? visibleConversations
         : visibleConversations.where((conversation) {
-            final titleLower = conversationListTitle(widget.controller, conversation).toLowerCase();
-            final subtitleLower = conversationListSubtitle(widget.controller, conversation).toLowerCase();
+            final titleLower =
+                conversationListTitle(widget.controller, conversation)
+                    .toLowerCase();
+            final subtitleLower =
+                conversationListSubtitle(widget.controller, conversation)
+                    .toLowerCase();
             final searchLower = searchQuery.toLowerCase();
-            
+
             // 搜索会话标题和副标题
-            if (titleLower.contains(searchLower) || subtitleLower.contains(searchLower)) {
+            if (titleLower.contains(searchLower) ||
+                subtitleLower.contains(searchLower)) {
               return true;
             }
-            
+
             // 搜索成员名称（如果是私聊）
             if (conversation.memberId != null) {
               final member = widget.controller.state.members
                   .where((m) => m.id == conversation.memberId)
                   .firstOrNull;
-              if (member != null && member.name.toLowerCase().contains(searchLower)) {
+              if (member != null &&
+                  member.name.toLowerCase().contains(searchLower)) {
                 return true;
               }
             }
-            
+
             // 搜索团队名称
             final team = widget.controller.state.teams
                 .where((t) => t.id == conversation.teamId)
@@ -78,10 +84,10 @@ class _ConversationListState extends State<ConversationList> {
             if (team != null && team.name.toLowerCase().contains(searchLower)) {
               return true;
             }
-            
+
             return false;
           }).toList();
-    
+
     final groupConversations = filteredConversations
         .where((conversation) => conversation.memberId == null)
         .toList();
@@ -89,7 +95,7 @@ class _ConversationListState extends State<ConversationList> {
         .where((conversation) => conversation.memberId != null)
         .toList();
     return ColoredBox(
-      color: const Color(0xFFF4F5F7),
+      color: const Color(0xFFEBEDEF),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -151,7 +157,8 @@ class _ConversationListState extends State<ConversationList> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(6),
-                    borderSide: const BorderSide(color: Color(0xFF2563EB), width: 1.5),
+                    borderSide:
+                        const BorderSide(color: Color(0xFF2563EB), width: 1.5),
                   ),
                   suffixIcon: searchQuery.isNotEmpty
                       ? IconButton(
@@ -362,7 +369,6 @@ class _ConversationSection extends StatelessWidget {
               padding: const EdgeInsets.only(bottom: 6),
               child: _ConversationTile(
                 key: ValueKey('conversation-row-${conversation.id}'),
-                icon: conversationListIcon(controller, conversation),
                 title: conversationListTitle(controller, conversation),
                 subtitle: conversationListSubtitle(controller, conversation),
                 badge: conversationListBadge(controller, conversation),
@@ -410,7 +416,6 @@ Future<void> _showConversationContextMenu(
 
 class _ConversationTile extends StatelessWidget {
   const _ConversationTile({
-    required this.icon,
     required this.title,
     required this.subtitle,
     this.badge,
@@ -422,7 +427,6 @@ class _ConversationTile extends StatelessWidget {
     super.key,
   });
 
-  final IconData icon;
   final String title;
   final String subtitle;
   final String? badge;
@@ -434,16 +438,10 @@ class _ConversationTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final titleColor = selected ? Colors.white : const Color(0xFF111827);
-    final subtitleColor = selected
-        ? Colors.white.withValues(alpha: 0.82)
-        : const Color(0xFF667085);
-    final iconColor = selected ? Colors.white : const Color(0xFF2563EB);
-    final avatarColor = selected
-        ? Colors.white.withValues(alpha: 0.18)
-        : const Color(0xFFEFF6FF);
+    const titleColor = Color(0xFF202328);
+    const subtitleColor = Color(0xFF6B7280);
     final backgroundColor = selected
-        ? const Color(0xFF2F80ED)
+        ? Colors.white
         : pinned
             ? const Color(0xFFE8EBF0)
             : Colors.transparent;
@@ -456,7 +454,7 @@ class _ConversationTile extends StatelessWidget {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(8),
           side: BorderSide(
-            color: selected ? const Color(0xFF2563EB) : Colors.transparent,
+            color: selected ? const Color(0xFFD9DDE2) : Colors.transparent,
           ),
         ),
         child: InkWell(
@@ -467,12 +465,6 @@ class _ConversationTile extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CircleAvatar(
-                  radius: 17,
-                  backgroundColor: avatarColor,
-                  child: Icon(icon, size: 17, color: iconColor),
-                ),
-                const SizedBox(width: 10),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -484,9 +476,9 @@ class _ConversationTile extends StatelessWidget {
                               title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
+                              style: const TextStyle(
                                 color: titleColor,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ),
@@ -502,7 +494,8 @@ class _ConversationTile extends StatelessWidget {
                         subtitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(color: subtitleColor, fontSize: 12),
+                        style:
+                            const TextStyle(color: subtitleColor, fontSize: 12),
                       ),
                     ],
                   ),

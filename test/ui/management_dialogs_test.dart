@@ -1,3 +1,5 @@
+import 'package:ai_team/ui/chat/chat_pane.dart';
+import 'package:ai_team/ui/conversation_sidebar.dart';
 import 'package:ai_team/ui/sidebar.dart';
 
 import 'app_widget_test_support.dart';
@@ -17,7 +19,102 @@ void main() {
           .first,
     );
 
-    expect(sidebarBackground.color, const Color(0xFF050505));
+    expect(sidebarBackground.color, const Color(0xFF090D10));
+  });
+
+  testWidgets('desktop chat geometry matches the design columns and composer', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 960);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    expect(
+      tester.getSize(find.byKey(const ValueKey('primary-sidebar-width'))).width,
+      64,
+    );
+    expect(tester.getSize(find.byType(ConversationList)).width, 282);
+
+    final chatPaneRect = tester.getRect(find.byType(ChatPane));
+    final composerRect = tester.getRect(
+      find.byKey(const ValueKey('chat-composer-box')),
+    );
+    final tokenRect = tester.getRect(
+      find.byKey(const ValueKey('token-usage-meter')),
+    );
+    final sendRect = tester.getRect(
+      find.byKey(const ValueKey('chat-send-button')),
+    );
+
+    expect(chatPaneRect.bottom - composerRect.bottom, closeTo(16, 0.01));
+    expect(tokenRect.right, lessThanOrEqualTo(sendRect.left));
+    expect(
+        (tokenRect.center.dy - sendRect.center.dy).abs(), lessThanOrEqualTo(3));
+  });
+
+  testWidgets('desktop management pages keep the expanded list-detail layout', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1440, 960);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: AppState.seed(),
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    const pages = [
+      (
+        tooltip: '团队',
+        rowKey: 'team-row-team-default',
+        detailKey: 'team-detail-team-default',
+      ),
+      (
+        tooltip: '模型',
+        rowKey: 'model-row-model-main',
+        detailKey: 'model-detail-model-main',
+      ),
+      (
+        tooltip: '角色',
+        rowKey: 'role-row-role-secretary',
+        detailKey: 'role-detail-role-secretary',
+      ),
+      (
+        tooltip: '成员',
+        rowKey: 'member-row-member-secretary',
+        detailKey: 'member-detail-member-secretary',
+      ),
+    ];
+
+    for (final page in pages) {
+      await tester.tap(find.byTooltip(page.tooltip));
+      await tester.pumpAndSettle();
+
+      expect(
+        tester
+            .getSize(find.byKey(const ValueKey('primary-sidebar-width')))
+            .width,
+        216,
+      );
+      final row = find.byKey(ValueKey(page.rowKey));
+      final detail = find.byKey(ValueKey(page.detailKey));
+      expect(row, findsOneWidget);
+      expect(detail, findsOneWidget);
+      expect(tester.getSize(detail).width, closeTo(330, 0.01));
+      expect(tester.getTopLeft(row).dx, lessThan(tester.getTopLeft(detail).dx));
+    }
   });
 
   testWidgets('left sidebar keeps all primary entries in design order', (
@@ -122,7 +219,7 @@ void main() {
 
     expect(find.text('团队管理'), findsOneWidget);
     expect(find.byTooltip('新增团队'), findsOneWidget);
-    expect(find.text('对象：开发团队'), findsOneWidget);
+    expect(find.text('开发团队'), findsWidgets);
     expect(find.text('负责方案拆解、代码修改、补丁提交。'), findsWidgets);
     expect(find.widgetWithText(FilledButton, '发起聊天'), findsOneWidget);
     expect(find.textContaining('群聊 · 默认开发团队'), findsNothing);
@@ -157,7 +254,11 @@ void main() {
 
       await tester.tap(find.byTooltip('成员'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('打开私聊').at(1));
+      await tester.tap(
+        find.byKey(const ValueKey('member-row-member-frontend')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('打开私聊'));
       await tester.pumpAndSettle();
 
       expect(find.text('私聊'), findsOneWidget);
@@ -322,10 +423,12 @@ void main() {
   testWidgets('team management creates a named team with selected members', (
     tester,
   ) async {
+    AppState? persisted;
     await tester.pumpWidget(
       AiTeamApp(
         initialState: AppState.seed(),
         modelGateway: FakeModelGateway(),
+        onStateChanged: (state) => persisted = state,
       ),
     );
 
@@ -338,7 +441,15 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('移动端小队'), findsOneWidget);
-    expect(find.textContaining('前端工程师、测试工程师'), findsWidgets);
+    expect(find.text('成员 3'), findsWidgets);
+    final createdTeam = persisted!.teams.singleWhere(
+      (team) => team.name == '移动端小队',
+    );
+    expect(createdTeam.memberIds.toSet(), {
+      'member-secretary',
+      'member-frontend',
+      'member-tester',
+    });
   });
 
   testWidgets('team dialog defaults to serial mode and can select parallel', (
@@ -671,7 +782,7 @@ void main() {
     await tester.tap(find.byTooltip('审计'));
     await tester.pumpAndSettle();
 
-    expect(find.text('设置'), findsNothing);
+    expect(find.text('设置'), findsOneWidget);
     expect(find.text('审计日志'), findsOneWidget);
     expect(find.text('操作记录'), findsOneWidget);
     expect(find.text('new_action'), findsOneWidget);
@@ -723,6 +834,45 @@ void main() {
     tester.view.resetPhysicalSize();
   });
 
+  testWidgets('compact audit page keeps long content scrollable', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(840, 640);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final state = AppState.seed().copyWith(
+      auditLog: List.generate(
+        12,
+        (index) => AuditEntry(
+          id: 'compact-audit-$index',
+          action: 'compact_action_$index',
+          detail: '紧凑视口审计记录 $index',
+          createdAt: DateTime(2026, 6, 15, 9, index),
+        ),
+      ),
+    );
+    await tester.pumpWidget(
+      AiTeamApp(initialState: state, modelGateway: FakeModelGateway()),
+    );
+    await tester.tap(find.byTooltip('审计'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    const scrollKey = ValueKey('compact-audit-scroll');
+    final compactScroll = find.byKey(scrollKey);
+    expect(compactScroll, findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('compact_action_0'),
+      300,
+      scrollable: find
+          .descendant(of: compactScroll, matching: find.byType(Scrollable))
+          .first,
+    );
+    expect(find.text('compact_action_0'), findsOneWidget);
+  });
+
   testWidgets('model dialog saves selected reasoning effort', (tester) async {
     AppState? persisted;
     await tester.pumpWidget(
@@ -767,12 +917,13 @@ void main() {
     await tester.tap(find.byTooltip('模型'));
     await tester.pumpAndSettle();
 
-    expect(find.text('设置'), findsNothing);
+    expect(find.byTooltip('设置'), findsOneWidget);
     expect(find.text('模型管理'), findsOneWidget);
     expect(find.text('模型列表'), findsOneWidget);
     expect(find.byTooltip('新增模型'), findsOneWidget);
     expect(find.text('上下文 32k'), findsWidgets);
-    expect(find.text('流式 开启'), findsWidgets);
+    expect(find.text('流式输出'), findsOneWidget);
+    expect(find.text('开启'), findsOneWidget);
     expect(find.text('Provider'), findsNothing);
     expect(find.text('OpenAI-compatible'), findsNothing);
     expect(find.text('协议'), findsOneWidget);
@@ -792,13 +943,13 @@ void main() {
     await tester.tap(find.byTooltip('角色'));
     await tester.pumpAndSettle();
 
-    expect(find.text('设置'), findsNothing);
+    expect(find.byTooltip('设置'), findsOneWidget);
     expect(find.text('角色管理'), findsOneWidget);
-    expect(find.text('角色列表'), findsOneWidget);
+    expect(find.text('角色列表'), findsNWidgets(2));
     expect(find.byTooltip('新增角色'), findsOneWidget);
-    expect(find.text('读项目 允许'), findsWidgets);
-    expect(find.text('补丁 允许'), findsWidgets);
-    expect(find.text('命令 需确认'), findsWidgets);
+    expect(find.text('读项目 · 命令需确认'), findsWidgets);
+    expect(find.text('读取项目文件'), findsOneWidget);
+    expect(find.text('请求命令'), findsOneWidget);
     expect(find.text('输出格式'), findsOneWidget);
     expect(find.text('应用补丁'), findsOneWidget);
     expect(find.text('生成后确认'), findsOneWidget);
@@ -817,17 +968,18 @@ void main() {
     await tester.tap(find.byTooltip('成员'));
     await tester.pumpAndSettle();
 
-    expect(find.text('设置'), findsNothing);
+    expect(find.byTooltip('设置'), findsOneWidget);
     expect(find.text('成员管理'), findsOneWidget);
-    expect(find.text('成员列表'), findsOneWidget);
+    expect(find.text('成员列表'), findsNWidgets(2));
     expect(find.byTooltip('新增成员'), findsOneWidget);
     expect(find.byTooltip('打开私聊'), findsWidgets);
     expect(find.text('秘书成员'), findsOneWidget);
     expect(find.text('私聊已启用'), findsNothing);
     expect(find.text('私聊入口'), findsWidgets);
     expect(find.textContaining('优先级'), findsNothing);
-    expect(find.text('角色 秘书'), findsOneWidget);
-    expect(find.text('模型 OpenAI Compatible'), findsWidgets);
+    expect(find.text('绑定角色'), findsOneWidget);
+    expect(find.text('绑定模型'), findsOneWidget);
+    expect(find.text('OpenAI Compatible'), findsOneWidget);
     expect(find.text('所属团队'), findsOneWidget);
     expect(find.text('开发团队'), findsOneWidget);
     expect(find.text('成员页 / 会话栏'), findsOneWidget);
@@ -848,7 +1000,7 @@ void main() {
     await tester.tap(find.byTooltip('设置'));
     await tester.pumpAndSettle();
 
-    expect(find.text('持久化存储、导入导出和应用级配置'), findsOneWidget);
+    expect(find.text('持久化存储、导入导出和应用级配置'), findsNothing);
     expect(find.text('本机配置、持久化目录和导入导出'), findsNothing);
     expect(find.text('持久化存储目录'), findsOneWidget);
     expect(find.text('用于 state、审计、会话与缓存；保存前会确认迁移。'), findsOneWidget);

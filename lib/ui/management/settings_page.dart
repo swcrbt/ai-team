@@ -44,7 +44,6 @@ class SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     return ManagementPageFrame(
       title: '设置',
-      subtitle: '持久化存储、导入导出和应用级配置',
       child: Column(
         children: [
           _StorageDirectoryPanel(
@@ -153,6 +152,44 @@ class _StorageDirectoryPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final directoryRows = [
+      _StorageDirectoryRow(
+        label: '状态目录',
+        description: 'state.json 和模型配置',
+        path: directories.stateDirectory,
+        kind: _StorageDirectoryKind.state,
+        onPick: onPick,
+        onOpen: onOpen,
+        onClear: onClear,
+      ),
+      _StorageDirectoryRow(
+        label: '审计目录',
+        description: '命令、模型调用和补丁审计',
+        path: directories.auditDirectory,
+        kind: _StorageDirectoryKind.audit,
+        onPick: onPick,
+        onOpen: onOpen,
+        onClear: onClear,
+      ),
+      _StorageDirectoryRow(
+        label: '会话目录',
+        description: '长期会话与私聊缓存',
+        path: directories.conversationDirectory,
+        kind: _StorageDirectoryKind.conversations,
+        onPick: onPick,
+        onOpen: onOpen,
+        onClear: onClear,
+      ),
+      _StorageDirectoryRow(
+        label: '缓存目录',
+        description: '临时响应和缓存',
+        path: directories.cacheDirectory,
+        kind: _StorageDirectoryKind.cache,
+        onPick: onPick,
+        onOpen: onOpen,
+        onClear: onClear,
+      ),
+    ];
     return _SettingsPanel(
       title: '持久化存储目录',
       child: Column(
@@ -163,43 +200,44 @@ class _StorageDirectoryPanel extends StatelessWidget {
             style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
           ),
           const SizedBox(height: 10),
-          _StorageDirectoryRow(
-            label: '状态目录',
-            description: 'state.json 和模型配置',
-            path: directories.stateDirectory,
-            kind: _StorageDirectoryKind.state,
-            onPick: onPick,
-            onOpen: onOpen,
-            onClear: onClear,
+          LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth < 900) {
+                return Column(
+                  children: [
+                    for (var index = 0;
+                        index < directoryRows.length;
+                        index++) ...[
+                      if (index > 0) const SizedBox(height: 8),
+                      directoryRows[index],
+                    ],
+                  ],
+                );
+              }
+              return Column(
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(flex: 11, child: directoryRows[0]),
+                      const SizedBox(width: 10),
+                      Expanded(flex: 9, child: directoryRows[1]),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(flex: 11, child: directoryRows[2]),
+                      const SizedBox(width: 10),
+                      Expanded(flex: 9, child: directoryRows[3]),
+                    ],
+                  ),
+                ],
+              );
+            },
           ),
-          _StorageDirectoryRow(
-            label: '审计目录',
-            description: '命令、模型调用和补丁审计',
-            path: directories.auditDirectory,
-            kind: _StorageDirectoryKind.audit,
-            onPick: onPick,
-            onOpen: onOpen,
-            onClear: onClear,
-          ),
-          _StorageDirectoryRow(
-            label: '会话目录',
-            description: '长期会话与私聊缓存',
-            path: directories.conversationDirectory,
-            kind: _StorageDirectoryKind.conversations,
-            onPick: onPick,
-            onOpen: onOpen,
-            onClear: onClear,
-          ),
-          _StorageDirectoryRow(
-            label: '缓存目录',
-            description: '临时响应和缓存',
-            path: directories.cacheDirectory,
-            kind: _StorageDirectoryKind.cache,
-            onPick: onPick,
-            onOpen: onOpen,
-            onClear: onClear,
-          ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 12),
           Align(
             alignment: Alignment.centerRight,
             child: Wrap(
@@ -247,23 +285,29 @@ class _StorageDirectoryRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(10),
+      constraints: const BoxConstraints(minHeight: 38),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: const Color(0xFFFBFCFD),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
+        border: Border.all(color: const Color(0xFFD9DDE2)),
       ),
       child: Row(
         children: [
           SizedBox(
-            width: 118,
+            width: 126,
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   label,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 Text(
                   description,
@@ -271,12 +315,13 @@ class _StorageDirectoryRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Color(0xFF64748B),
-                    fontSize: 12,
+                    fontSize: 11,
                   ),
                 ),
               ],
             ),
           ),
+          const SizedBox(width: 10),
           Expanded(
             child: SelectableText(
               path.isEmpty ? '未配置' : path,
@@ -284,7 +329,7 @@ class _StorageDirectoryRow extends StatelessWidget {
               style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 10),
           _DirectoryActionButton(
             tooltip: '选择目录',
             onPressed: () => onPick(kind),
@@ -332,8 +377,12 @@ class _DirectoryActionButton extends StatelessWidget {
         label: Text(label),
         style: TextButton.styleFrom(
           visualDensity: VisualDensity.compact,
-          minimumSize: const Size(0, 34),
-          padding: const EdgeInsets.symmetric(horizontal: 8),
+          minimumSize: const Size(0, 28),
+          padding: const EdgeInsets.symmetric(horizontal: 5),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          textStyle: Theme.of(context).textTheme.labelMedium?.copyWith(
+                fontSize: 12,
+              ),
           foregroundColor: const Color(0xFF475569),
           disabledForegroundColor: const Color(0xFF94A3B8),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),

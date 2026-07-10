@@ -309,7 +309,11 @@ void main() {
 
     await tester.tap(find.byTooltip('成员'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('打开私聊').at(1));
+    await tester.tap(
+      find.byKey(const ValueKey('member-row-member-frontend')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('打开私聊'));
     await tester.pumpAndSettle();
 
     await tester.tap(

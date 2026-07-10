@@ -33,13 +33,13 @@ class SplitSendButton extends StatelessWidget {
             : SendButtonMenuAction.send;
     final enabled = primaryAction != null;
     final backgroundColor =
-        enabled ? const Color(0xFF0EA5E9) : const Color(0xFFB8DDF0);
+        enabled ? const Color(0xFF1779E1) : const Color(0xFFA9CBEF);
     final foregroundColor =
         enabled ? Colors.white : Colors.white.withValues(alpha: 0.72);
 
     return ClipRRect(
       key: const ValueKey('chat-send-button'),
-      borderRadius: BorderRadius.circular(4),
+      borderRadius: BorderRadius.circular(6),
       child: Material(
         color: backgroundColor,
         child: SizedBox(
@@ -52,7 +52,7 @@ class SplitSendButton extends StatelessWidget {
                 child: InkWell(
                   onTap: primaryAction,
                   child: SizedBox(
-                    width: 66,
+                    width: 54,
                     height: 32,
                     child: Center(
                       child: isConversationDispatching
@@ -100,7 +100,7 @@ class SplitSendButton extends StatelessWidget {
               ),
               Container(width: 1, height: 18, color: Colors.white24),
               MenuAnchor(
-                alignmentOffset: const Offset(-70, 4),
+                alignmentOffset: const Offset(-58, 4),
                 menuChildren: [
                   if (menuAction != null)
                     MenuItemButton(
@@ -131,7 +131,7 @@ class SplitSendButton extends StatelessWidget {
                               }
                             },
                       child: SizedBox(
-                        width: 26,
+                        width: 22,
                         height: 32,
                         child: Icon(
                           Icons.keyboard_arrow_down_rounded,
@@ -207,26 +207,21 @@ class _TokenUsageMeterState extends State<TokenUsageMeter> {
               label: 'Token 用量',
               child: Container(
                 key: const ValueKey('token-usage-meter'),
-                height: 34,
-                padding: const EdgeInsets.only(left: 8, right: 2),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(999),
-                  color: const Color(0xFFF8FAFC),
-                  border: Border.all(color: const Color(0xFFE2E8F0)),
-                ),
+                height: 36,
+                constraints: const BoxConstraints(minWidth: 96),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     CustomPaint(
-                      size: const Size.square(26),
+                      size: const Size.square(34),
                       painter: _TokenRingPainter(ratio: ratio),
                       child: SizedBox.square(
-                        dimension: 26,
+                        dimension: 34,
                         child: Center(
                           child: Text(
                             percent,
                             style: const TextStyle(
-                              fontSize: 8,
+                              fontSize: 9,
                               fontWeight: FontWeight.w800,
                               fontFamily: 'monospace',
                             ),
@@ -234,7 +229,7 @@ class _TokenUsageMeterState extends State<TokenUsageMeter> {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 8),
                     Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -263,7 +258,7 @@ class _TokenUsageMeterState extends State<TokenUsageMeter> {
             if (hovered)
               Positioned(
                 right: 0,
-                bottom: 42,
+                bottom: 40,
                 child: _TokenUsagePopover(data: widget.data),
               ),
           ],
@@ -284,7 +279,7 @@ class _TokenUsagePopover extends StatelessWidget {
       elevation: 8,
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        width: 232,
+        width: 224,
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
           color: Colors.white,

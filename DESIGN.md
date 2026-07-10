@@ -2,7 +2,7 @@
 
 ## Source of truth
 - Status: Active
-- Last refreshed: 2026-07-04
+- Last refreshed: 2026-07-10
 - Primary product surfaces: group chat command center, member private chat, team/model/role/member/project/audit/settings pages, project safety and patch review, command approval, sidebar icon system.
 - Evidence reviewed: `README.md`, `docs/architecture.md`, `lib/ui/app_shell.dart`, `lib/ui/sidebar.dart`, `lib/ui/conversation_sidebar.dart`, `lib/ui/chat/chat_pane.dart`, `lib/ui/chat/chat_controls.dart`, `lib/ui/management/config_management_pages.dart`, `lib/ui/management/chat_status_cards.dart`, `lib/ui/management/audit_log_page.dart`, `lib/ui/management/settings_page.dart`.
 - Figma reference: https://www.figma.com/design/b661TshWPrgj83XFpvk04D
@@ -26,7 +26,7 @@
 - Key contexts of use: desktop Flutter app, repeated long sessions, mixed Chinese/English technical content, local repositories, and OpenAI-compatible model endpoints.
 
 ## Information architecture
-- Primary navigation: compact dark icon rail for messages, teams, models, roles, members, project, audit, and settings. Each entry has a designed 20px linear icon with default, hover, active, and disabled states.
+- Primary navigation: route-level dark navigation uses a 64px icon rail for messages and project workspaces, and a 216px labeled sidebar for team/model/role/member/audit/settings management pages at desktop widths. Each entry has a designed 20px linear icon with default, hover, active, and disabled states.
 - Core routes/screens: Group Chat Command Center, Member Private Chat, Team Management, Model Management, Role Management, Member Management, Project Safety and Patch Review, Audit Console, App Settings, Sidebar Icon System.
 - Content hierarchy: active work first, safety confirmation second, historical/audit evidence third. The message sidebar is only for group/private conversations; model and project objects remain sidebar destinations, not conversation rows. Team, model, role, and member management are separate sidebar pages in that order, not sections inside one settings page, and each management page presents its object list before item editing.
 
@@ -58,7 +58,7 @@
 
 ## Responsive behavior
 - Supported breakpoints/devices: desktop-first macOS; narrow desktop windows should collapse secondary panels before hiding primary chat.
-- Layout adaptations: icon rail stays fixed, conversation sidebars can shrink or collapse, safety status opens as a temporary drawer, and the chat composer remains fixed to the bottom of the chat surface. Composer footer metadata is not shown; the token meter lives in the input surface immediately before the send button.
+- Layout adaptations: chat and project rails stay at 64px; the 216px management sidebar collapses to the same 64px rail below the desktop breakpoint. Conversation sidebars can shrink or collapse, safety status opens as a temporary drawer, and the chat composer remains fixed to the bottom of the chat surface. Composer footer metadata is not shown; the token meter lives in the input surface immediately before the send button.
 - Touch/hover differences: desktop hover affordances are allowed, but all actions need keyboard/click access.
 
 ## Interaction states

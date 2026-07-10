@@ -30,7 +30,7 @@ class _AuditLogPageState extends State<AuditLogPage> {
     final selectedEntry = _selectedEntry(filteredEntries);
     return ManagementPageFrame(
       title: '审计日志',
-      subtitle: '查看操作记录、命令执行和模型诊断',
+      fillBody: true,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final wide = constraints.maxWidth >= 920;
@@ -47,12 +47,15 @@ class _AuditLogPageState extends State<AuditLogPage> {
           );
           final details = _AuditDetailDrawer(entry: selectedEntry);
           if (!wide) {
-            return Column(
-              children: [list, const SizedBox(height: 12), details],
+            return SingleChildScrollView(
+              key: const ValueKey('compact-audit-scroll'),
+              child: Column(
+                children: [list, const SizedBox(height: 12), details],
+              ),
             );
           }
           return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(flex: 3, child: list),
               const SizedBox(width: 14),

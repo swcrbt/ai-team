@@ -96,6 +96,38 @@ void main() {
     await mouse.removePointer();
   });
 
+  testWidgets('group messages keep speaker and time visible', (tester) async {
+    final seed = AppState.seed();
+    final conversation = seed.conversations.firstWhere(
+      (item) => item.id == 'conv-team-default',
+    );
+    final state = seed.copyWith(
+      conversations: [
+        conversation.copyWith(
+          messages: [
+            ChatMessage(
+              id: 'msg-group-header',
+              authorName: '群聊作者',
+              content: '群聊消息保留作者行',
+              createdAt: DateTime(2026, 6, 14, 11, 13),
+            ),
+          ],
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      AiTeamApp(initialState: state, modelGateway: FakeModelGateway()),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('conversation-row-conv-team-default')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('群聊作者'), findsOneWidget);
+    expect(find.text('11:13'), findsOneWidget);
+  });
+
   testWidgets('chat messages show real model thinking content when present',
       (tester) async {
     final seed = AppState.seed();
@@ -445,6 +477,60 @@ print("safe");
       find.descendant(of: list, matching: find.text('私聊消息内容')),
       findsOneWidget,
     );
+  });
+
+  testWidgets('private failed message shows time only on hover',
+      (tester) async {
+    final seed = AppState.seed();
+    final conversation = seed.conversations.firstWhere(
+      (item) => item.id == 'conv-member-secretary',
+    );
+    final state = seed.copyWith(
+      conversations: [
+        conversation.copyWith(
+          messages: [
+            ChatMessage(
+              id: 'msg-private-failed',
+              authorName: '秘书',
+              memberId: 'member-secretary',
+              content: '模型请求失败',
+              createdAt: DateTime(2026, 6, 17, 10, 27),
+              generationStatus: ChatMessageGenerationStatus.failed,
+              generationDurationMs: 3000,
+            ),
+          ],
+        ),
+        ...seed.conversations.where(
+          (item) => item.id != conversation.id,
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      AiTeamApp(
+        initialState: state,
+        modelGateway: FakeModelGateway(),
+      ),
+    );
+
+    final content = find.widgetWithText(SelectableText, '模型请求失败');
+    final messageRegion =
+        find.ancestor(of: content, matching: find.byType(MouseRegion)).first;
+    expect(find.text('失败 · 3s'), findsOneWidget);
+    expect(
+      find.descendant(of: messageRegion, matching: find.text('10:27')),
+      findsNothing,
+    );
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: tester.getCenter(content));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(of: messageRegion, matching: find.text('10:27')),
+      findsOneWidget,
+    );
+    await mouse.removePointer();
   });
 
   testWidgets('streaming message suppresses duplicate typing indicator',

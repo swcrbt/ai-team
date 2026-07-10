@@ -4,52 +4,150 @@ class ManagementPageFrame extends StatelessWidget {
   const ManagementPageFrame({
     super.key,
     required this.title,
-    required this.subtitle,
     required this.child,
+    this.headerAction,
+    this.sectionTitle,
+    this.sectionIcon,
+    this.fillBody = false,
   });
 
   final String title;
-  final String subtitle;
+  final Widget child;
+  final Widget? headerAction;
+  final String? sectionTitle;
+  final IconData? sectionIcon;
+  final bool fillBody;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: const Color(0xFFF5F7F9),
+      child: Column(
+        children: [
+          Container(
+            height: 64,
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(bottom: BorderSide(color: Color(0xFFD9DDE2))),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                if (headerAction != null) headerAction!,
+              ],
+            ),
+          ),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: _ManagementPageBody(
+                sectionTitle: sectionTitle,
+                sectionIcon: sectionIcon,
+                fillBody: fillBody,
+                child: child,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ManagementPageBody extends StatelessWidget {
+  const _ManagementPageBody({
+    required this.sectionTitle,
+    required this.sectionIcon,
+    required this.fillBody,
+    required this.child,
+  });
+
+  final String? sectionTitle;
+  final IconData? sectionIcon;
+  final bool fillBody;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          height: 72,
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    Text(subtitle),
+    if (sectionTitle == null) {
+      return fillBody ? child : SingleChildScrollView(child: child);
+    }
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFD9DDE2)),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          SizedBox(
+            height: 48,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                children: [
+                  if (sectionIcon != null) ...[
+                    Icon(sectionIcon, size: 18),
+                    const SizedBox(width: 8),
                   ],
-                ),
+                  Text(
+                    sectionTitle!,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ],
               ),
-            ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: child,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class ManagementHeaderActions extends StatelessWidget {
+  const ManagementHeaderActions({
+    super.key,
+    required this.countLabel,
+    required this.actionLabel,
+    required this.onPressed,
+  });
+
+  final String countLabel;
+  final String actionLabel;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          countLabel,
+          style: const TextStyle(
+            color: Color(0xFF6B7280),
+            fontFamily: 'monospace',
+            fontSize: 12,
           ),
         ),
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: child,
-          ),
-        ),
+        const SizedBox(width: 12),
+        FilledButton(onPressed: onPressed, child: Text(actionLabel)),
       ],
     );
   }
@@ -71,36 +169,44 @@ class ManagementPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final body = SingleChildScrollView(child: child);
+        return Container(
+          margin: const EdgeInsets.only(bottom: 14),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            border: Border.all(color: const Color(0xFFE5E7EB)),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(icon, size: 18),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
+              Row(
+                children: [
+                  Icon(icon, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
               ),
+              if (action != null)
+                Align(alignment: Alignment.centerRight, child: action!),
+              const SizedBox(height: 8),
+              if (constraints.hasBoundedHeight)
+                Expanded(child: body)
+              else
+                child,
             ],
           ),
-          if (action != null)
-            Align(alignment: Alignment.centerRight, child: action!),
-          const SizedBox(height: 8),
-          child,
-        ],
-      ),
+        );
+      },
     );
   }
 }

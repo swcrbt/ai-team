@@ -30,18 +30,27 @@ class _TeamManagementPageState extends State<TeamManagementPage> {
     final selected = _selectedTeam(teams);
     return ManagementPageFrame(
       title: '团队管理',
-      subtitle: '按开发团队、测试团队等团队对象管理成员组合',
+      headerAction: ManagementHeaderActions(
+        countLabel: '${teams.length} 个团队',
+        actionLabel: '新建团队',
+        onPressed: () => showTeamDialog(context, widget.controller),
+      ),
+      sectionTitle: '团队列表',
+      sectionIcon: Icons.account_tree_outlined,
       child: _EntityLayout(
         list: _TeamCardGrid(
           controller: widget.controller,
           teams: teams,
           selectedTeamId: selected?.id,
           onSelectTeam: (teamId) => setState(() => selectedTeamId = teamId),
-          onStartChat: widget.onStartChat,
         ),
         detail: selected == null
             ? const _EmptyDetail(title: '暂无团队')
-            : _TeamDetail(controller: widget.controller, team: selected),
+            : _TeamDetail(
+                controller: widget.controller,
+                team: selected,
+                onStartChat: widget.onStartChat,
+              ),
       ),
     );
   }
@@ -77,7 +86,13 @@ class _ModelManagementPageState extends State<ModelManagementPage> {
     final selected = _selectedModel(models);
     return ManagementPageFrame(
       title: '模型管理',
-      subtitle: '按模型列表维护模型名、协议和上下文窗口',
+      headerAction: ManagementHeaderActions(
+        countLabel: '${models.length} 个模型',
+        actionLabel: '新建模型',
+        onPressed: () => showModelDialog(context, widget.controller),
+      ),
+      sectionTitle: '模型列表管理',
+      sectionIcon: Icons.memory_rounded,
       child: _EntityLayout(
         list: _ObjectList(
           title: '模型列表',
@@ -87,27 +102,11 @@ class _ModelManagementPageState extends State<ModelManagementPage> {
             for (final model in models)
               _ObjectRow(
                 key: ValueKey('model-row-${model.id}'),
-                icon: Icons.memory_rounded,
                 title: model.name,
                 subtitle: '${model.modelName} · ${model.baseUrl}',
-                chips: [
-                  _TeamMetaChip(
-                    label:
-                        '上下文 ${_formatTokenLimit(model.contextWindowTokens)}',
-                  ),
-                  _TeamMetaChip(label: model.streaming ? '流式 开启' : '流式 关闭'),
-                  _TeamMetaChip(
-                    label: '温度 ${model.temperature.toStringAsFixed(1)}',
-                  ),
-                ],
+                summary: '上下文 ${_formatTokenLimit(model.contextWindowTokens)}',
                 selected: model.id == selected?.id,
                 onTap: () => setState(() => selectedModelId = model.id),
-                trailing: IconButton(
-                  tooltip: '编辑模型',
-                  onPressed: () =>
-                      showModelDialog(context, widget.controller, model: model),
-                  icon: const Icon(Icons.edit_rounded),
-                ),
               ),
           ],
         ),
@@ -149,7 +148,13 @@ class _RoleManagementPageState extends State<RoleManagementPage> {
     final selected = _selectedRole(roles);
     return ManagementPageFrame(
       title: '角色管理',
-      subtitle: '按角色列表维护职责、提示词和命令策略',
+      headerAction: ManagementHeaderActions(
+        countLabel: '${roles.length} 个角色',
+        actionLabel: '新建角色',
+        onPressed: () => showRoleDialog(context, widget.controller),
+      ),
+      sectionTitle: '角色列表',
+      sectionIcon: Icons.badge_outlined,
       child: _EntityLayout(
         list: _ObjectList(
           title: '角色列表',
@@ -159,30 +164,12 @@ class _RoleManagementPageState extends State<RoleManagementPage> {
             for (final role in roles)
               _ObjectRow(
                 key: ValueKey('role-row-${role.id}'),
-                icon: Icons.badge_outlined,
                 title: role.name,
                 subtitle: role.description,
-                chips: [
-                  _TeamMetaChip(
-                    label: role.canReadProject ? '读项目 允许' : '读项目 禁止',
-                  ),
-                  _TeamMetaChip(
-                    label: role.canProposePatch ? '补丁 允许' : '补丁 禁止',
-                  ),
-                  _TeamMetaChip(
-                    label: role.commandPolicy.requiresConfirmation
-                        ? '命令 需确认'
-                        : '命令 允许',
-                  ),
-                ],
+                summary:
+                    '${role.canReadProject ? '读项目' : '禁止读项目'} · ${role.commandPolicy.requiresConfirmation ? '命令需确认' : '命令允许'}',
                 selected: role.id == selected?.id,
                 onTap: () => setState(() => selectedRoleId = role.id),
-                trailing: IconButton(
-                  tooltip: '编辑角色',
-                  onPressed: () =>
-                      showRoleDialog(context, widget.controller, role: role),
-                  icon: const Icon(Icons.edit_rounded),
-                ),
               ),
           ],
         ),
@@ -229,7 +216,13 @@ class _MemberManagementPageState extends State<MemberManagementPage> {
     final selected = _selectedMember(members);
     return ManagementPageFrame(
       title: '成员管理',
-      subtitle: '按成员列表维护模型与角色绑定',
+      headerAction: ManagementHeaderActions(
+        countLabel: '${members.length} 个成员',
+        actionLabel: '新建成员',
+        onPressed: () => showMemberDialog(context, widget.controller),
+      ),
+      sectionTitle: '成员列表',
+      sectionIcon: Icons.person_outline_rounded,
       child: _EntityLayout(
         list: _ObjectList(
           title: '成员列表',
@@ -239,51 +232,22 @@ class _MemberManagementPageState extends State<MemberManagementPage> {
             for (final member in members)
               _ObjectRow(
                 key: ValueKey('member-row-${member.id}'),
-                icon: Icons.person_outline_rounded,
                 title: member.name,
                 subtitle:
                     '${roleName(widget.controller.state, member.roleId)} · ${modelName(widget.controller.state, member.modelId)} · ${_memberTeamNames(widget.controller.state, member)}',
-                chips: [
-                  _TeamMetaChip(label: member.isSecretary ? '秘书成员' : '私聊入口'),
-                  _TeamMetaChip(
-                    label:
-                        '角色 ${roleName(widget.controller.state, member.roleId)}',
-                  ),
-                  _TeamMetaChip(
-                    label:
-                        '模型 ${modelName(widget.controller.state, member.modelId)}',
-                  ),
-                ],
+                summary: member.isSecretary ? '秘书成员' : '私聊入口',
                 selected: member.id == selected?.id,
                 onTap: () => setState(() => selectedMemberId = member.id),
-                trailing: Wrap(
-                  spacing: 4,
-                  children: [
-                    IconButton(
-                      tooltip: '打开私聊',
-                      onPressed: () {
-                        widget.controller.startMemberChat(member.id);
-                        widget.onStartChat();
-                      },
-                      icon: const Icon(Icons.chat_bubble_outline_rounded),
-                    ),
-                    IconButton(
-                      tooltip: '编辑成员',
-                      onPressed: () => showMemberDialog(
-                        context,
-                        widget.controller,
-                        member: member,
-                      ),
-                      icon: const Icon(Icons.edit_rounded),
-                    ),
-                  ],
-                ),
               ),
           ],
         ),
         detail: selected == null
             ? const _EmptyDetail(title: '暂无成员')
-            : _MemberDetail(controller: widget.controller, member: selected),
+            : _MemberDetail(
+                controller: widget.controller,
+                member: selected,
+                onStartChat: widget.onStartChat,
+              ),
       ),
     );
   }
@@ -310,7 +274,7 @@ class ProjectPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return ManagementPageFrame(
       title: '项目管理',
-      subtitle: '项目列表、边界、命令审批和补丁确认',
+      fillBody: true,
       child: _ProjectSafetySurface(controller: controller),
     );
   }
@@ -322,14 +286,12 @@ class _TeamCardGrid extends StatelessWidget {
     required this.teams,
     required this.selectedTeamId,
     required this.onSelectTeam,
-    required this.onStartChat,
   });
 
   final AppController controller;
   final List<Team> teams;
   final String? selectedTeamId;
   final ValueChanged<String> onSelectTeam;
-  final VoidCallback onStartChat;
 
   @override
   Widget build(BuildContext context) {
@@ -338,7 +300,6 @@ class _TeamCardGrid extends StatelessWidget {
       actionLabel: '新增团队',
       onAdd: () => showTeamDialog(context, controller),
       children: [
-        const _TeamObjectHint(),
         for (final team in teams)
           _TeamObjectCard(
             key: ValueKey('team-row-${team.id}'),
@@ -346,34 +307,8 @@ class _TeamCardGrid extends StatelessWidget {
             team: team,
             selected: team.id == selectedTeamId,
             onSelect: () => onSelectTeam(team.id),
-            onStartChat: () {
-              controller.startTeamChat(team.id);
-              onStartChat();
-            },
           ),
       ],
-    );
-  }
-}
-
-class _TeamObjectHint extends StatelessWidget {
-  const _TeamObjectHint();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-      ),
-      child: const Text(
-        '按开发、测试、文档、发布这类团队对象管理成员组合。',
-        style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
-      ),
     );
   }
 }
@@ -385,14 +320,12 @@ class _TeamObjectCard extends StatelessWidget {
     required this.team,
     required this.selected,
     required this.onSelect,
-    required this.onStartChat,
   });
 
   final AppController controller;
   final Team team;
   final bool selected;
   final VoidCallback onSelect;
-  final VoidCallback onStartChat;
 
   @override
   Widget build(BuildContext context) {
@@ -423,91 +356,45 @@ class _TeamObjectCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            team.name,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            spec.purpose,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Color(0xFF64748B),
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    _TeamObjectBadge(label: '对象：${spec.objectName}'),
-                  ],
+                Text(
+                  team.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    _TeamMetaChip(label: '成员 ${members.length}'),
-                    _TeamMetaChip(
-                      label:
-                          '模式 ${collaborationModeLabel(team.collaborationMode)}协作',
-                    ),
-                    _TeamMetaChip(label: '默认秘书 ${secretary.name}'),
-                  ],
+                const SizedBox(height: 3),
+                Text(
+                  spec.purpose,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 12,
+                  ),
                 ),
                 const SizedBox(height: 10),
                 Row(
                   children: [
-                    const Icon(
-                      Icons.groups_2_outlined,
-                      size: 16,
-                      color: Color(0xFF64748B),
-                    ),
-                    const SizedBox(width: 6),
                     Expanded(
-                      child: Text(
-                        members.map((member) => member.name).join('、'),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Color(0xFF475569)),
+                      child: _TeamMetadataCell(
+                        label: '成员 ${members.length}',
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    FilledButton(
-                      onPressed: onStartChat,
-                      child: const Text('发起聊天'),
                     ),
                     const SizedBox(width: 8),
-                    IconButton(
-                      tooltip: '编辑团队',
-                      onPressed: () =>
-                          showTeamDialog(context, controller, team: team),
-                      icon: const Icon(Icons.edit_rounded),
+                    Expanded(
+                      child: _TeamMetadataCell(
+                        label:
+                            '模式 ${collaborationModeLabel(team.collaborationMode)}协作',
+                      ),
                     ),
-                    IconButton(
-                      tooltip: '删除团队',
-                      onPressed: controller.state.teams.length <= 1
-                          ? null
-                          : () => runConfigAction(
-                              context,
-                              () => controller.deleteTeam(team.id),
-                            ),
-                      icon: const Icon(Icons.delete_outline_rounded),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _TeamMetadataCell(
+                        label: '默认秘书 ${secretary.name}',
+                      ),
                     ),
                   ],
                 ),
@@ -520,51 +407,29 @@ class _TeamObjectCard extends StatelessWidget {
   }
 }
 
-class _TeamObjectBadge extends StatelessWidget {
-  const _TeamObjectBadge({required this.label});
+class _TeamMetadataCell extends StatelessWidget {
+  const _TeamMetadataCell({required this.label});
 
   final String label;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      constraints: const BoxConstraints(minHeight: 30),
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFFEFF6FF),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFBFDBFE)),
+        color: const Color(0xFFFBFCFD),
+        border: Border.all(color: const Color(0xFFD9DDE2)),
+        borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
         label,
-        style: const TextStyle(
-          color: Color(0xFF1D4ED8),
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
-        ),
-      ),
-    );
-  }
-}
-
-class _TeamMetaChip extends StatelessWidget {
-  const _TeamMetaChip({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF1F5F9),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
         style: const TextStyle(
           color: Color(0xFF475569),
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
+          fontSize: 12,
         ),
       ),
     );
@@ -585,53 +450,58 @@ class _CapabilityGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: 8,
-      mainAxisSpacing: 8,
-      childAspectRatio: 3.4,
-      children: [
-        for (final row in rows)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFC),
-              border: Border.all(color: const Color(0xFFE2E8F0)),
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    row.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Color(0xFF64748B),
-                      fontSize: 12,
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFD9DDE2)),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (var index = 0; index < rows.length; index++)
+            Container(
+              constraints: const BoxConstraints(minHeight: 32),
+              padding: const EdgeInsets.symmetric(horizontal: 9),
+              decoration: BoxDecoration(
+                border: index == rows.length - 1
+                    ? null
+                    : const Border(
+                        bottom: BorderSide(color: Color(0xFFD9DDE2)),
+                      ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      rows[index].label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        fontSize: 12,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    row.value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(
-                      color: Color(0xFF0F172A),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      rows[index].value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        color: Color(0xFF0F172A),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -645,10 +515,11 @@ class _PromptPreview extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      constraints: const BoxConstraints(minHeight: 88),
+      constraints: const BoxConstraints(minHeight: 136),
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFD9DDE2)),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
@@ -656,7 +527,7 @@ class _PromptPreview extends StatelessWidget {
         maxLines: 4,
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(
-          color: Color(0xFFE2E8F0),
+          color: Color(0xFF334155),
           fontFamily: 'monospace',
           fontSize: 12,
           height: 1.35,
@@ -741,14 +612,18 @@ class _EntityLayout extends StatelessWidget {
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 880;
         if (!wide) {
-          return Column(children: [list, const SizedBox(height: 12), detail]);
+          return SingleChildScrollView(
+            child: Column(
+              children: [list, const SizedBox(height: 12), detail],
+            ),
+          );
         }
         return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(flex: 3, child: list),
-            const SizedBox(width: 14),
-            Expanded(flex: 2, child: detail),
+            Expanded(child: list),
+            const SizedBox(width: 12),
+            SizedBox(width: 330, child: detail),
           ],
         );
       },
@@ -789,82 +664,81 @@ class _ObjectList extends StatelessWidget {
 class _ObjectRow extends StatelessWidget {
   const _ObjectRow({
     super.key,
-    required this.icon,
     required this.title,
     required this.subtitle,
-    this.chips = const [],
+    required this.summary,
     this.selected = false,
     this.onTap,
-    this.trailing,
   });
 
-  final IconData icon;
   final String title;
   final String subtitle;
-  final List<Widget> chips;
+  final String summary;
   final bool selected;
   final VoidCallback? onTap;
-  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       child: Material(
-        color: selected ? const Color(0xFFEFF6FF) : const Color(0xFFF8FAFC),
+        color: selected ? const Color(0xFFEFF6FF) : Colors.white,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(8),
           side: BorderSide(
             color: selected ? const Color(0xFFBFDBFE) : const Color(0xFFE2E8F0),
           ),
         ),
         child: InkWell(
-          borderRadius: BorderRadius.circular(6),
+          borderRadius: BorderRadius.circular(8),
           onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(10),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: selected
-                        ? const Color(0xFFDBEAFE)
-                        : const Color(0xFFEFF6FF),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(icon, size: 18, color: const Color(0xFF2563EB)),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w800),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Color(0xFF64748B)),
-                      ),
-                      if (chips.isNotEmpty) ...[
-                        const SizedBox(height: 8),
-                        Wrap(spacing: 6, runSpacing: 6, children: chips),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 58),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF64748B),
+                            fontSize: 12,
+                          ),
+                        ),
                       ],
-                    ],
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                if (trailing != null) trailing!,
-              ],
+                  const SizedBox(width: 12),
+                  Flexible(
+                    flex: 2,
+                    child: Text(
+                      summary,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        color: Color(0xFF64748B),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -874,10 +748,15 @@ class _ObjectRow extends StatelessWidget {
 }
 
 class _TeamDetail extends StatelessWidget {
-  const _TeamDetail({required this.controller, required this.team});
+  const _TeamDetail({
+    required this.controller,
+    required this.team,
+    required this.onStartChat,
+  });
 
   final AppController controller;
   final Team team;
+  final VoidCallback onStartChat;
 
   @override
   Widget build(BuildContext context) {
@@ -888,10 +767,33 @@ class _TeamDetail extends StatelessWidget {
     return _Panel(
       key: ValueKey('team-detail-${team.id}'),
       title: '编辑团队',
-      action: IconButton(
-        tooltip: '编辑团队',
-        onPressed: () => showTeamDialog(context, controller, team: team),
-        icon: const Icon(Icons.edit_rounded),
+      action: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FilledButton(
+            onPressed: () {
+              controller.startTeamChat(team.id);
+              onStartChat();
+            },
+            child: const Text('发起聊天'),
+          ),
+          const SizedBox(width: 4),
+          IconButton(
+            tooltip: '编辑团队',
+            onPressed: () => showTeamDialog(context, controller, team: team),
+            icon: const Icon(Icons.edit_rounded),
+          ),
+          IconButton(
+            tooltip: '删除团队',
+            onPressed: controller.state.teams.length <= 1
+                ? null
+                : () => runConfigAction(
+                      context,
+                      () => controller.deleteTeam(team.id),
+                    ),
+            icon: const Icon(Icons.delete_outline_rounded),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -1007,10 +909,15 @@ class _RoleDetail extends StatelessWidget {
 }
 
 class _MemberDetail extends StatelessWidget {
-  const _MemberDetail({required this.controller, required this.member});
+  const _MemberDetail({
+    required this.controller,
+    required this.member,
+    required this.onStartChat,
+  });
 
   final AppController controller;
   final TeamMember member;
+  final VoidCallback onStartChat;
 
   @override
   Widget build(BuildContext context) {
@@ -1018,10 +925,27 @@ class _MemberDetail extends StatelessWidget {
     return _Panel(
       key: ValueKey('member-detail-${member.id}'),
       title: '编辑成员',
-      action: IconButton(
-        tooltip: '编辑成员',
-        onPressed: () => showMemberDialog(context, controller, member: member),
-        icon: const Icon(Icons.edit_rounded),
+      action: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            tooltip: '打开私聊',
+            onPressed: () {
+              controller.startMemberChat(member.id);
+              onStartChat();
+            },
+            icon: const Icon(Icons.chat_bubble_outline_rounded),
+          ),
+          IconButton(
+            tooltip: '编辑成员',
+            onPressed: () => showMemberDialog(
+              context,
+              controller,
+              member: member,
+            ),
+            icon: const Icon(Icons.edit_rounded),
+          ),
+        ],
       ),
       child: Column(
         children: [
@@ -1082,37 +1006,61 @@ class _ProjectSafetySurface extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 980;
-        final panels = [
-          _ProjectManagementPanel(controller: controller),
-          _CommandApprovalPanel(
-            controller: controller,
-            commandRequests: commandRequests,
-          ),
-          _PatchConfirmationPanel(
-            controller: controller,
-            patchProposals: patchProposals,
-          ),
-          _ProjectBoundaryPanel(controller: controller),
-          _AuditSummaryPanel(auditLog: auditLog),
-        ];
+        final projectPanel = _ProjectManagementPanel(controller: controller);
+        final commandPanel = _CommandApprovalPanel(
+          controller: controller,
+          commandRequests: commandRequests,
+        );
+        final patchPanel = _PatchConfirmationPanel(
+          controller: controller,
+          patchProposals: patchProposals,
+        );
+        final boundaryPanel = _ProjectBoundaryPanel(controller: controller);
+        final auditPanel = _AuditSummaryPanel(auditLog: auditLog);
         if (!wide) {
-          return Column(
-            children: [
-              for (final panel in panels) ...[
-                panel,
-                const SizedBox(height: 12),
+          return SingleChildScrollView(
+            child: Column(
+              children: [
+                for (final panel in [
+                  projectPanel,
+                  commandPanel,
+                  patchPanel,
+                  boundaryPanel,
+                  auditPanel,
+                ]) ...[
+                  panel,
+                  const SizedBox(height: 12),
+                ],
               ],
-            ],
+            ),
           );
         }
-        return GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisSpacing: 12,
-          mainAxisSpacing: 12,
-          childAspectRatio: 1.35,
-          children: panels,
+        return Column(
+          children: [
+            SizedBox(height: 168, child: projectPanel),
+            const SizedBox(height: 16),
+            Expanded(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(flex: 108, child: commandPanel),
+                  const SizedBox(width: 16),
+                  Expanded(flex: 92, child: patchPanel),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(flex: 108, child: boundaryPanel),
+                  const SizedBox(width: 16),
+                  Expanded(flex: 92, child: auditPanel),
+                ],
+              ),
+            ),
+          ],
         );
       },
     );
@@ -1227,16 +1175,14 @@ class _CommandApprovalPanel extends StatelessWidget {
     return _Panel(
       title: '命令审批',
       action: _ProjectStatusPill(
-        label:
-            commandRequests.any(
-              (request) => request.status == CommandRequestStatus.pending,
-            )
+        label: commandRequests.any(
+          (request) => request.status == CommandRequestStatus.pending,
+        )
             ? '等待确认'
             : '无待处理',
-        tone:
-            commandRequests.any(
-              (request) => request.status == CommandRequestStatus.pending,
-            )
+        tone: commandRequests.any(
+          (request) => request.status == CommandRequestStatus.pending,
+        )
             ? _ProjectTone.amber
             : _ProjectTone.green,
       ),
@@ -1253,15 +1199,15 @@ class _CommandApprovalPanel extends StatelessWidget {
                     request: request,
                     onAllow: request.status == CommandRequestStatus.pending
                         ? () => controller.updateCommandRequestStatus(
-                            request.id,
-                            CommandRequestStatus.approved,
-                          )
+                              request.id,
+                              CommandRequestStatus.approved,
+                            )
                         : null,
                     onBlock: request.status == CommandRequestStatus.pending
                         ? () => controller.updateCommandRequestStatus(
-                            request.id,
-                            CommandRequestStatus.denied,
-                          )
+                              request.id,
+                              CommandRequestStatus.denied,
+                            )
                         : null,
                   ),
               ],
@@ -1548,13 +1494,13 @@ class _ProjectDiffLine extends StatelessWidget {
     final background = added
         ? const Color(0xFFECFDF3)
         : deleted
-        ? const Color(0xFFFFF1F2)
-        : Colors.white;
+            ? const Color(0xFFFFF1F2)
+            : Colors.white;
     final foreground = added
         ? const Color(0xFF047857)
         : deleted
-        ? const Color(0xFFBE123C)
-        : const Color(0xFF64748B);
+            ? const Color(0xFFBE123C)
+            : const Color(0xFF64748B);
     return Container(
       constraints: const BoxConstraints(minHeight: 28),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -2043,8 +1989,8 @@ _ProjectDiffStats _projectDiffStats(String diff) {
     files: gitFileHeaders > 0
         ? gitFileHeaders
         : plusFileHeaders == 0
-        ? 1
-        : plusFileHeaders,
+            ? 1
+            : plusFileHeaders,
     hunks: hunks == 0 ? 1 : hunks,
   );
 }
@@ -2077,32 +2023,47 @@ class _Panel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: const Color(0xFFE2E8F0)),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.w800),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final header = SizedBox(
+          height: 42,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
                 ),
-              ),
-              if (action != null) action!,
+                if (action != null) action!,
+              ],
+            ),
+          ),
+        );
+        final body = SingleChildScrollView(
+          padding: const EdgeInsets.all(12),
+          child: child,
+        );
+        return Container(
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: const Color(0xFFFBFCFD),
+            border: Border.all(color: const Color(0xFFD9DDE2)),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              header,
+              const Divider(height: 1),
+              if (constraints.hasBoundedHeight) Expanded(child: body) else body,
             ],
           ),
-          const SizedBox(height: 10),
-          child,
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -2117,9 +2078,11 @@ class _DetailRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
+      constraints: const BoxConstraints(minHeight: 36),
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFD9DDE2)),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Row(

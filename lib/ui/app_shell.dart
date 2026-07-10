@@ -41,13 +41,57 @@ class AiTeamApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = ColorScheme.fromSeed(
+      seedColor: const Color(0xFF1779E1),
+      brightness: Brightness.light,
+    ).copyWith(
+      primary: const Color(0xFF1779E1),
+      surface: Colors.white,
+      onSurface: const Color(0xFF202328),
+      outline: const Color(0xFFD9DDE2),
+      outlineVariant: const Color(0xFFE6E9EC),
+    );
+    final baseTextTheme = ThemeData.light().textTheme;
     return MaterialApp(
       title: 'AI Team',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF2563EB),
-          brightness: Brightness.light,
+        colorScheme: colorScheme,
+        scaffoldBackgroundColor: const Color(0xFFF5F7F9),
+        dividerColor: const Color(0xFFD9DDE2),
+        textTheme: baseTextTheme.copyWith(
+          bodyLarge:
+              baseTextTheme.bodyLarge?.copyWith(fontSize: 13, height: 1.45),
+          bodyMedium:
+              baseTextTheme.bodyMedium?.copyWith(fontSize: 13, height: 1.45),
+          bodySmall:
+              baseTextTheme.bodySmall?.copyWith(fontSize: 12, height: 1.4),
+          titleMedium: baseTextTheme.titleMedium?.copyWith(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
+          labelLarge: baseTextTheme.labelLarge?.copyWith(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(0, 32),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(6),
+            ),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size(0, 32),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(6),
+            ),
+          ),
         ),
         useMaterial3: true,
         visualDensity: VisualDensity.compact,
@@ -135,12 +179,16 @@ class _AiTeamHomeState extends State<AiTeamHome> {
               builder: (context, constraints) {
                 final conversationListWidth =
                     constraints.maxWidth < 900 ? 260.0 : 282.0;
+                final expandedSidebar = constraints.maxWidth >= 1100 &&
+                    _usesExpandedSidebar(mainView);
                 return Row(
                   children: [
                     SizedBox(
-                      width: 64,
+                      key: const ValueKey('primary-sidebar-width'),
+                      width: expandedSidebar ? 216 : 64,
                       child: AppSidebar(
                         selectedView: mainView,
+                        expanded: expandedSidebar,
                         onChat: () => _showMainView(MainView.chat),
                         onTeam: () => _showMainView(MainView.teams),
                         onModels: () => _showMainView(MainView.models),
@@ -171,6 +219,19 @@ class _AiTeamHomeState extends State<AiTeamHome> {
         );
       },
     );
+  }
+
+  bool _usesExpandedSidebar(MainView view) {
+    return switch (view) {
+      MainView.chat || MainView.project => false,
+      MainView.teams ||
+      MainView.models ||
+      MainView.roles ||
+      MainView.members ||
+      MainView.audit ||
+      MainView.settings =>
+        true,
+    };
   }
 
   Widget _buildChatWorkspace(double conversationListWidth) {

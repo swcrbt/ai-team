@@ -918,7 +918,7 @@ void main() {
           return conversation;
         }
         return conversation.copyWith(
-          messages: conversation.messages.take(44).toList(),
+          messages: conversation.messages.take(43).toList(),
         );
       }).toList(),
     );

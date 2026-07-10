@@ -123,13 +123,19 @@ class _InteractionMessageShell extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            radius: 17,
-            backgroundColor: avatarColor(authorName),
+          Container(
+            width: 34,
+            height: 34,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFBFCFD),
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFFD9DDE2)),
+            ),
             child: Text(
               avatarText(authorName),
               style: const TextStyle(
-                color: Colors.white,
+                color: Color(0xFF334155),
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -310,8 +316,8 @@ class _DiffLine extends StatelessWidget {
     final type = line.startsWith('+') && !line.startsWith('+++')
         ? _DiffLineType.added
         : line.startsWith('-') && !line.startsWith('---')
-        ? _DiffLineType.deleted
-        : _DiffLineType.neutral;
+            ? _DiffLineType.deleted
+            : _DiffLineType.neutral;
     final background = switch (type) {
       _DiffLineType.added => const Color(0xFFECFDF3),
       _DiffLineType.deleted => const Color(0xFFFFF1F2),

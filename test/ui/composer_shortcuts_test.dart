@@ -30,7 +30,7 @@ void main() {
     expect(find.textContaining('任务已停止'), findsWidgets);
   });
 
-  testWidgets('composer uses taller input and split send button',
+  testWidgets('composer uses three-line input and bottom split send button',
       (tester) async {
     final gateway = RecordingModelGateway();
     await tester.pumpWidget(
@@ -44,13 +44,15 @@ void main() {
     expect(find.byTooltip('提及'), findsNothing);
     expect(find.text('发送(S)'), findsNothing);
     expect(find.widgetWithText(InkWell, '发送'), findsOneWidget);
-    expect(
-      tester
-          .getSize(
-              find.byKey(const ValueKey('chat-input-conv-member-secretary')))
-          .height,
-      greaterThanOrEqualTo(80),
+    final inputFinder =
+        find.byKey(const ValueKey('chat-input-conv-member-secretary'));
+    final input = tester.widget<TextField>(inputFinder);
+    expect(input.minLines, 3);
+    expect(input.maxLines, 4);
+    final composerRect = tester.getRect(
+      find.byKey(const ValueKey('chat-composer-box')),
     );
+    expect(composerRect.height, greaterThanOrEqualTo(112));
     expect(
       tester.getSize(find.byKey(const ValueKey('chat-send-button'))).height,
       lessThanOrEqualTo(36),
@@ -59,12 +61,9 @@ void main() {
       tester.getSize(find.byKey(const ValueKey('chat-send-button'))).width,
       lessThanOrEqualTo(96),
     );
-    final inputRect = tester.getRect(
-      find.byKey(const ValueKey('chat-input-conv-member-secretary')),
-    );
     final sendButtonRect =
         tester.getRect(find.byKey(const ValueKey('chat-send-button')));
-    expect(inputRect.bottom - sendButtonRect.bottom, lessThanOrEqualTo(12));
+    expect(composerRect.bottom - sendButtonRect.bottom, closeTo(8, 0.01));
 
     await tester.enterText(find.byType(TextField).last, '使用长方形发送按钮');
     await tester.tap(find.byTooltip('发送'));
@@ -256,7 +255,13 @@ void main() {
     await gateway.started.future.timeout(const Duration(seconds: 1));
     await tester.pump();
 
-    expect(find.text('前'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(CircleAvatar),
+        matching: find.text('前'),
+      ),
+      findsOneWidget,
+    );
     expect(find.textContaining('前端工程师 正在输入中'), findsOneWidget);
 
     await tester.tap(find.byTooltip('停止生成'));

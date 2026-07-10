@@ -51,9 +51,11 @@ void main() {
           matching: find.byType(Material),
         ),
       );
-      expect(selectedRow.color, const Color(0xFF2F80ED));
+      expect(selectedRow.color, Colors.white);
       final selectedRowShape = selectedRow.shape! as RoundedRectangleBorder;
       expect(selectedRowShape.borderRadius, BorderRadius.circular(8));
+      expect(selectedRowShape.side.color, const Color(0xFFD9DDE2));
+      expect(selectedRowShape.side.width, 1);
       final selectedRowPadding = tester.widget<Padding>(
         find
             .descendant(
@@ -121,7 +123,11 @@ void main() {
 
     await tester.tap(find.byTooltip('成员'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byTooltip('打开私聊').at(1));
+    await tester.tap(
+      find.byKey(const ValueKey('member-row-member-frontend')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('打开私聊'));
     await tester.pumpAndSettle();
 
     expect(

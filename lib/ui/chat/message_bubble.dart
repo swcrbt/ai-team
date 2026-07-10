@@ -114,13 +114,11 @@ class _MessageBubbleState extends State<MessageBubble> {
       );
     }
     final alignRight = message.isUser;
-    final showAuthorName = !alignRight && widget.showAuthorName;
     final thinkingContent =
         alignRight ? null : normalizedThinkingContent(message);
     final inlineStatus =
         thinkingContent == null ? messageInlineGenerationStatus(message) : null;
-    final showMessageHeader =
-        !alignRight && (showAuthorName || inlineStatus != null);
+    final showMessageHeader = widget.showAuthorName || inlineStatus != null;
     final showReplyBubble =
         !isStreamingThinkingWithoutReplyContent(message, thinkingContent);
     final thinkingSection = thinkingContent == null
@@ -146,10 +144,8 @@ class _MessageBubbleState extends State<MessageBubble> {
       constraints: const BoxConstraints(maxWidth: 760),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: alignRight ? const Color(0xFFE8F1FF) : Colors.white,
-        border: Border.all(
-          color: alignRight ? const Color(0xFFCFE0FF) : const Color(0xFFE5E7EB),
-        ),
+        color: Colors.white,
+        border: Border.all(color: const Color(0xFFD9DDE2)),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Column(
@@ -179,14 +175,16 @@ class _MessageBubbleState extends State<MessageBubble> {
           ? Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  messageTimeText(message.createdAt),
-                  style: TextStyle(
-                    color: Colors.grey.shade500,
-                    fontSize: 12,
+                if (!widget.showAuthorName) ...[
+                  Text(
+                    messageTimeText(message.createdAt),
+                    style: TextStyle(
+                      color: Colors.grey.shade500,
+                      fontSize: 12,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 4),
+                  const SizedBox(width: 4),
+                ],
                 IconButton(
                   tooltip: '复制',
                   visualDensity: VisualDensity.compact,
@@ -214,17 +212,29 @@ class _MessageBubbleState extends State<MessageBubble> {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (showAuthorName)
+              if (widget.showAuthorName) ...[
                 Text(
-                  message.authorName,
+                  alignRight ? '你' : message.authorName,
                   style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 13,
+                    color: alignRight
+                        ? const Color(0xFF6B7280)
+                        : Colors.grey.shade600,
+                    fontSize: alignRight ? 12 : 13,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
+                const SizedBox(width: 8),
+                Text(
+                  messageTimeText(message.createdAt),
+                  style: const TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                  ),
+                ),
+                if (inlineStatus != null) const SizedBox(width: 6),
+              ],
               if (inlineStatus != null) ...[
-                if (showAuthorName) const SizedBox(width: 6),
                 Text(
                   inlineStatus,
                   style: TextStyle(
@@ -264,33 +274,15 @@ class _MessageBubbleState extends State<MessageBubble> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (!alignRight) ...[
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: avatarColor(message.authorName),
-                child: Text(
-                  avatarText(message.authorName),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
+              _MessageAvatar(
+                label: avatarText(message.authorName),
               ),
               const SizedBox(width: 10),
             ],
             Flexible(child: messageColumn),
             if (alignRight) ...[
               const SizedBox(width: 10),
-              const CircleAvatar(
-                radius: 18,
-                backgroundColor: Color(0xFF2563EB),
-                child: Text(
-                  '你',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
+              const _MessageAvatar(label: '你', highlighted: true),
             ],
           ],
         ),
@@ -312,6 +304,35 @@ class _MessageBubbleState extends State<MessageBubble> {
         setState(() => copied = false);
       }
     });
+  }
+}
+
+class _MessageAvatar extends StatelessWidget {
+  const _MessageAvatar({required this.label, this.highlighted = false});
+
+  final String label;
+  final bool highlighted;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 36,
+      height: 36,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: highlighted ? const Color(0xFFEAF3FE) : Colors.white,
+        shape: BoxShape.circle,
+        border: Border.all(color: const Color(0xFFD9DDE2)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color:
+              highlighted ? const Color(0xFF1779E1) : const Color(0xFF202328),
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
   }
 }
 

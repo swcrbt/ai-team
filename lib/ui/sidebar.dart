@@ -16,6 +16,7 @@ class AppSidebar extends StatelessWidget {
     required this.onAudit,
     required this.onProject,
     required this.onSettings,
+    this.expanded = false,
   });
 
   final MainView selectedView;
@@ -27,6 +28,7 @@ class AppSidebar extends StatelessWidget {
   final VoidCallback onAudit;
   final VoidCallback onProject;
   final VoidCallback onSettings;
+  final bool expanded;
 
   @override
   Widget build(BuildContext context) {
@@ -81,31 +83,53 @@ class AppSidebar extends StatelessWidget {
       ),
     ];
     return ColoredBox(
-      color: const Color(0xFF050505),
+      color: const Color(0xFF090D10),
       child: Column(
         children: [
-          const SizedBox(height: 14),
-          Container(
-            width: 36,
-            height: 36,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: const Color(0xFF272A31),
-              borderRadius: BorderRadius.circular(9),
-              border: Border.all(color: const Color(0xFF3A3E48)),
-            ),
-            child: const Text(
-              'ai',
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-              ),
+          SizedBox(height: expanded ? 18 : 14),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: expanded ? 18 : 0),
+            child: Row(
+              mainAxisAlignment:
+                  expanded ? MainAxisAlignment.start : MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: expanded ? 32 : 36,
+                  height: expanded ? 32 : 36,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF272A31),
+                    borderRadius: BorderRadius.circular(expanded ? 8 : 9),
+                    border: Border.all(color: const Color(0xFF3A3E48)),
+                  ),
+                  child: const Text(
+                    'ai',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                if (expanded) ...[
+                  const SizedBox(width: 10),
+                  const Text(
+                    'ai-team',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: expanded ? 18 : 12),
           Expanded(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(vertical: 4),
+              padding: EdgeInsets.symmetric(
+                horizontal: expanded ? 12 : 0,
+                vertical: 4,
+              ),
               child: Column(
                 children: [
                   for (final entry in entries)
@@ -113,13 +137,29 @@ class AppSidebar extends StatelessWidget {
                       label: entry.label,
                       icon: entry.icon,
                       selected: selectedView == entry.view,
+                      expanded: expanded,
                       onPressed: entry.onPressed,
                     ),
                 ],
               ),
             ),
           ),
-          const SizedBox(height: 14),
+          if (expanded)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '当前页：${_sidebarPageLabel(selectedView)}',
+                  style: const TextStyle(
+                    color: Color(0xFF8D96A3),
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            )
+          else
+            const SizedBox(height: 14),
         ],
       ),
     );
@@ -146,12 +186,14 @@ class _SidebarButton extends StatefulWidget {
     required this.label,
     required this.selected,
     required this.onPressed,
+    required this.expanded,
   });
 
   final SidebarIconKind icon;
   final String label;
   final bool selected;
   final VoidCallback onPressed;
+  final bool expanded;
 
   @override
   State<_SidebarButton> createState() => _SidebarButtonState();
@@ -172,18 +214,62 @@ class _SidebarButtonState extends State<_SidebarButton> {
       SidebarIconVisualState.hover => const Color(0xFF22262E),
       _ => Colors.transparent,
     };
+    final button = Semantics(
+      button: true,
+      label: widget.label,
+      selected: widget.selected,
+      child: InkWell(
+        onTap: widget.onPressed,
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+          width: widget.expanded ? double.infinity : 42,
+          height: widget.expanded ? 38 : 42,
+          padding: widget.expanded
+              ? const EdgeInsets.symmetric(horizontal: 10)
+              : null,
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: widget.selected || hovered
+                  ? const Color(0xFF3A3F4A)
+                  : Colors.transparent,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: widget.expanded
+                ? MainAxisAlignment.start
+                : MainAxisAlignment.center,
+            children: [
+              SidebarLinearIcon(widget.icon, state: visualState),
+              if (widget.expanded) ...[
+                const SizedBox(width: 10),
+                Text(
+                  widget.label,
+                  style: TextStyle(
+                    color: _sidebarIconColor(visualState),
+                    fontWeight:
+                        widget.selected ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
     return Tooltip(
       message: widget.label,
       child: MouseRegion(
         onEnter: (_) => setState(() => hovered = true),
         onExit: (_) => setState(() => hovered = false),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
+          padding: EdgeInsets.symmetric(vertical: widget.expanded ? 2 : 4),
           child: Stack(
             clipBehavior: Clip.none,
             alignment: Alignment.centerLeft,
             children: [
-              if (widget.selected)
+              if (widget.selected && !widget.expanded)
                 Positioned(
                   left: -10,
                   child: Container(
@@ -197,40 +283,26 @@ class _SidebarButtonState extends State<_SidebarButton> {
                     ),
                   ),
                 ),
-              Semantics(
-                button: true,
-                label: widget.label,
-                selected: widget.selected,
-                child: InkWell(
-                  onTap: widget.onPressed,
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: background,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: widget.selected || hovered
-                            ? const Color(0xFF3A3F4A)
-                            : Colors.transparent,
-                      ),
-                    ),
-                    child: Center(
-                      child: SidebarLinearIcon(
-                        widget.icon,
-                        state: visualState,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+              button,
             ],
           ),
         ),
       ),
     );
   }
+}
+
+String _sidebarPageLabel(MainView view) {
+  return switch (view) {
+    MainView.chat => '消息',
+    MainView.teams => '团队管理',
+    MainView.models => '模型管理',
+    MainView.roles => '角色管理',
+    MainView.members => '成员管理',
+    MainView.project => '项目管理',
+    MainView.audit => '审计日志',
+    MainView.settings => '设置',
+  };
 }
 
 enum SidebarIconKind {

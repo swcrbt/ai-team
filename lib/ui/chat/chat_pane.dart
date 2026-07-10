@@ -142,30 +142,46 @@ class ChatPaneState extends State<ChatPane> {
     }
     final showBackToBottomButton = !messageIsNearBottom;
     final tokenUsage = _tokenUsageFor(conversation);
+    final conversationMembers = conversation.memberId == null
+        ? widget.controller.membersForConversation(conversation.id)
+        : widget.controller.state.members
+            .where((member) => member.id == conversation.memberId)
+            .toList();
+    final headerNames =
+        conversationMembers.map((member) => member.name).take(3).toList();
+    final imagePickerButton = ImagePickerButton(
+      onImagesPicked: (files) async {
+        if (!_canAddImages()) return;
+        for (final file in files) {
+          try {
+            final attachment = await imagePasteService.attachmentFromFile(
+              file,
+              PendingImageSource.pickedFile,
+            );
+            setState(() => _pendingImages.add(attachment));
+          } catch (_) {
+            // Individual invalid images do not block the remaining selection.
+          }
+        }
+      },
+      onPickError: (_, __) {
+        _showInputError('图片选择失败：请检查 macOS 文件访问权限后重试');
+      },
+      enabled: !widget.controller.isDispatching,
+    );
     return Column(
       children: [
         Container(
           height: 64,
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+          padding: const EdgeInsets.symmetric(horizontal: 18),
           alignment: Alignment.centerLeft,
           decoration: const BoxDecoration(
-            color: Colors.white,
-            border: Border(bottom: BorderSide(color: Color(0xFFE5E7EB))),
+            color: Color(0xFFFBFCFD),
+            border: Border(bottom: BorderSide(color: Color(0xFFD9DDE2))),
           ),
           child: Row(
             children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: conversation.memberId == null
-                    ? const Color(0xFF22C55E)
-                    : const Color(0xFF3B82F6),
-                child: Icon(
-                  conversation.memberId == null
-                      ? Icons.forum_rounded
-                      : Icons.person_rounded,
-                  color: Colors.white,
-                ),
-              ),
+              _ConversationAvatarStack(names: headerNames),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -177,7 +193,7 @@ class ChatPaneState extends State<ChatPane> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 16,
+                        fontSize: 14,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -278,7 +294,7 @@ class ChatPaneState extends State<ChatPane> {
           child: Stack(
             children: [
               ColoredBox(
-                color: const Color(0xFFFCFCFD),
+                color: const Color(0xFFF5F7F9),
                 child: Listener(
                   onPointerSignal: (event) =>
                       _handleMessagePointerSignal(event),
@@ -293,7 +309,7 @@ class ChatPaneState extends State<ChatPane> {
                         child: ListView.builder(
                           key: const ValueKey('chat-message-list'),
                           controller: messageScrollController,
-                          padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
+                          padding: const EdgeInsets.fromLTRB(28, 22, 18, 22),
                           itemCount: messageListItemCount,
                           itemBuilder: (context, index) {
                             if (index < conversation.messages.length) {
@@ -372,120 +388,119 @@ class ChatPaneState extends State<ChatPane> {
             setState(() => _isDraggingImages = false);
             unawaited(_addDroppedImages(details.files));
           },
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 10, 24, 18),
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(
-                  color: _isDraggingImages
-                      ? const Color(0xFF2563EB)
-                      : const Color(0xFFE5E7EB),
-                  width: _isDraggingImages ? 1.5 : 1,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(18, 14, 18, 16),
+            decoration: const BoxDecoration(
+              color: Color(0xFFFBFCFD),
+              border: Border(top: BorderSide(color: Color(0xFFD9DDE2))),
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 112),
+              child: DecoratedBox(
+                key: const ValueKey('chat-composer-box'),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: Border.all(
+                    color: _isDraggingImages
+                        ? const Color(0xFF1779E1)
+                        : const Color(0xFFC9CFD6),
+                    width: _isDraggingImages ? 1.5 : 1,
+                  ),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                // 图片选择按钮
-                ImagePickerButton(
-                  onImagesPicked: (files) async {
-                    if (!_canAddImages()) return;
-                    for (final file in files) {
-                      try {
-                        final attachment = await imagePasteService.attachmentFromFile(
-                          file,
-                          PendingImageSource.pickedFile,
-                        );
-                        setState(() => _pendingImages.add(attachment));
-                      } catch (e) {
-                        // 忽略无效图片
-                      }
-                    }
-                  },
-                  onPickError: (_, __) {
-                    _showInputError('图片选择失败：请检查 macOS 文件访问权限后重试');
-                  },
-                  enabled: !widget.controller.isDispatching,
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // 图片预览
-                      if (_pendingImages.isNotEmpty)
-                        ImagePreviewList(
-                          images: _pendingImages,
-                          onRemove: (index) {
-                            final removed = _pendingImages.removeAt(index);
-                            _deleteOwnedPendingImages([removed]);
-                            setState(() {});
-                          },
-                        ),
-                      // 输入框
-                      Shortcuts(
-                        shortcuts: const <ShortcutActivator, Intent>{
-                          SingleActivator(LogicalKeyboardKey.keyV, meta: true):
-                              PasteTextIntent(SelectionChangedCause.keyboard),
-                          SingleActivator(LogicalKeyboardKey.keyV, control: true):
-                              PasteTextIntent(SelectionChangedCause.keyboard),
-                        },
-                        child: Actions(
-                          actions: <Type, Action<Intent>>{
-                            PasteTextIntent: CallbackAction<PasteTextIntent>(
-                              onInvoke: (_) {
-                                unawaited(_handleControlledPaste());
-                                return null;
+                child: Stack(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(right: 230),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // 图片预览
+                          if (_pendingImages.isNotEmpty)
+                            ImagePreviewList(
+                              images: _pendingImages,
+                              onRemove: (index) {
+                                final removed = _pendingImages.removeAt(index);
+                                _deleteOwnedPendingImages([removed]);
+                                setState(() {});
                               },
                             ),
-                          },
-                          child: Focus(
-                            onKeyEvent: _handleInputKeyEvent,
-                            child: TextField(
-                              key: ValueKey('chat-input-${conversation.id}'),
-                              controller: textController,
-                              minLines: 3,
-                              maxLines: 4,
-                              decoration: InputDecoration(
-                                hintText: inputHint(widget.controller, conversation),
-                                border: InputBorder.none,
-                                isDense: true,
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 16,
+                          // 输入框
+                          Shortcuts(
+                            shortcuts: const <ShortcutActivator, Intent>{
+                              SingleActivator(LogicalKeyboardKey.keyV,
+                                      meta: true):
+                                  PasteTextIntent(
+                                      SelectionChangedCause.keyboard),
+                              SingleActivator(LogicalKeyboardKey.keyV,
+                                      control: true):
+                                  PasteTextIntent(
+                                      SelectionChangedCause.keyboard),
+                            },
+                            child: Actions(
+                              actions: <Type, Action<Intent>>{
+                                PasteTextIntent:
+                                    CallbackAction<PasteTextIntent>(
+                                  onInvoke: (_) {
+                                    unawaited(_handleControlledPaste());
+                                    return null;
+                                  },
+                                ),
+                              },
+                              child: Focus(
+                                onKeyEvent: _handleInputKeyEvent,
+                                child: TextField(
+                                  key:
+                                      ValueKey('chat-input-${conversation.id}'),
+                                  controller: textController,
+                                  minLines: 3,
+                                  maxLines: 4,
+                                  decoration: InputDecoration(
+                                    hintText: inputHint(
+                                        widget.controller, conversation),
+                                    border: InputBorder.none,
+                                    isDense: true,
+                                    contentPadding: const EdgeInsets.fromLTRB(
+                                      12,
+                                      10,
+                                      0,
+                                      10,
+                                    ),
+                                  ),
+                                  onSubmitted: (_) => _submit(),
                                 ),
                               ),
-                              onSubmitted: (_) => _submit(),
                             ),
                           ),
-                        ),
+                        ],
                       ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(right: 8, bottom: 8),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      TokenUsageMeter(data: tokenUsage),
-                      const SizedBox(width: 8),
-                      SplitSendButton(
-                        isDispatching: widget.controller.isDispatching,
-                        isConversationDispatching: widget.controller
-                            .isConversationDispatching(conversation.id),
-                        onSend: _submit,
-                        onStop: () => widget.controller.stopConversationById(
-                          conversation.id,
-                        ),
+                    ),
+                    Positioned(
+                      right: 8,
+                      bottom: 8,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          imagePickerButton,
+                          const SizedBox(width: 4),
+                          TokenUsageMeter(data: tokenUsage),
+                          const SizedBox(width: 8),
+                          SplitSendButton(
+                            isDispatching: widget.controller.isDispatching,
+                            isConversationDispatching: widget.controller
+                                .isConversationDispatching(conversation.id),
+                            onSend: _submit,
+                            onStop: () =>
+                                widget.controller.stopConversationById(
+                              conversation.id,
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-              ],
               ),
             ),
           ),
@@ -568,29 +583,31 @@ class ChatPaneState extends State<ChatPane> {
 
   Future<void> _submit() async {
     final text = textController.text;
-    
+
     // 如果文本和图片都为空，不发送
     if (text.trim().isEmpty && _pendingImages.isEmpty) return;
-    
+
     // 检查是否有不可提交的图片
     final invalidImages = _pendingImages.where((p) => !p.canSubmit).toList();
     if (invalidImages.isNotEmpty) {
       _showInputError('部分图片不可用，请移除后重试');
       return;
     }
-    
+
     // 提交层门禁：验证当前模型是否支持图片
-    if (_pendingImages.isNotEmpty && !widget.controller.modelSupportsImagesForConversation(widget.conversationId)) {
+    if (_pendingImages.isNotEmpty &&
+        !widget.controller
+            .modelSupportsImagesForConversation(widget.conversationId)) {
       _showInputError('当前模型不支持图片输入');
       return;
     }
-    
+
     // 保存待提交的图片
     final pendingToSubmit = List<PendingImageAttachment>.from(_pendingImages);
-    
+
     // 生成消息 ID
     final messageId = 'msg-${DateTime.now().microsecondsSinceEpoch}';
-    
+
     // 保存图片到工作区
     List<MessageAttachment> attachments = [];
     if (pendingToSubmit.isNotEmpty) {
@@ -605,11 +622,12 @@ class ChatPaneState extends State<ChatPane> {
         return;
       }
     }
-    
+
     // 提交事务：dispatch 带回调
     var committed = false;
     try {
-      final submittedPendingIds = pendingToSubmit.map((item) => item.id).toSet();
+      final submittedPendingIds =
+          pendingToSubmit.map((item) => item.id).toSet();
       final dispatchCommitted = await widget.controller.dispatchConversation(
         widget.conversationId,
         text,
@@ -672,7 +690,7 @@ class ChatPaneState extends State<ChatPane> {
     if (imageFiles.isEmpty || !mounted) {
       return;
     }
-    
+
     // 转换为 PendingImageAttachment
     for (final file in imageFiles) {
       try {
@@ -1137,6 +1155,47 @@ class ChatPaneState extends State<ChatPane> {
     }
     _recordMessageScrollPosition(messageScrollController.position.pixels);
     _setMessageIsNearBottom(_isNearMessageBottom());
+  }
+}
+
+class _ConversationAvatarStack extends StatelessWidget {
+  const _ConversationAvatarStack({required this.names});
+
+  final List<String> names;
+
+  @override
+  Widget build(BuildContext context) {
+    final visibleNames = names.isEmpty ? const ['AI'] : names.take(3).toList();
+    return SizedBox(
+      width: 28 + (visibleNames.length - 1) * 21.0,
+      height: 28,
+      child: Stack(
+        children: [
+          for (final entry in visibleNames.indexed)
+            Positioned(
+              left: entry.$1 * 21.0,
+              child: Container(
+                width: 28,
+                height: 28,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F3F5),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+                child: Text(
+                  avatarText(entry.$2),
+                  style: const TextStyle(
+                    color: Color(0xFF202328),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
 
